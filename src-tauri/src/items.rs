@@ -89,8 +89,14 @@ impl ItemIndex {
     /// picker wants when the user is typing a name they already know.
     pub fn search(&self, query: &str, limit: usize) -> Vec<ItemInfo> {
         let q = query.trim().to_lowercase();
+        // Ids below FIRST_ITEM_ID are the fluid/splash name table, not items.
+        // They have no sprite and can't be a loot id, so they'd render as a row
+        // of blank cells at the head of every browse. `get_item` still resolves
+        // them for callers that address one directly.
+        let items = || self.by_id.values().filter(|i| i.server_id >= FIRST_ITEM_ID);
+
         if q.is_empty() {
-            return self.by_id.values().take(limit).cloned().collect();
+            return items().take(limit).cloned().collect();
         }
         // A bare number is an id lookup, not a name search.
         if let Ok(id) = q.parse::<u32>() {
@@ -101,7 +107,7 @@ impl ItemIndex {
 
         let mut prefix: Vec<&ItemInfo> = Vec::new();
         let mut substring: Vec<&ItemInfo> = Vec::new();
-        for item in self.by_id.values() {
+        for item in items() {
             let name = item.name.to_lowercase();
             if name.starts_with(&q) {
                 prefix.push(item);

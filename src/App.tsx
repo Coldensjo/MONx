@@ -1,75 +1,42 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { AlertCircle, CheckCircle2, Minus, Square, X } from 'lucide-react';
 import {
-	AlertCircle,
-	CheckCircle2,
-	FolderOpen,
-	Grid3X3,
-	Minus,
-	PersonStanding,
-	Package,
-	SlidersHorizontal,
-	Sparkles,
-	Square,
-	Wand2,
-	X
-} from 'lucide-react';
-import { closeDat, closeSpr, openDat, OpenDat, openSpr, OpenFile, probePair, ThingCategory } from './spr';
-import { ExportSettings, loadExportSettings, saveExportSettings } from './settings';
+	closeWorkspace,
+	listMonsters,
+	openWorkspace,
+	setProtocolCacheKey,
+	type MonsterSummary,
+	type WorkspaceInfo,
+	type WorkspacePaths
+} from './monster';
+import { openDat, openSpr } from './spr';
+import { loadWorkspaces, saveWorkspace, type RecentWorkspace } from './settings';
 import Landing from './Landing';
-import Viewer from './Viewer';
-import ThingsView from './ThingsView';
-import ExportSettingsDialog from './ExportSettingsDialog';
-
-const RECENT_KEY = 'monx.recent';
-const MAX_RECENT = 8;
+import Workspace from './Workspace';
 
 export interface Toast {
 	kind: 'ok' | 'error';
 	msg: string;
 }
 
-export interface FileSet {
-	spr: OpenFile;
-	dat: OpenDat | null;
-	datError: string | null;
-	transparent: boolean;
-}
-
-type Tab = ThingCategory | 'sprites';
-
-function loadRecent(): string[] {
-	try {
-		const raw = localStorage.getItem(RECENT_KEY);
-		const list = raw ? JSON.parse(raw) : [];
-		return Array.isArray(list) ? list.filter(p => typeof p === 'string') : [];
-	} catch {
-		return [];
-	}
-}
-
-function fileName(path: string): string {
-	return path.split(/[\\/]/).pop() ?? path;
+/** "…/Ironcore/data/monster" → "Ironcore". Falls back to the folder itself. */
+export function workspaceLabel(monstersPath: string): string {
+	const parts = monstersPath.split(/[\\/]/).filter(Boolean);
+	return parts[parts.length - 3] ?? parts[parts.length - 1] ?? monstersPath;
 }
 
 export default function App() {
-	const [files, setFiles] = useState<FileSet | null>(null);
-	const [tab, setTab] = useState<Tab>('item');
-	const [thingSel, setThingSel] = useState<Partial<Record<ThingCategory, number>>>({});
+	const [info, setInfo] = useState<WorkspaceInfo | null>(null);
+	const [monsters, setMonsters] = useState<MonsterSummary[]>([]);
+	const [openFile, setOpenFile] = useState<string | null>(null);
+	const [dirty, setDirty] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [opening, setOpening] = useState(false);
-	const [dropActive, setDropActive] = useState(false);
-	const [recent, setRecent] = useState<string[]>(loadRecent);
+	const [droppedPath, setDroppedPath] = useState<string | null>(null);
+	const [recent, setRecent] = useState<RecentWorkspace[]>(loadWorkspaces);
 	const [toast, setToast] = useState<Toast | null>(null);
-	const [exportSettings, setExportSettings] = useState<ExportSettings>(loadExportSettings);
-	const [showExportSettings, setShowExportSettings] = useState(false);
-
-	const applyExportSettings = useCallback((settings: ExportSettings) => {
-		setExportSettings(settings);
-		saveExportSettings(settings);
-	}, []);
 
 	const showToast = useCallback((kind: Toast['kind'], msg: string) => {
 		setToast({ kind, msg });
@@ -81,141 +48,96 @@ export default function App() {
 		return () => clearTimeout(t);
 	}, [toast]);
 
-	const openFile = useCallback(
-		async (path: string) => {
+	const open = useCallback(
+		async (paths: WorkspacePaths) => {
 			setOpening(true);
 			setError(null);
 			try {
-				const pair = await probePair(path);
-				if (!pair.spr) {
-					throw new Error(`No .spr file found next to ${fileName(path)}`);
-				}
-				if (files) {
-					await closeSpr(files.spr.path).catch(() => {});
-					if (files.dat) await closeDat(files.dat.path).catch(() => {});
-				}
-				const spr = await openSpr(pair.spr);
-				const transparent = pair.transparency ?? spr.extended;
-				let dat: OpenDat | null = null;
-				let datError: string | null = null;
-				if (pair.dat) {
-					try {
-						dat = await openDat(pair.dat);
-					} catch (e) {
-						datError = String(e);
-					}
-				} else {
-					datError = 'No .dat file found next to the .spr';
-				}
-				setFiles({ spr, dat, datError, transparent });
-				setThingSel({});
-				setTab(dat ? 'item' : 'sprites');
-				if (datError) showToast('error', `${datError} — showing raw sprites only`);
-				setRecent(prev => {
-					const next = [path, ...prev.filter(p => p !== path)].slice(0, MAX_RECENT);
-					localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-					return next;
-				});
+				const loaded = await openWorkspace(paths);
+				// Bump the protocol cache-buster so images can't leak across
+				// workspaces, then take frontend handles on the client files —
+				// the managers already hold them, this just names them for the
+				// inherited SPRx URL builders.
+				setProtocolCacheKey(Date.now());
+				await Promise.all([
+					openSpr(loaded.sprPath).catch(() => null),
+					openDat(loaded.datPath).catch(() => null)
+				]);
+				setInfo(loaded);
+				setMonsters(await listMonsters());
+				setDirty(false);
+				setRecent(
+					saveWorkspace({ label: workspaceLabel(loaded.paths.monsters), paths: loaded.paths })
+				);
 			} catch (e) {
 				setError(e instanceof Error ? e.message : String(e));
 			} finally {
 				setOpening(false);
 			}
 		},
-		[files, showToast]
+		[]
 	);
 
-	const pickFile = useCallback(async () => {
-		const picked = await openDialog({
-			multiple: false,
-			filters: [{ name: 'Tibia client files', extensions: ['dat', 'spr'] }]
-		});
-		if (typeof picked === 'string') await openFile(picked);
-	}, [openFile]);
+	const close = useCallback(async () => {
+		if (dirty && !window.confirm('You have unsaved changes. Close the workspace anyway?')) return;
+		await closeWorkspace().catch(() => {});
+		setInfo(null);
+		setMonsters([]);
+		setOpenFile(null);
+		setDirty(false);
+	}, [dirty]);
 
-	const closeFile = useCallback(async () => {
-		if (files) {
-			await closeSpr(files.spr.path).catch(() => {});
-			if (files.dat) await closeDat(files.dat.path).catch(() => {});
-		}
-		setFiles(null);
-		setError(null);
-	}, [files]);
+	const refreshMonsters = useCallback((focusFile: string | null) => {
+		listMonsters()
+			.then(list => {
+				setMonsters(list);
+				if (focusFile) setOpenFile(focusFile);
+			})
+			.catch(() => {});
+	}, []);
 
+	// Folder drops. Tauri gives us paths only — no coordinates — so Landing
+	// decides which slot a drop belongs to from the pointer position.
 	useEffect(() => {
 		const un = getCurrentWebview().onDragDropEvent(event => {
 			const payload = event.payload;
-			if (payload.type === 'enter' || payload.type === 'over') {
-				setDropActive(true);
-			} else if (payload.type === 'leave') {
-				setDropActive(false);
-			} else if (payload.type === 'drop') {
-				setDropActive(false);
-				const file = payload.paths.find(p => /\.(spr|dat)$/i.test(p));
-				if (file) void openFile(file);
+			if (payload.type === 'drop' && payload.paths.length > 0) {
+				setDroppedPath(payload.paths[0]);
+				// Clear so dropping the same folder twice re-triggers the effect.
+				setTimeout(() => setDroppedPath(null), 0);
 			}
 		});
 		return () => {
 			void un.then(f => f());
 		};
-	}, [openFile]);
+	}, []);
 
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
 			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
 				e.preventDefault();
-				void pickFile();
+				if (info) void close();
 			}
 		};
 		window.addEventListener('keydown', handler);
 		return () => window.removeEventListener('keydown', handler);
-	}, [pickFile]);
+	}, [info, close]);
+
+	// Never let the window close on unsaved work.
+	useEffect(() => {
+		const un = getCurrentWindow().onCloseRequested(async event => {
+			if (dirty && !window.confirm('You have unsaved changes. Quit anyway?')) {
+				event.preventDefault();
+			}
+		});
+		return () => {
+			void un.then(f => f());
+		};
+	}, [dirty]);
 
 	const win = getCurrentWindow();
-
-	const navItems: { key: Tab; label: string; icon: JSX.Element; count: number | null; disabled: boolean }[] =
-		files
-			? [
-					{
-						key: 'item',
-						label: 'Items',
-						icon: <Package size={16} />,
-						count: files.dat ? files.dat.itemLastId - files.dat.itemFirstId + 1 : null,
-						disabled: !files.dat
-					},
-					{
-						key: 'outfit',
-						label: 'Outfits',
-						icon: <PersonStanding size={16} />,
-						count: files.dat?.outfitCount ?? null,
-						disabled: !files.dat
-					},
-					{
-						key: 'effect',
-						label: 'Effects',
-						icon: <Sparkles size={16} />,
-						count: files.dat?.effectCount ?? null,
-						disabled: !files.dat
-					},
-					{
-						key: 'missile',
-						label: 'Missiles',
-						icon: <Wand2 size={16} />,
-						count: files.dat?.missileCount ?? null,
-						disabled: !files.dat
-					},
-					{
-						key: 'sprites',
-						label: 'Sprites',
-						icon: <Grid3X3 size={16} />,
-						count: files.spr.spriteCount,
-						disabled: false
-					}
-				]
-			: [];
-
-	const openName = files
-		? fileName(files.dat ? files.dat.path : files.spr.path).replace(/\.(dat|spr)$/i, '')
+	const title = info
+		? `${workspaceLabel(info.paths.monsters)}${openFile ? ` · ${openFile}` : ''}`
 		: '';
 
 	return (
@@ -224,7 +146,12 @@ export default function App() {
 				<div className="ss-titlebar-title">
 					<img src="/icon.png" alt="" className="ss-titlebar-icon" width={14} height={14} />
 					<span>MONx</span>
-					{files && <span className="ss-titlebar-file">— {openName}</span>}
+					{info && (
+						<span className="ss-titlebar-file">
+							— {title}
+							{dirty && <span className="mx-dirty" title="Unsaved changes"> •</span>}
+						</span>
+					)}
 				</div>
 				<div className="ss-titlebar-spacer" data-tauri-drag-region />
 				<button className="ss-caption-button" onClick={() => void win.minimize()} aria-label="Minimize">
@@ -238,90 +165,24 @@ export default function App() {
 				</button>
 			</div>
 
-			{files ? (
-				<div className="ss-body">
-					<aside className="ss-sidebar">
-						<div className="ss-sidebar-file" title={files.dat?.path ?? files.spr.path}>
-							{openName}
-						</div>
-						<nav className="ss-sidebar-nav">
-							{navItems.map(t => (
-								<button
-									key={t.key}
-									className={`ss-nav-item ${tab === t.key ? 'ss-nav-item-active' : ''}`}
-									disabled={t.disabled}
-									onClick={() => setTab(t.key)}
-								>
-									{t.icon}
-									<span className="ss-nav-label">{t.label}</span>
-									{t.count !== null && (
-										<span className="ss-nav-meta">{t.count.toLocaleString()}</span>
-									)}
-								</button>
-							))}
-						</nav>
-						<div className="ss-sidebar-footer">
-							<button className="ss-icon-btn" onClick={() => void pickFile()}>
-								<FolderOpen size={14} />
-								Open other
-							</button>
-							<button className="ss-icon-btn" onClick={() => setShowExportSettings(true)}>
-								<SlidersHorizontal size={14} />
-								Export settings
-							</button>
-							<button className="ss-icon-btn" onClick={() => void closeFile()}>
-								<X size={14} />
-								Close file
-							</button>
-						</div>
-					</aside>
-
-					<main className="ss-main">
-						{tab === 'sprites' ? (
-							<Viewer
-								key={files.spr.path}
-								file={files.spr}
-								transparent={files.transparent}
-								onTransparentChange={transparent =>
-									setFiles(f => (f ? { ...f, transparent } : f))
-								}
-								exportSettings={exportSettings}
-								showToast={showToast}
-							/>
-						) : files.dat ? (
-							<ThingsView
-								key={`${files.dat.path}-${tab}`}
-								spr={files.spr}
-								dat={files.dat}
-								category={tab}
-								selectedId={thingSel[tab] ?? null}
-								onSelect={id => setThingSel(s => ({ ...s, [tab]: id }))}
-								transparent={files.transparent}
-								onTransparentChange={transparent =>
-									setFiles(f => (f ? { ...f, transparent } : f))
-								}
-								exportSettings={exportSettings}
-								showToast={showToast}
-							/>
-						) : null}
-					</main>
-				</div>
+			{info ? (
+				<Workspace
+					info={info}
+					monsters={monsters}
+					onMonstersChanged={refreshMonsters}
+					dirty={dirty}
+					onDirtyChange={setDirty}
+					onOpenFile={setOpenFile}
+					showToast={showToast}
+				/>
 			) : (
 				<Landing
-					recent={recent}
 					error={error}
 					opening={opening}
-					dropActive={dropActive}
-					onPick={() => void pickFile()}
-					onOpenRecent={path => void openFile(path)}
-				/>
-			)}
-
-			{showExportSettings && (
-				<ExportSettingsDialog
-					settings={exportSettings}
-					onSave={applyExportSettings}
-					onClose={() => setShowExportSettings(false)}
+					droppedPath={droppedPath}
+					recent={recent}
+					onOpen={paths => void open(paths)}
+					onOpenRecent={entry => void open(entry.paths)}
 				/>
 			)}
 
