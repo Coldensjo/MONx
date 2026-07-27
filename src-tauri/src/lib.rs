@@ -1,6 +1,7 @@
 pub mod dat;
 pub mod items;
 pub mod monster;
+pub mod otb;
 mod protocol;
 pub mod spr;
 pub mod workspace;
@@ -696,23 +697,29 @@ fn open_workspace(
     let spr_path = workspace::find_by_ext(&client_dir, "spr")
         .ok_or_else(|| format!("No .spr file in {}", client_dir.display()))?;
 
-    // The client files carry the same `.otfi` transparency hint SPRx reads.
-    let transparency = dat::find_otfi(&dat_path.to_string_lossy()).and_then(|o| o.transparency);
+    // The sibling `.otfi` carries two separate hints: `extended` selects the
+    // SPR header layout, `transparency` selects 3- vs 4-channel decompression.
+    // They are not interchangeable — every later composition call has to be
+    // handed the same `transparency` or the pixel stream decodes to nothing.
+    let otfi = dat::find_otfi(&dat_path.to_string_lossy());
+    let extended = otfi.as_ref().and_then(|o| o.extended);
+    let transparent = otfi.as_ref().and_then(|o| o.transparency).unwrap_or(false);
     let spr_info = {
         let mut manager = spr_state.write().map_err(|e| format!("lock: {e}"))?;
-        manager.open_file(spr_path.to_string_lossy().into_owned(), transparency)?
+        manager.open_file(spr_path.to_string_lossy().into_owned(), extended)?
     };
     {
         let mut manager = dat_state.write().map_err(|e| format!("lock: {e}"))?;
         manager.open_file(dat_path.to_string_lossy().into_owned(), None)?;
     }
 
-    let index = items::ItemIndex::load(&items_dir.join("items.xml"))?;
+    let index = items::ItemIndex::load(&items_dir)?;
     let monsters = monster::scrape_folder(&monsters_dir);
 
     let registered_count = monsters.iter().filter(|m| m.registered).count() as u32;
     let orphan_count = monsters.len() as u32 - registered_count;
-    let lints = workspace_lints(&monsters);
+    let mut lints = workspace_lints(&monsters);
+    lints.extend(item_lints(&index));
 
     let info = WorkspaceInfo {
         paths: WorkspacePaths {
@@ -725,8 +732,7 @@ fn open_workspace(
         registered_count,
         orphan_count,
         item_count: index.len() as u32,
-        // Real OTB header parsing lands with `otb.rs` at M1.
-        otb_version: "OTB 2.7.2".to_string(),
+        otb_version: index.otb_version.clone(),
         spr_path: spr_path.to_string_lossy().into_owned(),
         dat_path: dat_path.to_string_lossy().into_owned(),
         sprite_count: spr_info.sprite_count,
@@ -739,6 +745,7 @@ fn open_workspace(
     ws.monsters = monsters;
     ws.spr_path = info.spr_path.clone();
     ws.dat_path = info.dat_path.clone();
+    ws.transparent = transparent;
 
     Ok(info)
 }
@@ -784,6 +791,34 @@ fn workspace_lints(monsters: &[MonsterSummary]) -> Vec<Lint> {
     }
 
     lints
+}
+
+/// Workspace-scope lints from the OTB ↔ items.xml cross-check. An items.xml
+/// entry with no OTB row has no sprite and cannot be a valid loot id, so this
+/// is worth surfacing at open time rather than as a blank preview later.
+fn item_lints(index: &items::ItemIndex) -> Vec<Lint> {
+    let check = &index.cross_check;
+    if check.missing_from_otb.is_empty() {
+        return Vec::new();
+    }
+    let sample: Vec<String> = check
+        .missing_from_otb
+        .iter()
+        .take(5)
+        .map(u32::to_string)
+        .collect();
+    vec![Lint {
+        severity: "warning".to_string(),
+        code: "items.missing-from-otb".to_string(),
+        message: format!(
+            "{} items.xml entries have no items.otb row and cannot be previewed (e.g. {})",
+            check.missing_from_otb.len(),
+            sample.join(", ")
+        ),
+        file: None,
+        path: None,
+        fixable: false,
+    }]
 }
 
 // ---------- Monsters (Agent 2) ----------
@@ -943,6 +978,14 @@ fn list_monster_scripts(state: State<WorkspaceState>) -> Result<Vec<String>, Str
 }
 
 #[tauri::command]
+fn list_monster_groups(state: State<WorkspaceState>) -> Result<Vec<String>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    Ok(monster::scrape_groups(
+        &PathBuf::from(&ws.paths.monsters).join("monsters.xml"),
+    ))
+}
+
+#[tauri::command]
 fn balance_bands() -> Result<Vec<BalanceBand>, String> {
     Ok(monster::balance_bands())
 }
@@ -1011,6 +1054,7 @@ pub fn run() {
             next_free_raceid,
             list_spell_names,
             list_monster_scripts,
+            list_monster_groups,
             search_items,
             get_item,
             balance_bands

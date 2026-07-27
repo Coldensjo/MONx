@@ -76,6 +76,11 @@ pub struct MonsterSummary {
     pub species: Option<String>,
     pub race: Option<String>,
     pub look: Look,
+    /// `<flag isboss="1" />`. On the summary so the list filters without
+    /// loading every document.
+    pub boss: bool,
+    pub summonable: bool,
+    pub has_loot: bool,
     pub lint_counts: LintCounts,
 }
 
@@ -426,12 +431,34 @@ pub fn scrape_summary(path: &Path, registered: bool) -> Option<MonsterSummary> {
         species: attr(root, "species").map(str::to_string),
         race: attr(root, "race").map(str::to_string),
         look,
+        boss: text.contains("isboss=\"1\""),
+        summonable: text.contains("summonable=\"1\""),
+        has_loot: text.contains("<loot") && text.contains("<item"),
         lint_counts: LintCounts {
             error: 0,
             warning: 0,
             silent: 0,
         },
     })
+}
+
+/// The comment groups in `monsters.xml` — `<!-- bosses -->`, `<!-- spells -->`,
+/// `<!-- ironcore monsters -->` — in file order. They populate the
+/// new-monster dialog's Group dropdown, so a new file lands in the right
+/// section of the registry instead of at the end.
+pub fn scrape_groups(monsters_xml: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(monsters_xml) else {
+        return Vec::new();
+    };
+    let mut groups = Vec::new();
+    for chunk in text.split("<!--").skip(1) {
+        let Some(end) = chunk.find("-->") else { continue };
+        let name = chunk[..end].trim();
+        if !name.is_empty() && !groups.iter().any(|g| g == name) {
+            groups.push(name.to_string());
+        }
+    }
+    groups
 }
 
 /// Names registered in `monsters.xml`, lower-cased, for the `registered` flag.

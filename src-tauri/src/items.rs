@@ -5,13 +5,20 @@
 //! the server. So the name index maps to a *list* of server ids and `ItemInfo`
 //! carries `ambiguousName` for anything that resolves to more than one.
 //!
-//! M0 scope: the XML index, name search, and `get_item`. Client-id resolution
-//! comes from `otb.rs` at M1; until then `clientId` mirrors `serverId`.
+//! Client ids come from `otb.rs`. Because a wrong mapping renders the wrong
+//! sprite silently, `load` cross-checks the two files against each other and
+//! reports the delta rather than trusting either alone.
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+
+use crate::otb::Otb;
+
+/// Real items start here; `dat.rs` uses the same boundary. Below it, items.xml
+/// holds the fluid/splash type names rather than items.
+const FIRST_ITEM_ID: u32 = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,16 +35,39 @@ pub struct ItemInfo {
     pub ambiguous_name: bool,
 }
 
+/// What the OTB ↔ items.xml cross-check found. Surfaced in `WorkspaceInfo` so
+/// a mismatched pair of files is visible at open time, not as a wrong sprite
+/// three hours into an editing session.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCrossCheck {
+    pub otb_count: u32,
+    pub xml_count: u32,
+    /// In items.xml but with no OTB entry — these cannot be previewed, and a
+    /// loot entry naming one is a lint (§24: MONx must not invent item ids).
+    pub missing_from_otb: Vec<u32>,
+    /// In the OTB but unnamed in items.xml. Common and harmless; counted only.
+    pub missing_from_xml: u32,
+}
+
 #[derive(Debug, Default)]
 pub struct ItemIndex {
     by_id: BTreeMap<u32, ItemInfo>,
     /// Lower-cased name → every server id carrying it.
     by_name: BTreeMap<String, Vec<u32>>,
+    otb: Otb,
+    pub otb_version: String,
+    pub cross_check: ItemCrossCheck,
 }
 
 impl ItemIndex {
     pub fn len(&self) -> usize {
         self.by_id.len()
+    }
+
+    /// The server↔client id map, for the protocol routes that render sprites.
+    pub fn otb(&self) -> &Otb {
+        &self.otb
     }
 
     pub fn is_empty(&self) -> bool {
@@ -90,8 +120,52 @@ impl ItemIndex {
             .collect()
     }
 
+    /// Loads the item database from a folder holding `items.otb` + `items.xml`.
+    pub fn load(dir: &Path) -> Result<ItemIndex, String> {
+        let otb = Otb::load(&dir.join("items.otb"))?;
+        let mut index = ItemIndex::load_xml(&dir.join("items.xml"))?;
+        index.apply_otb(&otb);
+        index.otb = otb;
+        Ok(index)
+    }
+
+    /// Resolves every entry's client id through the OTB and records the delta
+    /// between the two files.
+    fn apply_otb(&mut self, otb: &Otb) {
+        let mut missing_from_otb = Vec::new();
+        for (id, item) in self.by_id.iter_mut() {
+            match otb.client_id(*id) {
+                Some(client_id) => item.client_id = client_id,
+                None => {
+                    // No OTB entry means no sprite. Leaving client_id == server_id
+                    // here would render an arbitrary wrong sprite; 0 renders nothing.
+                    item.client_id = 0;
+                    // Ids below FIRST_ITEM_ID are the fluid/splash name table
+                    // (water, blood, beer, …), not items — they have no OTB row
+                    // by design, so reporting them would be permanent noise.
+                    if *id >= FIRST_ITEM_ID {
+                        missing_from_otb.push(*id);
+                    }
+                }
+            }
+        }
+
+        let missing_from_xml = otb
+            .server_ids()
+            .filter(|id| !self.by_id.contains_key(id))
+            .count() as u32;
+
+        self.otb_version = otb.version.clone();
+        self.cross_check = ItemCrossCheck {
+            otb_count: otb.len() as u32,
+            xml_count: self.by_id.len() as u32,
+            missing_from_otb,
+            missing_from_xml,
+        };
+    }
+
     /// Parses `items.xml`. `fromid`/`toid` ranges are expanded to one entry per id.
-    pub fn load(items_xml: &Path) -> Result<ItemIndex, String> {
+    pub fn load_xml(items_xml: &Path) -> Result<ItemIndex, String> {
         let text = std::fs::read_to_string(items_xml)
             .map_err(|e| format!("Failed to read {}: {}", items_xml.display(), e))?;
 

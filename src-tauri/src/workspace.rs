@@ -69,6 +69,10 @@ pub struct Workspace {
     pub monsters: Vec<MonsterSummary>,
     pub spr_path: String,
     pub dat_path: String,
+    /// From the sibling `.otfi`. Selects 3- vs 4-channel sprite decompression;
+    /// every composition call must be given the same value the file was opened
+    /// with, or the pixel stream decodes to garbage.
+    pub transparent: bool,
 }
 
 impl Workspace {
@@ -227,15 +231,20 @@ pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
             ))
         }),
         items: slot(Some(&expanded.items), |dir| {
-            let xml = dir.join("items.xml");
-            if !xml.is_file() {
+            if !dir.join("items.xml").is_file() {
                 return Err("items.xml not found".to_string());
             }
             if !dir.join("items.otb").is_file() {
                 return Err("items.otb not found".to_string());
             }
-            let index = ItemIndex::load(&xml)?;
-            Ok(format!("{} items", index.len()))
+            let index = ItemIndex::load(dir)?;
+            let check = &index.cross_check;
+            Ok(format!(
+                "{} items · {} · {} unmapped",
+                index.len(),
+                index.otb_version,
+                check.missing_from_otb.len()
+            ))
         }),
         client: slot(Some(&expanded.client), |dir| {
             let dat = find_by_ext(dir, "dat").ok_or("No .dat file here")?;

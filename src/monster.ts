@@ -73,6 +73,10 @@ export interface MonsterSummary {
 	species: string | null;
 	race: string | null;
 	look: Look;
+	/** `<flag isboss="1" />`. Carried on the summary so the list can filter without loading every doc. */
+	boss: boolean;
+	summonable: boolean;
+	hasLoot: boolean;
 	lintCounts: { error: number; warning: number; silent: number };
 }
 
@@ -292,6 +296,11 @@ export function listSpellNames(): Promise<SpellName[]> {
 
 export function listMonsterScripts(): Promise<string[]> {
 	return invoke<string[]>('list_monster_scripts', {});
+}
+
+/** The comment groups in monsters.xml (`<!-- bosses -->`, …), for the new-monster dialog. */
+export function listMonsterGroups(): Promise<string[]> {
+	return invoke<string[]>('list_monster_groups', {});
 }
 
 export function searchItems(query: string, limit: number): Promise<ItemInfo[]> {

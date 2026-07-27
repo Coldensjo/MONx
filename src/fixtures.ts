@@ -35,27 +35,27 @@ const noLints = { error: 0, warning: 0, silent: 0 };
 // ---------- Monster list ----------
 
 export const FIXTURE_SUMMARIES: MonsterSummary[] = [
-	{ file: 'amazon.xml', name: 'Amazon', registered: true, raceid: 77, experience: 75, health: 85, speed: 166, species: 'humanoid', race: 'blood', look: look(137, 3065, { head: 113, body: 120, legs: 95, feet: 115 }), lintCounts: noLints },
-	{ file: 'banshee.xml', name: 'Banshee', registered: true, raceid: 78, experience: 890, health: 590, speed: 340, species: 'undead', race: 'undead', look: look(78, 2998), lintCounts: noLints },
-	{ file: 'basilisk.xml', name: 'Basilisk', registered: true, raceid: 256, experience: 250, health: 350, speed: 300, species: 'reptile', race: 'blood', look: look(28, 2817), lintCounts: noLints },
-	{ file: 'bear.xml', name: 'Bear', registered: true, raceid: 16, experience: 65, health: 75, speed: 158, species: 'animal', race: 'blood', look: look(16, 2849), lintCounts: noLints },
-	{ file: 'behemoth.xml', name: 'Behemoth', registered: true, raceid: 55, experience: 3550, health: 1500, speed: 490, species: 'giant', race: 'blood', look: look(55, 2931), lintCounts: noLints },
-	{ file: 'cyclops.xml', name: 'Cyclops', registered: true, raceid: 22, experience: 605, health: 420, speed: 325, species: 'giant', race: 'blood', look: look(22, 2808), lintCounts: noLints },
-	{ file: 'demon.xml', name: 'Demon', registered: true, raceid: 35, experience: 3875, health: 4200, speed: 500, species: 'demon', race: 'blood', look: look(528, 11939), lintCounts: { error: 0, warning: 1, silent: 0 } },
-	{ file: 'dragonlord.xml', name: 'Dragon Lord', registered: true, raceid: 39, experience: 2900, health: 1650, speed: 330, species: 'dragon', race: 'blood', look: look(39, 2881), lintCounts: noLints },
-	{ file: 'ghoul.xml', name: 'Ghoul', registered: true, raceid: 18, experience: 120, health: 100, speed: 152, species: 'undead', race: 'blood', look: look(18, 2853), lintCounts: noLints },
-	{ file: 'giantscorpion.xml', name: 'Giant Scorpion', registered: true, raceid: 509, experience: 1200, health: 850, speed: 240, species: 'arachnid', race: 'venom', look: look(628, 13481), lintCounts: noLints },
-	{ file: 'hydra.xml', name: 'Hydra', registered: true, raceid: 121, experience: 8000, health: 5000, speed: 200, species: 'reptile', race: 'blood', look: look(121, 12094), lintCounts: noLints },
-	{ file: 'minotaur.xml', name: 'Minotaur', registered: true, raceid: 25, experience: 50, health: 80, speed: 164, species: 'minotaur', race: 'blood', look: look(25, 2830), lintCounts: noLints },
-	{ file: 'orc.xml', name: 'Orc', registered: true, raceid: 5, experience: 25, health: 40, speed: 155, species: 'orc', race: 'blood', look: look(5, 2820), lintCounts: noLints },
-	{ file: 'rat.xml', name: 'Rat', registered: true, raceid: 21, experience: 5, health: 20, speed: 147, species: 'animal', race: 'blood', look: look(21, 2813), lintCounts: noLints },
+	{ file: 'amazon.xml', name: 'Amazon', registered: true, raceid: 77, experience: 75, health: 85, speed: 166, species: 'humanoid', race: 'blood', look: look(137, 3065, { head: 113, body: 120, legs: 95, feet: 115 }), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'banshee.xml', name: 'Banshee', registered: true, raceid: 78, experience: 890, health: 590, speed: 340, species: 'undead', race: 'undead', look: look(78, 2998), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'basilisk.xml', name: 'Basilisk', registered: true, raceid: 256, experience: 250, health: 350, speed: 300, species: 'reptile', race: 'blood', look: look(28, 2817), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'bear.xml', name: 'Bear', registered: true, raceid: 16, experience: 65, health: 75, speed: 158, species: 'animal', race: 'blood', look: look(16, 2849), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'behemoth.xml', name: 'Behemoth', registered: true, raceid: 55, experience: 3550, health: 1500, speed: 490, species: 'giant', race: 'blood', look: look(55, 2931), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'cyclops.xml', name: 'Cyclops', registered: true, raceid: 22, experience: 605, health: 420, speed: 325, species: 'giant', race: 'blood', look: look(22, 2808), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'demon.xml', name: 'Demon', registered: true, raceid: 35, experience: 3875, health: 4200, speed: 500, species: 'demon', race: 'blood', look: look(528, 11939), boss: false, summonable: false, hasLoot: true, lintCounts: { error: 0, warning: 1, silent: 0 } },
+	{ file: 'dragonlord.xml', name: 'Dragon Lord', registered: true, raceid: 39, experience: 2900, health: 1650, speed: 330, species: 'dragon', race: 'blood', look: look(39, 2881), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'ghoul.xml', name: 'Ghoul', registered: true, raceid: 18, experience: 120, health: 100, speed: 152, species: 'undead', race: 'blood', look: look(18, 2853), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'giantscorpion.xml', name: 'Giant Scorpion', registered: true, raceid: 509, experience: 1200, health: 850, speed: 240, species: 'arachnid', race: 'venom', look: look(628, 13481), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'hydra.xml', name: 'Hydra', registered: true, raceid: 121, experience: 8000, health: 5000, speed: 200, species: 'reptile', race: 'blood', look: look(121, 12094), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'minotaur.xml', name: 'Minotaur', registered: true, raceid: 25, experience: 50, health: 80, speed: 164, species: 'minotaur', race: 'blood', look: look(25, 2830), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'orc.xml', name: 'Orc', registered: true, raceid: 5, experience: 25, health: 40, speed: 155, species: 'orc', race: 'blood', look: look(5, 2820), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'rat.xml', name: 'Rat', registered: true, raceid: 21, experience: 5, health: 20, speed: 147, species: 'animal', race: 'blood', look: look(21, 2813), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
 	// speed 0 is the immobile-prop convention (reference §26), not a mistake.
-	{ file: 'rotmaw.xml', name: 'Rotmaw', registered: true, raceid: 513, experience: 2400, health: 12000, speed: 0, species: null, race: 'venom', look: look(631, 13585), lintCounts: { error: 0, warning: 0, silent: 1 } },
-	{ file: 'stalker.xml', name: 'Stalker', registered: true, raceid: 72, experience: 185, health: 120, speed: 300, species: 'undead', race: 'blood', look: look(128, 3058, { head: 97, body: 116, legs: 95, feet: 95 }), lintCounts: noLints },
-	{ file: 'troll.xml', name: 'Troll', registered: true, raceid: 15, experience: 20, health: 40, speed: 180, species: 'troll', race: 'blood', look: look(15, 2806), lintCounts: noLints },
-	{ file: 'valkyrie.xml', name: 'Valkyrie', registered: true, raceid: 12, experience: 95, health: 115, speed: 168, species: 'humanoid', race: 'blood', look: look(139, 3065, { head: 113, body: 38, legs: 76, feet: 96 }), lintCounts: noLints },
-	{ file: 'witch.xml', name: 'Witch', registered: true, raceid: 54, experience: 155, health: 125, speed: 182, species: 'humanoid', race: 'blood', look: look(54, 3065), lintCounts: noLints },
-	{ file: 'wolf.xml', name: 'Wolf', registered: true, raceid: 27, experience: 18, health: 22, speed: 180, species: 'animal', race: 'blood', look: look(27, 2826), lintCounts: noLints }
+	{ file: 'rotmaw.xml', name: 'Rotmaw', registered: true, raceid: 513, experience: 2400, health: 12000, speed: 0, species: null, race: 'venom', look: look(631, 13585), boss: false, summonable: false, hasLoot: true, lintCounts: { error: 0, warning: 0, silent: 1 } },
+	{ file: 'stalker.xml', name: 'Stalker', registered: true, raceid: 72, experience: 185, health: 120, speed: 300, species: 'undead', race: 'blood', look: look(128, 3058, { head: 97, body: 116, legs: 95, feet: 95 }), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'troll.xml', name: 'Troll', registered: true, raceid: 15, experience: 20, health: 40, speed: 180, species: 'troll', race: 'blood', look: look(15, 2806), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'valkyrie.xml', name: 'Valkyrie', registered: true, raceid: 12, experience: 95, health: 115, speed: 168, species: 'humanoid', race: 'blood', look: look(139, 3065, { head: 113, body: 38, legs: 76, feet: 96 }), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'witch.xml', name: 'Witch', registered: true, raceid: 54, experience: 155, health: 125, speed: 182, species: 'humanoid', race: 'blood', look: look(54, 3065), boss: false, summonable: false, hasLoot: true, lintCounts: noLints },
+	{ file: 'wolf.xml', name: 'Wolf', registered: true, raceid: 27, experience: 18, health: 22, speed: 180, species: 'animal', race: 'blood', look: look(27, 2826), boss: false, summonable: false, hasLoot: true, lintCounts: noLints }
 ];
 
 // ---------- One complete document ----------
