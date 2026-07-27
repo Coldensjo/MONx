@@ -1,0 +1,2 @@
+/* Agent 2 — reserved. The format layer is Rust-only; this file exists so the
+   import list in main.tsx is stable if that ever changes. */
