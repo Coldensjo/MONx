@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Present so the `<event name="…">` registration check has something to
+     check against; `NeverRegisteredEvent` in lootsummons.xml is not here. -->
+<creaturescripts>
+	<event type="death" name="RotmawDeath" script="rotmawdeath.lua" />
+</creaturescripts>

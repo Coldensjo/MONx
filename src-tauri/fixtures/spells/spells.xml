@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Enough of data/spells/spells.xml to exercise §8.1 resolution: one ordinary
+     registered monster spell, and one whose name collides with a built-in so
+     the shadowing hazard has something to report. -->
+<spells>
+	<instant name="cleave" words="###042" lvl="1" mana="0" aggressive="1" script="monsterspells/cleave.lua" />
+	<instant name="fire" words="###099" lvl="1" mana="0" aggressive="1" script="monsterspells/fire.lua" />
+	<instant name="light healing" words="exura" lvl="8" mana="20" script="healing/light healing.lua" />
+</spells>
