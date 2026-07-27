@@ -51,7 +51,7 @@ fn main() {
         .and_then(|i| args.get(i + 1))
         .map(PathBuf::from)
         .unwrap_or_else(|| dir.with_file_name("items"));
-    let items = monx_lib::items::ItemIndex::load(&items_dir.join("items.xml")).unwrap_or_default();
+    let items = monx_lib::items::ItemIndex::load(&items_dir).unwrap_or_default();
     let files = monster::monster_files(&dir);
     let started = Instant::now();
     let mut source_lints = Vec::new();
