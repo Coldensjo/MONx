@@ -215,8 +215,11 @@ pub const SPELL_GROUP_DAMAGE: &str = "Direct damage / healing";
 pub const SPELL_GROUP_CONDITION: &str = "Damage over time";
 pub const SPELL_GROUP_STATUS: &str = "Status / utility";
 
-/// `(name, group, corpus usage)`. Usage counts are §9.5, recomputed by
-/// `probe_monster --usage`; unused-but-valid names are offered at 0 (§9.5).
+/// `(name, group, corpus usage)`. The counts are §9.5 as transcribed, and are
+/// only a fallback for when there is no corpus to measure: `list_spell_names`
+/// serves `SpellIndex::all_with_usage`, which recounts against the open
+/// workspace. Unused-but-valid names are offered at 0 so the editor still lists
+/// them (§9.5).
 pub const BUILTIN_SPELLS: &[(&str, &str, u32)] = &[
     ("melee", SPELL_GROUP_MELEE, 335),
     // §9.2 direct damage / healing
