@@ -978,6 +978,14 @@ fn list_monster_scripts(state: State<WorkspaceState>) -> Result<Vec<String>, Str
 }
 
 #[tauri::command]
+fn list_monster_groups(state: State<WorkspaceState>) -> Result<Vec<String>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    Ok(monster::scrape_groups(
+        &PathBuf::from(&ws.paths.monsters).join("monsters.xml"),
+    ))
+}
+
+#[tauri::command]
 fn balance_bands() -> Result<Vec<BalanceBand>, String> {
     Ok(monster::balance_bands())
 }
@@ -1046,6 +1054,7 @@ pub fn run() {
             next_free_raceid,
             list_spell_names,
             list_monster_scripts,
+            list_monster_groups,
             search_items,
             get_item,
             balance_bands

@@ -77,6 +77,24 @@ export function saveZoomIdx(view: string, idx: number): void {
 	}
 }
 
+/** Reads one `monx.*` key. Returns `fallback` when missing or unreadable. */
+export function loadSetting(key: string, fallback: string | null): string | null {
+	try {
+		const raw = localStorage.getItem(key);
+		return raw === null ? fallback : raw;
+	} catch {
+		return fallback;
+	}
+}
+
+export function saveSetting(key: string, value: string): void {
+	try {
+		localStorage.setItem(key, value);
+	} catch {
+		// Ignore storage failures (private mode, quota); none of this is critical.
+	}
+}
+
 export function saveExportSettings(settings: ExportSettings): void {
 	try {
 		localStorage.setItem(EXPORT_KEY, JSON.stringify(settings));
