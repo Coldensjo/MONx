@@ -1,0 +1,11 @@
+/* Agent 1 — app shell: titlebar, landing, workspace layout.
+   index.css is frozen SPRx; everything MONx adds lives here or in the three
+   sibling stylesheets, so four parallel streams never conflict on one file. */
+
+:root {
+	--warn: #d9a441;
+	--warn-dim: rgba(217, 164, 65, 0.12);
+	--silent: #8b7ec8;
+	--silent-dim: rgba(139, 126, 200, 0.12);
+	--editor-w: 720px;
+}
