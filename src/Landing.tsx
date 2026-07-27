@@ -1,33 +1,172 @@
-import { FolderOpen, History, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import {
+	AlertCircle,
+	Check,
+	FolderOpen,
+	History,
+	Image,
+	Loader2,
+	Package,
+	Skull,
+	Sparkles
+} from 'lucide-react';
+import { probeWorkspace, type SlotStatus, type WorkspacePaths, type WorkspaceProbe } from './monster';
+import type { RecentWorkspace } from './settings';
+
+type SlotKey = keyof WorkspacePaths;
+
+const SLOTS: { key: SlotKey; label: string; hint: string; icon: JSX.Element; optional?: boolean }[] = [
+	{ key: 'monsters', label: 'Monsters folder', hint: 'data/monster', icon: <Skull size={16} /> },
+	{
+		key: 'items',
+		label: 'Items folder',
+		hint: 'data/items — items.otb + items.xml',
+		icon: <Package size={16} />
+	},
+	{ key: 'client', label: 'Client folder', hint: 'Tibia.dat + Tibia.spr', icon: <Image size={16} /> },
+	{
+		key: 'spells',
+		label: 'Spells folder',
+		hint: 'data/spells — optional, enables ### spell verification',
+		icon: <Sparkles size={16} />,
+		optional: true
+	}
+];
+
+const EMPTY: WorkspacePaths = { monsters: '', items: '', client: '', spells: null };
 
 interface Props {
-	recent: string[];
 	error: string | null;
 	opening: boolean;
-	dropActive: boolean;
-	onPick: () => void;
-	onOpenRecent: (path: string) => void;
+	/** A folder dropped on the window, from App's webview drag wiring. */
+	droppedPath: string | null;
+	recent: RecentWorkspace[];
+	onOpen: (paths: WorkspacePaths) => void;
+	onOpenRecent: (entry: RecentWorkspace) => void;
 }
 
-export default function Landing({ recent, error, opening, dropActive, onPick, onOpenRecent }: Props) {
+function slotOf(probe: WorkspaceProbe | null, key: SlotKey): SlotStatus | null {
+	return probe ? probe[key] : null;
+}
+
+export default function Landing({ error, opening, droppedPath, recent, onOpen, onOpenRecent }: Props) {
+	const [paths, setPaths] = useState<WorkspacePaths>(EMPTY);
+	const [probe, setProbe] = useState<WorkspaceProbe | null>(null);
+	const [probing, setProbing] = useState(false);
+	const [hoverSlot, setHoverSlot] = useState<SlotKey | null>(null);
+
+	// Every path change is re-probed, and the probe result — not what the user
+	// picked — is what fills the rows: the backend resolves a file to its folder
+	// and expands a server `data/` root into all three slots.
+	useEffect(() => {
+		if (!paths.monsters && !paths.items && !paths.client && !paths.spells) {
+			setProbe(null);
+			return;
+		}
+		let cancelled = false;
+		setProbing(true);
+		probeWorkspace(paths)
+			.then(result => {
+				if (cancelled) return;
+				setProbe(result);
+				setPaths(prev => ({
+					monsters: result.monsters.path ?? prev.monsters,
+					items: result.items.path ?? prev.items,
+					client: result.client.path ?? prev.client,
+					spells: result.spells.path ?? prev.spells
+				}));
+			})
+			.catch(() => {
+				if (!cancelled) setProbe(null);
+			})
+			.finally(() => {
+				if (!cancelled) setProbing(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [paths.monsters, paths.items, paths.client, paths.spells]);
+
+	// The webview drop event carries no coordinates, so a drop lands in the row
+	// the pointer is over, falling back to `monsters` — which is also the slot
+	// that expands a server data/ root into the rest.
+	useEffect(() => {
+		if (!droppedPath) return;
+		const key = hoverSlot ?? 'monsters';
+		setPaths(prev => ({ ...prev, [key]: droppedPath }));
+		// hoverSlot is read at drop time only; re-running on hover would re-apply
+		// the same path to whichever row the pointer wandered into next.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [droppedPath]);
+
+	const pick = useCallback(async (key: SlotKey) => {
+		const picked = await openDialog({ directory: true, multiple: false });
+		if (typeof picked === 'string') setPaths(prev => ({ ...prev, [key]: picked }));
+	}, []);
+
+	const ready =
+		!!probe && probe.monsters.ok && probe.items.ok && probe.client.ok && !probing && !opening;
+
 	return (
-		<div className={`ss-landing ${dropActive ? 'ss-drop-active' : ''}`}>
+		<div className="ss-landing">
 			<img src="/icon.png" alt="" className="ss-landing-icon" width={40} height={40} />
 
 			{error && <div className="ss-landing-error">{error}</div>}
 
-			<button className="ss-btn ss-btn-primary" onClick={onPick} disabled={opening}>
-				{opening ? <Loader2 size={15} className="ss-spin" /> : <FolderOpen size={15} />}
-				{opening ? 'Opening…' : 'Open client files'}
+			<div className="mx-slots">
+				{SLOTS.map(slot => {
+					const status = slotOf(probe, slot.key);
+					const path = slot.key === 'spells' ? paths.spells : paths[slot.key];
+					const state = !path ? 'empty' : status?.ok ? 'ok' : 'bad';
+					return (
+						<button
+							key={slot.key}
+							className="mx-slot"
+							data-state={state}
+							data-hover={hoverSlot === slot.key ? 'true' : undefined}
+							onClick={() => void pick(slot.key)}
+							onMouseEnter={() => setHoverSlot(slot.key)}
+							onMouseLeave={() => setHoverSlot(s => (s === slot.key ? null : s))}
+						>
+							<span className="mx-slot-icon">{slot.icon}</span>
+							<span className="mx-slot-body">
+								<span className="mx-slot-label">
+									{slot.label}
+									{slot.optional && <span className="mx-slot-optional">optional</span>}
+								</span>
+								<span className="mx-slot-path mono">{path || slot.hint}</span>
+								{status && (status.summary || status.error) && (
+									<span className="mx-slot-status" data-ok={status.ok ? 'true' : 'false'}>
+										{status.ok ? <Check size={12} /> : <AlertCircle size={12} />}
+										{status.summary ?? status.error}
+									</span>
+								)}
+							</span>
+						</button>
+					);
+				})}
+			</div>
+
+			<button className="ss-btn ss-btn-primary" disabled={!ready} onClick={() => onOpen(paths)}>
+				{opening || probing ? <Loader2 size={15} className="ss-spin" /> : <FolderOpen size={15} />}
+				{opening ? 'Opening…' : probing ? 'Checking…' : 'Open workspace'}
 			</button>
 
 			{recent.length > 0 && (
 				<div className="ss-recent">
 					<div className="ss-recent-label">Recent</div>
-					{recent.map(path => (
-						<button key={path} className="ss-recent-row" onClick={() => onOpenRecent(path)} disabled={opening}>
+					{recent.map(entry => (
+						<button
+							key={entry.paths.monsters}
+							className="ss-recent-row"
+							onClick={() => onOpenRecent(entry)}
+							disabled={opening}
+						>
 							<History size={14} />
-							<span className="ss-recent-path">{path}</span>
+							<span className="ss-recent-path">
+								{entry.label} — {entry.paths.monsters}
+							</span>
 						</button>
 					))}
 				</div>

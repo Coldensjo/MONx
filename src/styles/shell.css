@@ -1,6 +1,7 @@
 /* Agent 1 — app shell: titlebar, landing, workspace layout.
    index.css is frozen SPRx; everything MONx adds lives here or in the three
-   sibling stylesheets, so four parallel streams never conflict on one file. */
+   sibling stylesheets, so four parallel streams never conflict on one file.
+   No new colours: everything below comes from the inherited palette. */
 
 :root {
 	--warn: #d9a441;
@@ -8,4 +9,205 @@
 	--silent: #8b7ec8;
 	--silent-dim: rgba(139, 126, 200, 0.12);
 	--editor-w: 720px;
+}
+
+/* ---------- Titlebar ---------- */
+
+/* The unsaved marker. Accent rather than destructive — unsaved work is a
+   state, not an error. */
+.mx-dirty {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+/* ---------- Landing: the three workspace slots ---------- */
+
+.mx-slots {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 560px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	overflow: hidden;
+	background: var(--surface);
+}
+
+.mx-slot {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 12px 14px;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--border);
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.mx-slot:last-child {
+	border-bottom: none;
+}
+
+.mx-slot:hover,
+.mx-slot[data-hover='true'] {
+	background: var(--surface-2);
+}
+
+.mx-slot-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex: 0 0 auto;
+	border-radius: var(--radius);
+	background: var(--surface-2);
+	color: var(--text-muted);
+}
+
+.mx-slot[data-state='ok'] .mx-slot-icon {
+	background: var(--accent-dim);
+	color: var(--accent);
+}
+
+.mx-slot[data-state='bad'] .mx-slot-icon {
+	background: var(--destructive-dim);
+	color: var(--destructive);
+}
+
+.mx-slot-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	flex: 1;
+}
+
+.mx-slot-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.mx-slot-optional {
+	padding: 0 5px;
+	border-radius: 3px;
+	background: var(--surface-2);
+	color: var(--text-muted);
+	font-size: 10px;
+	font-weight: 400;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.mx-slot-path {
+	color: var(--text-muted);
+	font-size: 11px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mx-slot-status {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11px;
+	color: var(--accent);
+}
+
+.mx-slot-status[data-ok='false'] {
+	color: var(--destructive);
+}
+
+/* ---------- Workspace ---------- */
+
+.ss-details {
+	width: var(--details-w);
+	flex: 0 0 var(--details-w);
+	border-left: 1px solid var(--border);
+	background: var(--surface);
+	overflow-y: auto;
+}
+
+.mx-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+/* The status bar doubles as the lint summary (DESIGN §11.2). */
+.mx-statusbar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 12px;
+	border-top: 1px solid var(--border);
+	background: var(--surface);
+	flex: 0 0 auto;
+}
+
+.mx-status-file {
+	flex: 1;
+	color: var(--text-muted);
+	font-size: 11px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ---------- Editor placeholder ----------
+   Temporary. Agent 3's MonsterEditor replaces .mx-editor-placeholder wholesale;
+   the section bar here mirrors the nine sections so the layout is honest about
+   what will occupy the space. */
+
+.mx-editor-placeholder {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.mx-editor-bar {
+	display: flex;
+	gap: 2px;
+	padding: 0 12px;
+	border-bottom: 1px solid var(--border);
+	background: var(--surface);
+	flex: 0 0 auto;
+	overflow-x: auto;
+}
+
+.mx-editor-tab {
+	padding: 9px 10px;
+	color: var(--text-muted);
+	font-size: 12px;
+	white-space: nowrap;
+	border-bottom: 2px solid transparent;
+}
+
+.mx-editor-tab:first-child {
+	color: var(--text);
+	border-bottom-color: var(--accent);
+}
+
+.mx-editor-json {
+	flex: 1;
+	min-height: 0;
+	margin: 0;
+	padding: 12px;
+	overflow: auto;
+	color: var(--text-muted);
+	font-size: 11px;
+	line-height: 1.5;
+	white-space: pre;
+	user-select: text;
 }
