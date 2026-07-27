@@ -5,3 +5,8 @@ src-tauri/gen/schemas
 
 # Per-agent git worktrees for the parallel build (agents/README.md §4).
 .claude/worktrees/
+
+# The fixture workspace: a real server's monster/item data and a full Tibia
+# client (Tibia.spr alone is 54 MB). Needed on disk to run and verify MONx —
+# see AGENTS.md — but deliberately never committed.
+assets/
