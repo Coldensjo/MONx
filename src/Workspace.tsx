@@ -364,6 +364,14 @@ export default function Workspace({
 							}
 							cellKey={t => t.id}
 							cellLabel={t => t.name ?? String(t.id)}
+							// Outfits: frame 0 is the standing pose, so loop the walking
+							// frames (1..n-1), exactly as SPRx does.
+							cellFrames={t => (view === 'outfits' && t.frames > 1 ? t.frames - 1 : t.frames)}
+							cellUrl={(t, frame) =>
+								thingUrlFor(info.sprPath, info.datPath, THING_CAT[view as ThingView], t.id, info.transparent, {
+									frame: view === 'outfits' && t.frames > 1 ? frame + 1 : frame
+								})
+							}
 							searchId={t => t.id}
 							searchText={t => t.name ?? ''}
 							selectionMode="single"
