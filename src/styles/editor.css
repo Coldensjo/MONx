@@ -963,19 +963,10 @@
 	color: var(--text-muted);
 }
 
-.ss-ed-rarity {
-	position: relative;
-	width: 56px;
-	height: 5px;
-	border-radius: 3px;
-	background: var(--surface-2);
-	overflow: hidden;
-}
-
-.ss-ed-rarity-fill {
-	position: absolute;
-	inset: 0 auto 0 0;
-	background: var(--accent);
+.ss-ed-odds {
+	width: 74px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
 }
 
 .ss-ed-loot-id {
@@ -984,6 +975,7 @@
 	font-size: 11px;
 	color: var(--text-muted);
 	font-variant-numeric: tabular-nums;
+	flex-shrink: 0;
 }
 
 .ss-ed-loot-detail {

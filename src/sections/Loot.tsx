@@ -47,11 +47,17 @@ export function percentText(chance: number): string {
 	return `${pct.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}%`;
 }
 
-/** Log-ish bar: rare drops would all render as an empty sliver on a linear scale. */
-function rarityFill(chance: number): number {
-	if (chance <= 0) return 0;
-	const t = Math.log10(chance) / Math.log10(MAX_CHANCE);
-	return Math.max(4, Math.min(100, t * 100));
+/**
+ * Odds the way anyone actually talks about a drop: 1% is "1 in 100". Below 2:1
+ * the form needs a fraction to stay honest, so common drops read as a percent
+ * instead — "3 in 4" is not how anyone says 75%.
+ */
+export function oddsText(chance: number): string {
+	if (chance <= 0) return 'never';
+	if (chance >= MAX_CHANCE) return 'always';
+	const ratio = MAX_CHANCE / chance;
+	if (ratio < 2) return percentText(chance);
+	return `1 in ${Math.round(ratio).toLocaleString()}`;
 }
 
 interface RowProps {
@@ -118,6 +124,8 @@ const LootRow = memo(function LootRow({
 
 				<ItemSprite serverId={serverId} size={32} />
 
+				<span className="ss-ed-loot-id">{serverId ?? '—'}</span>
+
 				<span className="ss-ed-loot-name">
 					{info?.name ?? entry.name ?? (entry.id !== null ? `id ${entry.id}` : 'unresolved')}
 					{container && <Package size={12} className="ss-ed-loot-container-mark" />}
@@ -138,9 +146,7 @@ const LootRow = memo(function LootRow({
 				</span>
 
 				<span className="ss-ed-loot-chance" title={`chance="${entry.chance}" of ${MAX_CHANCE}`}>
-					<span className="ss-ed-rarity">
-						<span className="ss-ed-rarity-fill" style={{ width: `${rarityFill(entry.chance)}%` }} />
-					</span>
+					<span className="ss-ed-odds">{oddsText(entry.chance)}</span>
 					<NumberField
 						value={Number((entry.chance / 1000).toFixed(3))}
 						onChange={v => onChange({ ...entry, chance: Math.min(MAX_CHANCE, Math.round(v * 1000)) })}
@@ -168,8 +174,6 @@ const LootRow = memo(function LootRow({
 					/>
 					{countLints.length > 0 && <FieldLint lints={countLints} />}
 				</span>
-
-				<span className="ss-ed-loot-id">{serverId ?? '—'}</span>
 
 				<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" disabled={readOnly} title="Remove" onClick={onRemove}>
 					<Trash2 size={14} />
