@@ -941,6 +941,33 @@ fn balance_bands(state: State<WorkspaceState>) -> Result<Vec<BalanceBand>, Strin
     Ok(monster::balance_bands(&ws.docs))
 }
 
+/// Corpus-wide loot pin (§13). `apply = false` is the preview the Tools menu
+/// shows before anything touches disk; the same call with `apply = true` writes
+/// every changed file through the normal save path, backups included.
+#[tauri::command]
+fn pin_loot_ids(
+    state: State<WorkspaceState>,
+    ambiguous_only: bool,
+    apply: bool,
+) -> Result<monster::PinReport, String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    let docs = std::mem::take(&mut ws.docs);
+    let report = monster::pin_loot_ids(
+        &ws.monsters_dir(),
+        &ws.registry,
+        &ws.items,
+        &docs,
+        ambiguous_only,
+        apply,
+    );
+    ws.docs = docs;
+    let report = report?;
+    if apply && report.files > 0 {
+        refresh(&mut ws);
+    }
+    Ok(report)
+}
+
 // ---------- Items (Agent 1) ----------
 
 #[tauri::command]
@@ -1015,7 +1042,8 @@ pub fn run() {
             list_monster_groups,
             search_items,
             get_item,
-            balance_bands
+            balance_bands,
+            pin_loot_ids
         ])
         .run(tauri::generate_context!())
         .expect("error while running MONx");

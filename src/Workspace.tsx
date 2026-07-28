@@ -24,6 +24,8 @@ import {
 	type MonsterSummary,
 	type WorkspaceInfo
 } from './monster';
+import Menubar, { type Menu } from './Menubar';
+import PinLootDialog, { type PinScope } from './PinLootDialog';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
@@ -55,6 +57,7 @@ interface Props {
 	onDirtyChange: (dirty: boolean) => void;
 	onOpenFile: (file: string | null) => void;
 	showToast: (kind: Toast['kind'], msg: string) => void;
+	onCloseWorkspace: () => void;
 }
 
 export default function Workspace({
@@ -64,9 +67,11 @@ export default function Workspace({
 	dirty,
 	onDirtyChange,
 	onOpenFile,
-	showToast
+	showToast,
+	onCloseWorkspace
 }: Props) {
 	const [view, setView] = useState<View>('monsters');
+	const [tool, setTool] = useState<PinScope | null>(null);
 	const [selected, setSelected] = useState<string | null>(() =>
 		loadSetting('monx.lastMonster', null)
 	);
@@ -78,6 +83,8 @@ export default function Workspace({
 	const [items, setItems] = useState<Map<number, ItemInfo>>(new Map());
 	const [itemList, setItemList] = useState<ItemInfo[]>([]);
 	const [saving, setSaving] = useState(false);
+	/** Bumped to re-read the open monster from disk after a corpus-wide tool ran. */
+	const [reloadKey, setReloadKey] = useState(0);
 	const [spells, setSpells] = useState<SpellName[]>([]);
 	const [scripts, setScripts] = useState<string[]>([]);
 	const [nextRaceid, setNextRaceid] = useState<number | null>(null);
@@ -112,7 +119,7 @@ export default function Workspace({
 		return () => {
 			cancelled = true;
 		};
-	}, [selected, onOpenFile, onDirtyChange, showToast]);
+	}, [selected, reloadKey, onOpenFile, onDirtyChange, showToast]);
 
 	useEffect(() => {
 		listMonsterGroups().then(setGroups).catch(() => setGroups([]));
@@ -268,6 +275,35 @@ export default function Workspace({
 		[onMonstersChanged]
 	);
 
+	// The corpus tools rewrite files straight from the on-disk corpus, so an
+	// unsaved editor buffer would be silently overwritten by the next save.
+	// Blocked rather than merged: the fix is one Ctrl+S away.
+	const toolsBlocked = dirty ? ' — save first' : '';
+	const menus: Menu[] = [
+		{
+			label: 'File',
+			items: [
+				{ label: 'Save monster', shortcut: 'Ctrl+S', disabled: !doc || saving, onSelect: () => void save() },
+				{ label: 'Close workspace', shortcut: 'Ctrl+O', separated: true, onSelect: onCloseWorkspace }
+			]
+		},
+		{
+			label: 'Tools',
+			items: [
+				{
+					label: `Pin ambiguous loot ids…${toolsBlocked}`,
+					disabled: dirty,
+					onSelect: () => setTool('ambiguous')
+				},
+				{
+					label: `Pin all loot ids…${toolsBlocked}`,
+					disabled: dirty,
+					onSelect: () => setTool('all')
+				}
+			]
+		}
+	];
+
 	const nav: { key: View; label: string; icon: JSX.Element; count: number }[] = [
 		{ key: 'monsters', label: 'Monsters', icon: <Skull size={16} />, count: info.monsterCount },
 		{ key: 'items', label: 'Items', icon: <Package size={16} />, count: itemList.length },
@@ -297,6 +333,8 @@ export default function Workspace({
 
 	return (
 		<>
+			<Menubar menus={menus} />
+
 			<div className="ss-body">
 				<aside className="ss-sidebar">
 					<div className="ss-sidebar-file" title={info.paths.monsters}>
@@ -425,6 +463,25 @@ export default function Workspace({
 					{saving ? 'Saving…' : dirty ? 'Save •' : 'Save'}
 				</button>
 			</div>
+
+			{tool && (
+				<PinLootDialog
+					scope={tool}
+					onClose={() => setTool(null)}
+					onError={m => showToast('error', m)}
+					onApplied={report => {
+						onMonstersChanged(null);
+						lintWorkspace().then(setWorkspaceLints).catch(() => {});
+						setReloadKey(k => k + 1);
+						showToast(
+							'ok',
+							`Pinned ${report.pinned.length} loot ${
+								report.pinned.length === 1 ? 'entry' : 'entries'
+							} across ${report.files} ${report.files === 1 ? 'file' : 'files'}`
+						);
+					}}
+				/>
+			)}
 
 			<LintPanel
 				open={lintsOpen}

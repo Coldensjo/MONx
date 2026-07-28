@@ -176,6 +176,7 @@ export default function App() {
 					onDirtyChange={setDirty}
 					onOpenFile={setOpenFile}
 					showToast={showToast}
+					onCloseWorkspace={() => void close()}
 				/>
 			) : (
 				<Landing

@@ -215,6 +215,34 @@ export interface ItemInfo {
 	ambiguousName: boolean;
 }
 
+// ---------- Corpus tools ----------
+
+export interface PinnedLoot {
+	file: string;
+	monster: string;
+	/** The name the entry carried, as spelled in the monster file. */
+	name: string;
+	id: number;
+	/** The name owns more than one server id — the §13 drop hazard. */
+	ambiguous: boolean;
+}
+
+export interface UnresolvedLoot {
+	file: string;
+	monster: string;
+	name: string;
+}
+
+export interface PinReport {
+	/** False for a dry run — nothing was written. */
+	applied: boolean;
+	pinned: PinnedLoot[];
+	/** Names no items.xml entry owns; left untouched (§24). */
+	unresolved: UnresolvedLoot[];
+	/** Files the pin touches, not files scanned. */
+	files: number;
+}
+
 // ---------- Spells ----------
 
 export interface SpellName {
@@ -323,6 +351,14 @@ export function getItem(serverId: number): Promise<ItemInfo> {
 
 export function balanceBands(): Promise<BalanceBand[]> {
 	return invoke<BalanceBand[]>('balance_bands', {});
+}
+
+/**
+ * Corpus-wide loot pin (§13). Call with `apply: false` for the preview the
+ * Tools menu shows, then again with `apply: true` to write it.
+ */
+export function pinLootIds(ambiguousOnly: boolean, apply: boolean): Promise<PinReport> {
+	return invoke<PinReport>('pin_loot_ids', { ambiguousOnly, apply });
 }
 
 // ---------- Protocol URLs (README §7) ----------

@@ -20,6 +20,133 @@
 	font-weight: 600;
 }
 
+/* ---------- Menubar ---------- */
+
+.mx-menubar {
+	display: flex;
+	align-items: stretch;
+	flex: 0 0 auto;
+	padding: 0 6px;
+	border-bottom: 1px solid var(--border);
+	background: var(--surface);
+}
+
+.mx-menu {
+	position: relative;
+}
+
+.mx-menu-title {
+	padding: 5px 10px;
+	background: transparent;
+	border: none;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.mx-menu-title:hover,
+.mx-menu-title-open {
+	background: var(--surface-2);
+	color: var(--text);
+}
+
+/* Above the editor's sticky headers, below the modal backdrop (z 2000). */
+.mx-menu-pop {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	z-index: 1500;
+	min-width: 230px;
+	padding: 4px 0;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.mx-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	width: 100%;
+	padding: 6px 12px;
+	background: transparent;
+	border: none;
+	color: var(--text);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.mx-menu-item:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+
+.mx-menu-item:disabled {
+	color: var(--text-muted);
+	cursor: default;
+}
+
+.mx-menu-item-sep {
+	margin-top: 4px;
+	border-top: 1px solid var(--border);
+	padding-top: 8px;
+}
+
+.mx-menu-shortcut {
+	margin-left: auto;
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
+/* ---------- Corpus tools: the loot pin preview ---------- */
+
+.mx-pin-modal {
+	width: 620px;
+	max-width: calc(100vw - 64px);
+}
+
+.mx-pin-list {
+	max-height: 260px;
+	overflow: auto;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface-2);
+	font-size: 11px;
+	line-height: 1.7;
+	user-select: text;
+}
+
+.mx-pin-row {
+	display: flex;
+	gap: 10px;
+	white-space: nowrap;
+}
+
+.mx-pin-file {
+	flex: 0 0 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--text-muted);
+}
+
+.mx-pin-flag {
+	color: var(--warn);
+}
+
+.mx-pin-more {
+	padding-top: 4px;
+	color: var(--text-muted);
+}
+
+.mx-pin-warn {
+	color: var(--warn);
+}
+
 /* ---------- Landing: the three workspace slots ---------- */
 
 .mx-slots {
