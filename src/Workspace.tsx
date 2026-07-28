@@ -13,6 +13,7 @@ import {
 	listMonsters,
 	listSpellNames,
 	nextFreeRaceid,
+	revealMonster,
 	saveMonster,
 	searchItems,
 	thingsRowUrlFor,
@@ -160,6 +161,13 @@ export default function Workspace({
 	);
 
 	const monsterNames = useMemo(() => monsters.map(m => m.name), [monsters]);
+
+	const reveal = useCallback(
+		(file: string) => {
+			revealMonster(file).catch(e => showToast('error', String(e)));
+		},
+		[showToast]
+	);
 
 	const editDoc = useCallback(
 		(next: MonsterDoc) => {
@@ -360,6 +368,7 @@ export default function Workspace({
 						onMutated={refreshMonsters}
 						showToast={showToast}
 						groups={groups}
+						onReveal={reveal}
 					/>
 				</aside>
 

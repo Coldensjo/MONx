@@ -342,6 +342,42 @@ fn rename_monster(
     Ok(doc)
 }
 
+/// Opens the OS file manager with the monster's `.xml` selected.
+#[tauri::command]
+fn reveal_monster(state: State<WorkspaceState>, file: String) -> Result<(), String> {
+    let path = {
+        let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+        ws.monsters_dir().join(&file)
+    };
+    if !path.exists() {
+        return Err(format!("{} is not on disk", path.display()));
+    }
+    // Explorer exits 1 even when it succeeds, and `open -R` detaches, so the
+    // exit status is not worth reading — only a failure to spawn is real.
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("explorer.exe");
+        c.arg(format!("/select,{}", path.display()));
+        c
+    };
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg("-R").arg(&path);
+        c
+    };
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    let mut cmd = {
+        // No portable "select the file" on Linux; the containing folder is the
+        // most any file manager is guaranteed to understand.
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(path.parent().unwrap_or(&path));
+        c
+    };
+    cmd.spawn().map_err(|e| format!("reveal: {e}"))?;
+    Ok(())
+}
+
 #[tauri::command]
 fn lint_workspace(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
@@ -476,6 +512,7 @@ pub fn run() {
             duplicate_monster,
             delete_monster,
             rename_monster,
+            reveal_monster,
             lint_workspace,
             lint_monster,
             next_free_raceid,

@@ -321,6 +321,11 @@ export function renameMonster(file: string, newName: string, newFile: string): P
 	return invoke<MonsterDoc>('rename_monster', { file, newName, newFile });
 }
 
+/** Opens the OS file manager with the monster's `.xml` selected. */
+export function revealMonster(file: string): Promise<void> {
+	return invoke<void>('reveal_monster', { file });
+}
+
 export function lintWorkspace(): Promise<Lint[]> {
 	return invoke<Lint[]>('lint_workspace', {});
 }
