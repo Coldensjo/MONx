@@ -1,8 +1,5 @@
 // Custom `monx://` URI scheme serving sprite/thing images as PNG, adapted from
 // SpriteForge's sprite_protocol.rs. Routes:
-//   /atlas.png?path=<spr>&start=<id>&count=<n>&cols=<n>&transparent=0|1
-//   /atlas.png?path=<spr>&ids=1,5,9&cols=<n>&transparent=0|1
-//   /flags.bin?path=<spr>   -> one byte per sprite id, 1 = has pixels
 //   /thing.png?path=<spr>&dat=<dat>&cat=item|outfit|effect|missile&id=<n>&transparent=0|1
 //              [&frame=<n>][&dir=<n>][&diry=<n>][&patz=<n>][&addons=<mask>]
 //              (dir = pattern_x index, e.g. outfit facing; diry = pattern_y
@@ -12,7 +9,7 @@
 //              [&frame=<n>][&anim=0|1][&addons=<mask>]
 //              -> horizontal strip, one cell×cell square per id (grid row atlas)
 //
-// MONx routes (agents/README.md §7). These take their file paths from the open
+// MONx routes. These take their file paths from the open
 // workspace rather than from query params, so the frontend builders stay short:
 //   /look.png?type=<n>&head=&body=&legs=&feet=&addons=&mount=&dir=&frame=[&cell=]
 //   /look.png?typeex=<server item id>[&cell=]
@@ -468,36 +465,6 @@ fn dispatch(
     }
 
     match path_seg {
-        "/atlas.png" => {
-            let cols = num::<u32>(query, "cols", 12).max(1);
-            let transparent = num::<u32>(query, "transparent", 0) != 0;
-
-            let ids: Vec<u32> = if let Some(list) = query.get("ids") {
-                list.split(',')
-                    .filter_map(|v| v.trim().parse().ok())
-                    .collect()
-            } else {
-                let start = num::<u32>(query, "start", 1).max(1);
-                let count = num::<u32>(query, "count", 0);
-                (start..start.saturating_add(count)).collect()
-            };
-
-            if ids.is_empty() {
-                return Err("no sprite ids requested".to_string());
-            }
-            if ids.len() > 16384 {
-                return Err("too many sprite ids in one atlas request".to_string());
-            }
-
-            let manager = spr.read().map_err(|e| format!("lock: {e}"))?;
-            let png = manager.compose_atlas_png(&spr_path, &ids, cols, transparent)?;
-            Ok(("image/png", png))
-        }
-        "/flags.bin" => {
-            let manager = spr.read().map_err(|e| format!("lock: {e}"))?;
-            let flags = manager.read_flags(&spr_path)?;
-            Ok(("application/octet-stream", flags))
-        }
         "/thing.png" => {
             let dat_path = query.get("dat").cloned().unwrap_or_default();
             if dat_path.is_empty() {
