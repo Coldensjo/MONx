@@ -36,10 +36,10 @@ as expected.
 `application/x-monx+item`, Agent 3 listened for `application/x-monx-item`, so
 every drag from a browser into an editor field was dead. Resolved in favour of
 `dnd.ts` — the shared module the contract intends, already emitted by the
-browsers. `fields/drop.ts` is now a thin adapter over it, which kept the nine
-editor sections untouched. The item payload gained `container`, which the loot
-editor needs to decide whether a dropped entry can nest before it has resolved
-the id.
+browsers. `fields/drop.ts` became a thin adapter over it, which kept the nine
+editor sections untouched — and was retired one merge later, see §2. The item
+payload gained `container`, which the loot editor needs to decide whether a
+dropped entry can nest before it has resolved the id.
 
 Verified on the built exe: the workspace opens, all nine sections render, the
 Look section shows the outfit sprite with colour swatches and a corpse picker
@@ -48,7 +48,36 @@ and editing a field marks the titlebar and Save button dirty.
 
 ---
 
-## 2. What is still open
+## 2. The second round of merges
+
+Agents 2 and 3 each pushed one more commit after the first integration, and both
+are merged.
+
+**Agent 2** gated `write_new` — the renderer behind `create_monster`, which the
+splice writer never exercised — on idempotence, and it caught a real defect: a
+`<voices>` or `<summons>` block with attributes but no children was dropped
+whole, taking `interval`, `chance` and `maxSummons` with it (`man.xml`,
+`woman.xml`, `vampireinvoker.xml`).
+
+**Agent 3** deleted `fields/drop.ts` and moved every drop target and the reorder
+gesture onto `dnd.ts` directly, which retires the adapter I wrote during the
+first integration. They also adopted `derive.ts` and routed `monx.editor`
+through `settings.ts`. The merge was a modify/delete conflict on `drop.ts`,
+resolved in favour of the deletion.
+
+Full gate run after both merges:
+
+```
+probe_monster -- ../assets/monsters --canonical --mutate
+parsed 382 files in 76ms · round-trip identical: 382 · differing: 0
+canonical re-read equal: 382/382 (0 failed) — what create_monster writes
+canonical normalisation: 7 documents drop something the engine already ignores
+edit round-trip: 382/382 re-read equal after an edit · 1726 lines changed (0 failed)
+```
+
+---
+
+## 3. What is still open
 
 1. **Icons are still SPRx's artwork.** `public/icon.png` and `src-tauri/icons/*`
    are unchanged, so the app ships another product's mark. Every size in the
@@ -60,26 +89,27 @@ and editing a field marks the titlebar and Save button dirty.
    `OpenFile` handle that `App.tsx` currently opens and discards; it also wants
    `ExportSettings`, which the workspace shell no longer carries. `Viewer.tsx`
    and `ExportSettingsDialog.tsx` are both unimported today.
-3. **`ItemIndex` (the TS interface) lives in Agent 3's `ItemPicker.tsx`**, not
-   in the contract. Their brief expected it from me and M0 didn't ship it. Move
-   it into `monster.ts` if it should be contract surface.
-4. **`monx.editor` is read and written directly from `MonsterEditor.tsx`**
-   rather than through `settings.ts`. Fold it in for consistency with the other
-   `monx.*` keys.
-5. **No "reveal in folder" command.** `MonsterList` renders the menu item only
+3. **`ItemIndex` (the TS interface) still lives in `fields/ItemPicker.tsx`**,
+   not in the contract. Harmless where it is; move it into `monster.ts` only if
+   it should be contract surface.
+4. **No "reveal in folder" command.** `MonsterList` renders the menu item only
    when given an `onReveal` prop. Adding the command is a contract addition.
-6. **One unreproduced crash.** The app exited once while navigating from the
+5. **One unreproduced crash.** The app exited once while navigating from the
    outfit browser back to Monsters. The same sequence has not reproduced since,
    and no other exit has been seen across many navigations. Recorded rather than
    claimed fixed — if it recurs, that navigation is the place to look.
-7. **`save_monster` has not been exercised against the corpus.** The dirty
-   marker, lint refresh and Save button are wired and verified, but every test
-   edit was deliberately discarded rather than written, so Agent 2's writer has
-   only been proven through `probe_monster`, not through the UI.
+6. **Saving has never been done through the UI.** The writer itself is now well
+   covered — `--mutate` edits and rewrites all 382 files and re-reads them equal
+   — but every test edit in the running app was deliberately discarded rather
+   than saved, so the `Save` button's own path is the one thing still unproven.
+   Worth doing once against a scratch copy of the corpus.
+
+Resolved since the last revision: `monx.editor` now goes through `settings.ts`,
+and the drag MIME split is gone with `drop.ts`.
 
 ---
 
-## 3. Two decisions waiting on you
+## 4. Two decisions waiting on you
 
 1. **`get_monster` re-reads from disk** rather than serving the parsed cache, so
    the editor always opens what is actually on the file system and an external
@@ -92,7 +122,7 @@ and editing a field marks the titlebar and Save button dirty.
 
 ---
 
-## 4. Defects found in frozen documents
+## 5. Defects found in frozen documents
 
 Neither has been edited, because `DESIGN.md`, `MONSTER_EDITOR_REFERENCE.md` and
 `agents/` are frozen. Both need correcting at the source.
@@ -110,7 +140,7 @@ Neither has been edited, because `DESIGN.md`, `MONSTER_EDITOR_REFERENCE.md` and
 
 ---
 
-## 5. Things worth not re-learning
+## 6. Things worth not re-learning
 
 - **`.otfi` carries two independent flags.** `extended` selects the SPR header
   layout; `transparency` selects 3- vs 4-channel decompression. Passing one
