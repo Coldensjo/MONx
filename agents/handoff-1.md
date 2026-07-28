@@ -1,136 +1,81 @@
 # Handoff 1 — Platform: status and remaining work
 
-**M0–M3 are done and merged to `main`. M4 (integration) has not started.**
-
-All four streams have now delivered. Agents 2, 3 and 4 are finished; the
-outstanding work is almost entirely mine.
+**M0–M4 are done and merged to `main`, and pushed. All four streams are
+integrated and the application runs.**
 
 | Milestone | State |
 |---|---|
-| M0 — fork, contracts, stubs | **Done** — merged, see [handoff-1-m0.md](handoff-1-m0.md) |
-| M1 — `otb.rs`, `items.rs` | **Done** — merged |
-| M2 — four protocol routes | **Done** — merged |
-| M3 — workspace + shell | **Done** — merged |
-| M4 — integration | **Not started** |
+| M0 — fork, contracts, stubs | **Done** — see [handoff-1-m0.md](handoff-1-m0.md) |
+| M1 — `otb.rs`, `items.rs` | **Done** |
+| M2 — four protocol routes | **Done** |
+| M3 — workspace + shell | **Done** |
+| M4 — integration | **Done** |
 
-Branch state:
-
-```
-main                 9cb8194  M0+M1+M2+M3 + Agent 4
-agent/1-platform     9cb8194  (same)
-agent/2-format       198a867  3 commits, clean worktree, NOT merged
-agent/3-editor       584639c  1 commit,  clean worktree, NOT merged
-```
-
-Agent 4's stream is already on `main` (it was delivered into this checkout
-rather than onto a branch, so it landed as one attributed commit).
+Remote: `https://github.com/Coldensjo/MONx` (private). `assets/` is gitignored
+and was stripped from history — it is a real server's data plus a full Tibia
+client, 56 MB, and is needed on disk to run MONx but is not distributed.
 
 ---
 
-## 1. What remains — M4, integration
+## 1. How M4 went
 
-This is the whole job now, and it is bigger than a `git merge` because two of
-the streams edited each other's assumptions.
+Both merges were textually clean; what needed real work was the disagreement
+between streams.
 
-### 1.1 Merge `agent/2-format`
+**`agent/2-format`** merged without conflict, and both sides' semantics
+survived: Agent 2's corpus parsing, registry, spells and lint engine replaced
+the M0 stubs, while the `.otfi` handling, the OTB cross-check lint and the
+items-slot summary stayed intact. `probe_monster` reports 382/382 byte-identical
+round-trip in the merged tree.
 
-Agent 2 rewrote `monster.rs` and edited two of my files. Their changes are
-mechanical and I have reviewed the handoff; expect these conflicts:
+**`agent/3-editor`** merged without conflict. The large apparent deletions in
+`git diff main..agent/3-editor` were a diff artifact of their branching from M0,
+as expected.
 
-- **`src-tauri/src/lib.rs`** — they deleted my `workspace_lints` and
-  `stub_lints` and re-pointed every Agent-2 command at the real modules. My
-  `item_lints` is kept and appended. Their version wins; I need to re-apply my
-  M1 OTB cross-check lint on top and confirm `open_workspace` still opens the
-  `.spr`/`.dat` with the `.otfi` `extended` flag and stores `transparent`.
-- **`src-tauri/src/workspace.rs`** — they added `docs`, `registry`, `spells`
-  and stopped `probe()` from parsing (it was ~40 ms per keystroke in the
-  Landing dialog). **Their `probe()` must keep my items slot summary**, which
-  reports the OTB version and unmapped count — that string is what the landing
-  screen shows.
-- **`src-tauri/src/monster.rs`** — entirely theirs now. My M0 seed's
-  `scrape_*`/`fixture_*` are gone as intended. They kept my `boss`/
-  `summonable`/`has_loot` additions and now fill them from parsed flags, which
-  also fixes `isBoss` casing that my string match missed (94 files).
+**The one genuine conflict** was the drag MIME names: Agent 4 emitted
+`application/x-monx+item`, Agent 3 listened for `application/x-monx-item`, so
+every drag from a browser into an editor field was dead. Resolved in favour of
+`dnd.ts` — the shared module the contract intends, already emitted by the
+browsers. `fields/drop.ts` is now a thin adapter over it, which kept the nine
+editor sections untouched. The item payload gained `container`, which the loot
+editor needs to decide whether a dropped entry can nest before it has resolved
+the id.
 
-**Watch for:** they replaced my `scrape_groups` because it treated *any* XML
-comment as a group heading and picked up a commented-out `<monster>` entry at
-`monsters.xml:107`. Take their `registry.rs` version.
-
-### 1.2 Merge `agent/3-editor`
-
-Agent 3 only touched files they own plus `fixtures.ts`. `git diff main..agent/3-editor`
-shows large deletions in `settings.ts`, `monster.ts`, `shell.css` and
-`browse.css` — **that is a diff artifact**, not deletions: they branched from
-M0 and simply don't have my M3 work or Agent 4's. The merge base handles it.
-
-Then **mount the editor**. `Workspace.tsx` currently renders a read-only JSON
-placeholder in the centre column; it must become `<MonsterEditor …>` with:
-
-- required: `doc`, `onChange`, `lints`, `spells`, `readOnly`
-- wanted: `items`, `scripts` (`list_monster_scripts`), `monsterNames`,
-  `nextRaceid` (`next_free_raceid`), `onSave`, `onBrowseOutfits`, `previewUrl`,
-  `knownEvents`
-
-`onChange` is what finally drives the dirty marker — the plumbing for it is
-already in `App.tsx` and unused.
-
-### 1.3 The one genuine conflict between streams
-
-**Agents 3 and 4 chose different drag MIME types and will not talk to each
-other:**
-
-| | MIME |
-|---|---|
-| Agent 4, `src/dnd.ts` | `application/x-monx+item` |
-| Agent 3, `src/fields/drop.ts` | `application/x-monx-item` |
-
-Every drag from a browser into an editor field is broken until one wins. Agent 3
-offered to delete `drop.ts` if `dnd.ts` lands. **Decision: keep `dnd.ts`** — it
-is the shared module the contract intends, it is already consumed by
-`ThingBrowser`, and Agent 3's is a private fallback written only because
-`dnd.ts` did not exist yet. Port the four payload shapes and delete `drop.ts`.
-
-Agent 3's targets are already wired for: loot list, container row (nests),
-corpse field, `typeex` field, Look section, summons list, and reorder on every
-sortable list.
-
-### 1.4 Then re-verify
-
-Nothing is integrated until this passes on the built exe, not in a diff:
-
-```sh
-bun run build
-cd src-tauri && cargo check
-cargo run --release --example probe_monster -- ../assets/monsters   # Agent 2's round-trip gate
-bun run tauri:build:portable
-pwsh -File .claude/skills/run-monx/driver.ps1 launch
-```
+Verified on the built exe: the workspace opens, all nine sections render, the
+Look section shows the outfit sprite with colour swatches and a corpse picker
+resolving "dead orc 2820" to its sprite through the OTB map, 632 outfits browse,
+and editing a field marks the titlebar and Save button dirty.
 
 ---
 
-## 2. Smaller things I own and have not done
+## 2. What is still open
 
 1. **Icons are still SPRx's artwork.** `public/icon.png` and `src-tauri/icons/*`
    are unchanged, so the app ships another product's mark. Every size in the
    `tauri.conf.json` icon list is intact, so it is a pure file swap with no
-   config change. **This needs a design decision, not a guess.**
-2. **Four of the six sidebar browsers are stubs.** Only Monsters and Items are
-   wired. Outfits / Effects / Missiles need `get_things` against the dat plus
-   `thingsRowUrl`; Sprites needs the inherited `Viewer`. The nav entries render
-   with no count and a "wiring pending" placeholder. `Viewer.tsx` and
-   `ExportSettingsDialog.tsx` are currently unimported by anything.
+   config change. **This needs a design decision, not a guess — it is the one
+   item I deliberately will not invent.**
+2. **The Sprites browser is not wired.** Monsters, Items, Outfits, Effects and
+   Missiles all work. Sprites needs the inherited `Viewer`, which takes an
+   `OpenFile` handle that `App.tsx` currently opens and discards; it also wants
+   `ExportSettings`, which the workspace shell no longer carries. `Viewer.tsx`
+   and `ExportSettingsDialog.tsx` are both unimported today.
 3. **`ItemIndex` (the TS interface) lives in Agent 3's `ItemPicker.tsx`**, not
    in the contract. Their brief expected it from me and M0 didn't ship it. Move
    it into `monster.ts` if it should be contract surface.
 4. **`monx.editor` is read and written directly from `MonsterEditor.tsx`**
    rather than through `settings.ts`. Fold it in for consistency with the other
    `monx.*` keys.
-5. **`previewUrl`** — the editor needs `/thing.png` URLs for effect and missile
-   previews but has no `.spr`/`.dat` handles. Agent 3 takes an optional
-   callback `(kind, id) => string | null` with the raw enum value; applying the
-   dat's id offset is mine.
-6. **No "reveal in folder" command.** `MonsterList` renders the menu item only
+5. **No "reveal in folder" command.** `MonsterList` renders the menu item only
    when given an `onReveal` prop. Adding the command is a contract addition.
+6. **One unreproduced crash.** The app exited once while navigating from the
+   outfit browser back to Monsters. The same sequence has not reproduced since,
+   and no other exit has been seen across many navigations. Recorded rather than
+   claimed fixed — if it recurs, that navigation is the place to look.
+7. **`save_monster` has not been exercised against the corpus.** The dirty
+   marker, lint refresh and Save button are wired and verified, but every test
+   edit was deliberately discarded rather than written, so Agent 2's writer has
+   only been proven through `probe_monster`, not through the UI.
 
 ---
 
