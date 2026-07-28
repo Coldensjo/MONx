@@ -18,7 +18,12 @@ const MAX_CHANCE = 100000;
 /** §13 — above this the server drops the whole entry, so input is blocked. */
 const MAX_COUNTMAX = 100;
 
-export function newLootEntry(item: { serverId: number }): LootEntry {
+/**
+ * Entries are written by id, which says nothing to anyone reading the file, so
+ * the item's name rides along as a trailing comment — the same shape the corpus
+ * already uses by hand: `<item id="2148" … /> <!-- gold coin -->`.
+ */
+export function newLootEntry(item: { serverId: number; name?: string }): LootEntry {
 	return {
 		id: item.serverId,
 		name: null,
@@ -27,7 +32,7 @@ export function newLootEntry(item: { serverId: number }): LootEntry {
 		subtype: null,
 		actionId: null,
 		text: null,
-		comment: null,
+		comment: item.name?.trim() || null,
 		children: []
 	};
 }
@@ -200,7 +205,7 @@ const LootRow = memo(function LootRow({
 							disabled={readOnly}
 						/>
 					</Field>
-					<Field label="Comment" note="Preserved from the file and written back untouched.">
+					<Field label="Comment" note="Written after the entry as an XML comment. Set to the item name when the entry is added by id.">
 						<TextField
 							value={entry.comment ?? ''}
 							onChange={v => onChange({ ...entry, comment: v === '' ? null : v })}

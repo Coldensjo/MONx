@@ -233,10 +233,20 @@ export interface UnresolvedLoot {
 	name: string;
 }
 
+export interface NamedLoot {
+	file: string;
+	monster: string;
+	id: number;
+	/** What items.xml calls the id — the comment text. */
+	name: string;
+}
+
 export interface PinReport {
 	/** False for a dry run — nothing was written. */
 	applied: boolean;
 	pinned: PinnedLoot[];
+	/** Bare ids that gain a naming comment. Empty for an ambiguous-only sweep. */
+	named: NamedLoot[];
 	/** Names no items.xml entry owns; left untouched (§24). */
 	unresolved: UnresolvedLoot[];
 	/** Files the pin touches, not files scanned. */

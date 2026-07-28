@@ -3256,12 +3256,26 @@ pub struct UnresolvedLoot {
     pub name: String,
 }
 
+/// A loot entry already written by id, with nothing in the file saying what
+/// that id is. The sweep gives it the trailing comment; the id is untouched.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedLoot {
+    pub file: String,
+    pub monster: String,
+    pub id: i64,
+    /// What items.xml calls the id — the comment text.
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PinReport {
     /// False for a dry run — nothing was written.
     pub applied: bool,
     pub pinned: Vec<PinnedLoot>,
+    /// Bare ids that gain a naming comment. Empty for an ambiguous-only sweep.
+    pub named: Vec<NamedLoot>,
     pub unresolved: Vec<UnresolvedLoot>,
     /// Files the pin touches, not files scanned.
     pub files: usize,
@@ -3273,6 +3287,9 @@ pub struct PinReport {
 /// `ambiguous_only` restricts the sweep to names owned by several ids, which are
 /// the ones the server silently drops. A name owned by exactly one id works
 /// today, so pinning it is a readability change, not a fix.
+///
+/// The full sweep also names entries that were *already* bare ids, so a file
+/// ends up readable however its entries were written.
 ///
 /// The chosen id is the lowest owning the name, matching what the editor's
 /// per-row "pin id" button resolves to. Run with `apply = false` first: the
@@ -3352,6 +3369,29 @@ fn pin_entries(
                 Some(_) => {}
             }
         }
+
+        // An entry written by id alone says nothing to whoever reads the file
+        // next. The full sweep names it; the hazard-only sweep leaves it, since
+        // a bare id works perfectly well as far as the server is concerned.
+        if !ambiguous_only && entry.comment.is_none() && entry.name.is_none() {
+            if let Some(name) = entry
+                .id
+                .and_then(|id| u32::try_from(id).ok())
+                .and_then(|id| items.get(id))
+                .map(|i| i.name.clone())
+                .filter(|n| !n.trim().is_empty())
+            {
+                report.named.push(NamedLoot {
+                    file: doc.file.clone(),
+                    monster: doc.name.clone(),
+                    id: entry.id.unwrap_or_default(),
+                    name: name.clone(),
+                });
+                entry.comment = Some(name);
+                changed = true;
+            }
+        }
+
         if pin_entries(&mut entry.children, items, ambiguous_only, doc, report) {
             changed = true;
         }

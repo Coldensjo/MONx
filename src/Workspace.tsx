@@ -473,11 +473,12 @@ export default function Workspace({
 						onMonstersChanged(null);
 						lintWorkspace().then(setWorkspaceLints).catch(() => {});
 						setReloadKey(k => k + 1);
+						const n = report.pinned.length + report.named.length;
 						showToast(
 							'ok',
-							`Pinned ${report.pinned.length} loot ${
-								report.pinned.length === 1 ? 'entry' : 'entries'
-							} across ${report.files} ${report.files === 1 ? 'file' : 'files'}`
+							`Pinned ${n} loot ${n === 1 ? 'entry' : 'entries'} across ${report.files} ${
+								report.files === 1 ? 'file' : 'files'
+							}`
 						);
 					}}
 				/>

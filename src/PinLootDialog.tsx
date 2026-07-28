@@ -49,6 +49,9 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 	};
 
 	const count = report?.pinned.length ?? 0;
+	// Bare ids that gain a naming comment. Only the full sweep produces them.
+	const named = report?.named ?? [];
+	const total = count + named.length;
 
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
@@ -62,11 +65,11 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 				) : (
 					<>
 						<div className="ss-modal-desc">
-							{count === 0
+							{total === 0
 								? ambiguousOnly
 									? 'No loot entry names an ambiguous item. Nothing to pin.'
-									: 'Every loot entry is already pinned to an id.'
-								: `${count.toLocaleString()} loot ${count === 1 ? 'entry' : 'entries'} in ${report.files} ${
+									: 'Every loot entry is already pinned to an id and named.'
+								: `${total.toLocaleString()} loot ${total === 1 ? 'entry' : 'entries'} in ${report.files} ${
 										report.files === 1 ? 'file' : 'files'
 									} become id + a trailing comment naming the item.`}
 							{!ambiguousOnly && count > 0 && (
@@ -76,12 +79,20 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 									drops today.
 								</>
 							)}
+							{named.length > 0 && (
+								<>
+									{' '}
+									{named.length.toLocaleString()} {named.length === 1 ? 'was' : 'were'} already an id
+									with nothing saying what it is; {named.length === 1 ? 'it gains' : 'they gain'} only
+									the comment.
+								</>
+							)}
 						</div>
 
-						{count > 0 && (
+						{total > 0 && (
 							<div className="mx-pin-list mono">
 								{report.pinned.slice(0, PREVIEW_ROWS).map((p, i) => (
-									<div className="mx-pin-row" key={i}>
+									<div className="mx-pin-row" key={`p${i}`}>
 										<span className="mx-pin-file">{p.file}</span>
 										<span>
 											name="{p.name}" → id="{p.id}" &lt;!-- {p.name} --&gt;
@@ -89,8 +100,16 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 										{p.ambiguous && <span className="mx-pin-flag">ambiguous</span>}
 									</div>
 								))}
-								{count > PREVIEW_ROWS && (
-									<div className="mx-pin-more">and {(count - PREVIEW_ROWS).toLocaleString()} more</div>
+								{named.slice(0, Math.max(0, PREVIEW_ROWS - count)).map((n, i) => (
+									<div className="mx-pin-row" key={`n${i}`}>
+										<span className="mx-pin-file">{n.file}</span>
+										<span>
+											id="{n.id}" → id="{n.id}" &lt;!-- {n.name} --&gt;
+										</span>
+									</div>
+								))}
+								{total > PREVIEW_ROWS && (
+									<div className="mx-pin-more">and {(total - PREVIEW_ROWS).toLocaleString()} more</div>
 								)}
 							</div>
 						)}
@@ -121,10 +140,10 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 					<div className="ss-modal-buttons-spacer" />
 					<button
 						className="ss-btn ss-btn-primary"
-						disabled={busy || !report || count === 0}
+						disabled={busy || !report || total === 0}
 						onClick={() => void apply()}
 					>
-						{busy ? 'Pinning…' : count > 0 ? `Pin ${count.toLocaleString()}` : 'Pin'}
+						{busy ? 'Pinning…' : total > 0 ? `Pin ${total.toLocaleString()}` : 'Pin'}
 					</button>
 				</div>
 			</div>
