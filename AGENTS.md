@@ -130,7 +130,6 @@ src-tauri/src/         see the architecture diagram above
 src-tauri/examples/    probe.rs, probe_dat.rs, probe_monster.rs
 
 assets/                fixture workspace: monsters/, items/, client/
-agents/                the parallel-build coordination contract and per-agent briefs
 ```
 
 ## Domain knowledge

@@ -1,4 +1,4 @@
-// The shared contract between all four build streams (agents/README.md §5–§7).
+// The shared contract between the frontend and the backend.
 // Types are mirrored by `#[serde(rename_all = "camelCase")]` structs in Rust.
 // Types and thin invoke/URL wrappers only — no logic lives here.
 

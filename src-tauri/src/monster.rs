@@ -1,5 +1,5 @@
 //! Monster document model, reader and writer — the Rust half of the shared
-//! contract in `agents/README.md` §5, mirrored by `src/monster.ts`.
+//! contract, mirrored by `src/monster.ts`.
 //!
 //! # Why the writer works the way it does
 //!
