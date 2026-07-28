@@ -1488,6 +1488,32 @@ impl<'a> Writer<'a> {
         }
     }
 
+    /// Takes the whitespace already written at the end of `out` back off it.
+    /// The last child of a container is the indentation in front of its closing
+    /// tag; appended nodes have to land *before* that run, or the closing tag
+    /// ends up glued to the last new node and a stray indent line is left where
+    /// the append started.
+    fn split_pending_ws(&self, out: &mut Vec<u8>) -> Vec<u8> {
+        let keep = out
+            .iter()
+            .rposition(|b| !b.is_ascii_whitespace())
+            .map_or(0, |i| i + 1);
+        out.split_off(keep)
+    }
+
+    /// Re-emits a self-closing start tag as an opening one: `<loot />` becomes
+    /// `<loot>`, attributes and all, so a block that gained children can hold
+    /// them without losing anything the tag already carried.
+    fn reopen(&self, n: &Node, out: &mut Vec<u8>) {
+        let raw = &self.src[n.element_span.start..n.element_span.end];
+        let mut head = raw[..raw.len().saturating_sub(2)].to_vec();
+        while head.last().is_some_and(|b| b.is_ascii_whitespace()) {
+            head.pop();
+        }
+        out.extend_from_slice(&head);
+        out.push(b'>');
+    }
+
     fn enc(&self, s: &str) -> Vec<u8> {
         self.layout.encoding.encode(s)
     }
@@ -1558,6 +1584,17 @@ impl<'a> Writer<'a> {
                 }
             }
         }
+        // A block the file never had — `<voices>` on a freshly created monster —
+        // has nowhere to be edited in place, so it is grafted on at the end.
+        // Nothing that was already there moves.
+        let ws = self.split_pending_ws(out);
+        for name in SECTIONS {
+            if !handled.iter().any(|h| h == name) {
+                self.section(name, false, out);
+            }
+        }
+        out.extend_from_slice(&ws);
+
         // `</monster>` and anything after it.
         out.extend_from_slice(&self.src[cursor..root.span.end]);
         out.extend_from_slice(&self.src[root.span.end..]);
@@ -1686,7 +1723,8 @@ impl<'a> Writer<'a> {
             "voices" => self.voices(n, depth, out),
             "summons" => self.summons(n, depth, out),
             "loot" => self.loot(n, depth, out),
-            // `<strategy>`, `<targetstrategies>`, `<personalloot>`, `<script>`
+            "script" => self.script(n, depth, out),
+            // `<strategy>`, `<targetstrategies>`, `<personalloot>`
             // and anything else the model doesn't own ride along untouched.
             // `<personalloot>` in particular is *not* `<loot>`: it is one file's
             // own extension, and rewriting it from `doc.loot` would replace its
@@ -1859,11 +1897,28 @@ impl<'a> Writer<'a> {
         all_keys: &[String],
         out: &mut Vec<u8>,
     ) {
-        let open_end = self.open_tag_end(container);
-        out.extend_from_slice(&self.src[container.span.start..open_end]);
         if container.self_closed {
+            // `<flags />` that gained entries has to grow a body.
+            if all_keys.is_empty() {
+                self.raw(&container.span, out);
+                return;
+            }
+            self.reopen(container, out);
+            for key in all_keys {
+                if let Some(pair) = pair_for(self, key) {
+                    self.eol(out);
+                    self.indent(depth + 1, out);
+                    self.tag(item_tag, &[pair], "", out);
+                }
+            }
+            self.eol(out);
+            self.indent(depth, out);
+            out.extend_from_slice(self.enc(&format!("</{}>", container.name)).as_slice());
             return;
         }
+
+        let open_end = self.open_tag_end(container);
+        out.extend_from_slice(&self.src[container.span.start..open_end]);
 
         let mut seen: Vec<String> = Vec::new();
         let mut cursor = open_end;
@@ -1905,6 +1960,7 @@ impl<'a> Writer<'a> {
         let added: Vec<&String> = all_keys.iter().filter(|k| !seen.contains(k)).collect();
         if !added.is_empty() {
             let tail = self.src[cursor..container.span.end].to_vec();
+            let ws = self.split_pending_ws(out);
             for key in added {
                 if let Some(pair) = pair_for(self, key) {
                     self.eol(out);
@@ -1912,6 +1968,7 @@ impl<'a> Writer<'a> {
                     self.tag(item_tag, &[pair], "", out);
                 }
             }
+            out.extend_from_slice(&ws);
             out.extend_from_slice(&tail);
         } else {
             out.extend_from_slice(&self.src[cursor..container.span.end]);
@@ -1923,9 +1980,15 @@ impl<'a> Writer<'a> {
     fn defenses(&self, n: &Node, depth: usize, out: &mut Vec<u8>) {
         // `<defenses>` carries armor/defense of its own, so its open tag can
         // change independently of its children.
+        // A `<defenses … />` that gained spells has to grow a body.
+        let expand = n.self_closed && !self.doc.defenses.is_empty();
         let open_end = self.open_tag_end(n);
         if self.base.defense_stats == self.doc.defense_stats && self.unknown_same("defenses") {
-            out.extend_from_slice(&self.src[n.span.start..open_end]);
+            if expand {
+                self.reopen(n, out);
+            } else {
+                out.extend_from_slice(&self.src[n.span.start..open_end]);
+            }
         } else {
             let d = &self.doc.defense_stats;
             out.extend_from_slice(b"<defenses");
@@ -1936,9 +1999,15 @@ impl<'a> Writer<'a> {
                     out.extend_from_slice(format!(" {k}=\"{v}\"").as_bytes());
                 }
             }
-            out.extend_from_slice(if n.self_closed { b" />" } else { b">" });
+            out.extend_from_slice(if n.self_closed && !expand { b" />" } else { b">" });
         }
         if n.self_closed {
+            if expand {
+                self.spell_body(depth, "defenses", "defense", &self.doc.defenses, 0, out);
+                self.eol(out);
+                self.indent(depth, out);
+                out.extend_from_slice(b"</defenses>");
+            }
             return;
         }
         self.spell_children(n, open_end, depth, "defenses", "defense", &self.base.defenses, &self.doc.defenses, out);
@@ -1955,12 +2024,39 @@ impl<'a> Writer<'a> {
         new: &[SpellBlock],
         out: &mut Vec<u8>,
     ) {
-        let open_end = self.open_tag_end(n);
-        out.extend_from_slice(&self.src[n.span.start..open_end]);
         if n.self_closed {
+            if new.is_empty() {
+                self.raw(&n.span, out);
+            } else {
+                self.reopen(n, out);
+                self.spell_body(depth, path, item_tag, new, 0, out);
+                self.eol(out);
+                self.indent(depth, out);
+                out.extend_from_slice(self.enc(&format!("</{}>", n.name)).as_slice());
+            }
             return;
         }
+        let open_end = self.open_tag_end(n);
+        out.extend_from_slice(&self.src[n.span.start..open_end]);
         self.spell_children(n, open_end, depth, path, item_tag, base, new, out);
+    }
+
+    /// The `<attack>`/`<defense>` children from `skip` onwards, each on its own
+    /// indented line.
+    fn spell_body(
+        &self,
+        depth: usize,
+        path: &str,
+        item_tag: &str,
+        new: &[SpellBlock],
+        skip: usize,
+        out: &mut Vec<u8>,
+    ) {
+        for (i, spell) in new.iter().enumerate().skip(skip) {
+            self.eol(out);
+            self.indent(depth + 1, out);
+            self.spell_tag(item_tag, spell, &format!("{path}[{i}]"), depth + 1, out);
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2003,10 +2099,10 @@ impl<'a> Writer<'a> {
             }
         }
         let tail = self.src[cursor..container.span.end].to_vec();
-        for (i, spell) in new.iter().enumerate().skip(idx) {
-            self.eol(out);
-            self.indent(depth + 1, out);
-            self.spell_tag(item_tag, spell, &format!("{path}[{i}]"), depth + 1, out);
+        if idx < new.len() {
+            let ws = self.split_pending_ws(out);
+            self.spell_body(depth, path, item_tag, new, idx, out);
+            out.extend_from_slice(&ws);
         }
         out.extend_from_slice(&tail);
     }
@@ -2143,12 +2239,18 @@ impl<'a> Writer<'a> {
     // ---------- voices, summons, loot ----------
 
     fn voices(&self, n: &Node, depth: usize, out: &mut Vec<u8>) {
+        // A `<voices … />` that gained lines has to grow a body.
+        let expand = n.self_closed && !self.doc.voices.lines.is_empty();
         let open_end = self.open_tag_end(n);
         let head_same = self.base.voices.interval == self.doc.voices.interval
             && self.base.voices.chance == self.doc.voices.chance
             && self.unknown_same("voices");
         if head_same {
-            out.extend_from_slice(&self.src[n.span.start..open_end]);
+            if expand {
+                self.reopen(n, out);
+            } else {
+                out.extend_from_slice(&self.src[n.span.start..open_end]);
+            }
         } else {
             out.extend_from_slice(b"<voices");
             out.extend_from_slice(
@@ -2160,9 +2262,15 @@ impl<'a> Writer<'a> {
                 )
                 .as_bytes(),
             );
-            out.extend_from_slice(if n.self_closed { b" />" } else { b">" });
+            out.extend_from_slice(if n.self_closed && !expand { b" />" } else { b">" });
         }
         if n.self_closed {
+            if expand {
+                self.voice_body(depth, &self.doc.voices.lines, 0, out);
+                self.eol(out);
+                self.indent(depth, out);
+                out.extend_from_slice(b"</voices>");
+            }
             return;
         }
 
@@ -2202,12 +2310,21 @@ impl<'a> Writer<'a> {
             }
         }
         let tail = self.src[cursor..n.span.end].to_vec();
-        for (i, line) in new.iter().enumerate().skip(idx) {
+        if idx < new.len() {
+            let ws = self.split_pending_ws(out);
+            self.voice_body(depth, new, idx, out);
+            out.extend_from_slice(&ws);
+        }
+        out.extend_from_slice(&tail);
+    }
+
+    /// The `<voice>` lines from `skip` onwards, each on its own indented line.
+    fn voice_body(&self, depth: usize, lines: &[VoiceLine], skip: usize, out: &mut Vec<u8>) {
+        for (i, line) in lines.iter().enumerate().skip(skip) {
             self.eol(out);
             self.indent(depth + 1, out);
             self.tag("voice", &self.voice_pairs(line), &format!("voices.lines[{i}]"), out);
         }
-        out.extend_from_slice(&tail);
     }
 
     fn voice_pairs(&self, v: &VoiceLine) -> Vec<Pair> {
@@ -2219,23 +2336,35 @@ impl<'a> Writer<'a> {
     }
 
     fn summons(&self, n: &Node, depth: usize, out: &mut Vec<u8>) {
+        // A `<summons … />` that gained entries has to grow a body.
+        let expand = n.self_closed && !self.doc.summons.entries.is_empty();
         let open_end = self.open_tag_end(n);
         if self.base.summons.max_summons == self.doc.summons.max_summons
             && self.unknown_same("summons")
         {
-            out.extend_from_slice(&self.src[n.span.start..open_end]);
+            if expand {
+                self.reopen(n, out);
+            } else {
+                out.extend_from_slice(&self.src[n.span.start..open_end]);
+            }
         } else {
             // Exact casing — any other spelling means the monster never summons.
             out.extend_from_slice(
                 format!(
                     "<summons maxSummons=\"{}\"{}",
                     self.doc.summons.max_summons,
-                    if n.self_closed { " />" } else { ">" }
+                    if n.self_closed && !expand { " />" } else { ">" }
                 )
                 .as_bytes(),
             );
         }
         if n.self_closed {
+            if expand {
+                self.summon_body(depth, &self.doc.summons.entries, 0, out);
+                self.eol(out);
+                self.indent(depth, out);
+                out.extend_from_slice(b"</summons>");
+            }
             return;
         }
 
@@ -2268,12 +2397,21 @@ impl<'a> Writer<'a> {
             }
         }
         let tail = self.src[cursor..n.span.end].to_vec();
-        for (i, e) in new.iter().enumerate().skip(idx) {
+        if idx < new.len() {
+            let ws = self.split_pending_ws(out);
+            self.summon_body(depth, new, idx, out);
+            out.extend_from_slice(&ws);
+        }
+        out.extend_from_slice(&tail);
+    }
+
+    /// The `<summon>` entries from `skip` onwards, each on its own indented line.
+    fn summon_body(&self, depth: usize, entries: &[SummonEntry], skip: usize, out: &mut Vec<u8>) {
+        for (i, e) in entries.iter().enumerate().skip(skip) {
             self.eol(out);
             self.indent(depth + 1, out);
             self.summon_tag(e, &format!("summons.entries[{i}]"), depth + 1, out);
         }
-        out.extend_from_slice(&tail);
     }
 
     fn summon_tag(&self, e: &SummonEntry, path: &str, depth: usize, out: &mut Vec<u8>) {
@@ -2310,12 +2448,32 @@ impl<'a> Writer<'a> {
     }
 
     fn loot(&self, n: &Node, depth: usize, out: &mut Vec<u8>) {
-        let open_end = self.open_tag_end(n);
-        out.extend_from_slice(&self.src[n.span.start..open_end]);
+        // `create_monster` writes `<loot />`, so every new monster starts with a
+        // self-closing block: without this it could never gain a single item.
         if n.self_closed {
+            if self.doc.loot.is_empty() {
+                self.raw(&n.span, out);
+            } else {
+                self.reopen(n, out);
+                self.loot_body(depth, "loot", &self.doc.loot, 0, out);
+                self.eol(out);
+                self.indent(depth, out);
+                out.extend_from_slice(b"</loot>");
+            }
             return;
         }
+        let open_end = self.open_tag_end(n);
+        out.extend_from_slice(&self.src[n.span.start..open_end]);
         self.loot_children(n, open_end, depth, "loot", &self.base.loot, &self.doc.loot, out);
+    }
+
+    /// The `<item>` entries from `skip` onwards, each on its own indented line.
+    fn loot_body(&self, depth: usize, path: &str, new: &[LootEntry], skip: usize, out: &mut Vec<u8>) {
+        for (i, e) in new.iter().enumerate().skip(skip) {
+            self.eol(out);
+            self.indent(depth + 1, out);
+            self.loot_tag(e, &format!("{path}[{i}]"), depth + 1, out);
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2364,10 +2522,10 @@ impl<'a> Writer<'a> {
             }
         }
         let tail = self.src[cursor..container.span.end].to_vec();
-        for (i, e) in new.iter().enumerate().skip(idx) {
-            self.eol(out);
-            self.indent(depth + 1, out);
-            self.loot_tag(e, &format!("{path}[{i}]"), depth + 1, out);
+        if idx < new.len() {
+            let ws = self.split_pending_ws(out);
+            self.loot_body(depth, path, new, idx, out);
+            out.extend_from_slice(&ws);
         }
         out.extend_from_slice(&tail);
     }
@@ -2413,6 +2571,73 @@ impl<'a> Writer<'a> {
         }
         if let Some(comment) = &e.comment {
             out.extend_from_slice(self.enc(&format!(" <!-- {comment} -->")).as_slice());
+        }
+    }
+
+    /// `<script>` holds the creature events the model owns — the root's own
+    /// `script=` attribute is a different thing entirely.
+    fn script(&self, n: &Node, depth: usize, out: &mut Vec<u8>) {
+        let new = &self.doc.events;
+        if n.self_closed {
+            if new.is_empty() {
+                self.raw(&n.span, out);
+            } else {
+                self.reopen(n, out);
+                self.event_body(depth, new, 0, out);
+                self.eol(out);
+                self.indent(depth, out);
+                out.extend_from_slice(b"</script>");
+            }
+            return;
+        }
+        let open_end = self.open_tag_end(n);
+        out.extend_from_slice(&self.src[n.span.start..open_end]);
+
+        let mut idx = 0usize;
+        let mut cursor = open_end;
+        for child in &n.children {
+            match child {
+                Child::Element(e) => {
+                    if !e.name.eq_ignore_ascii_case("event") {
+                        out.extend_from_slice(&self.src[cursor..e.span.end]);
+                        cursor = e.span.end;
+                        continue;
+                    }
+                    if idx >= new.len() {
+                        cursor = e.span.end;
+                        idx += 1;
+                        continue;
+                    }
+                    out.extend_from_slice(&self.src[cursor..e.span.start]);
+                    if e.attr("name") == Some(new[idx].as_str()) {
+                        self.raw(&e.span, out);
+                    } else {
+                        self.tag("event", &[Pair("name".into(), new[idx].clone())], "", out);
+                    }
+                    cursor = e.span.end;
+                    idx += 1;
+                }
+                Child::Comment { span, .. } | Child::Text { span } => {
+                    out.extend_from_slice(&self.src[cursor..span.end]);
+                    cursor = span.end;
+                }
+            }
+        }
+        let tail = self.src[cursor..n.span.end].to_vec();
+        if idx < new.len() {
+            let ws = self.split_pending_ws(out);
+            self.event_body(depth, new, idx, out);
+            out.extend_from_slice(&ws);
+        }
+        out.extend_from_slice(&tail);
+    }
+
+    /// The `<event>` names from `skip` onwards, each on its own indented line.
+    fn event_body(&self, depth: usize, events: &[String], skip: usize, out: &mut Vec<u8>) {
+        for e in events.iter().skip(skip) {
+            self.eol(out);
+            self.indent(depth + 1, out);
+            self.tag("event", &[Pair("name".into(), e.clone())], "", out);
         }
     }
 
@@ -2473,112 +2698,124 @@ impl<'a> Writer<'a> {
             self,
         );
 
-        if !d.flags.is_empty() {
-            line(out, 1, "<flags>", self);
-            for (k, v) in &d.flags {
-                let value = match v {
-                    FlagValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
-                    FlagValue::Num(x) => x.to_string(),
-                };
-                line(out, 2, &format!(r#"<flag {k}="{value}" />"#), self);
-            }
-            line(out, 1, "</flags>", self);
+        for name in SECTIONS {
+            self.section(name, true, out);
         }
-        if !d.immunities.is_empty() {
-            line(out, 1, "<immunities>", self);
-            for (k, v) in &d.immunities {
-                line(out, 2, &format!(r#"<immunity {k}="{}" />"#, i32::from(*v)), self);
-            }
-            line(out, 1, "</immunities>", self);
-        }
-        if !d.elements.is_empty() {
-            line(out, 1, "<elements>", self);
-            for (k, v) in &d.elements {
-                line(out, 2, &format!(r#"<element {k}="{v}" />"#), self);
-            }
-            line(out, 1, "</elements>", self);
-        }
-        if !d.attacks.is_empty() {
-            line(out, 1, "<attacks>", self);
-            for (i, s) in d.attacks.iter().enumerate() {
-                self.eol(out);
-                self.indent(2, out);
-                self.spell_tag("attack", s, &format!("attacks[{i}]"), 2, out);
-            }
-            line(out, 1, "</attacks>", self);
-        }
-        {
-            let ds = &d.defense_stats;
-            line(out, 1, &format!(r#"<defenses armor="{}" defense="{}">"#, ds.armor, ds.defense), self);
-            for (i, s) in d.defenses.iter().enumerate() {
-                self.eol(out);
-                self.indent(2, out);
-                self.spell_tag("defense", s, &format!("defenses[{i}]"), 2, out);
-            }
-            line(out, 1, "</defenses>", self);
-        }
-        // A block with no children can still carry attributes that matter:
-        // `<voices interval chance/>` with every line commented out, and the
-        // pacifist-only voices of man.xml, both still set the yell clock.
-        // Skipping the node because the child list is empty silently drops them.
-        let voices_meaningful = !d.voices.lines.is_empty()
-            || d.voices.interval != 0
-            || d.voices.chance != 0;
-        if voices_meaningful {
-            let head = format!(
-                r#"<voices interval="{}" chance="{}""#,
-                d.voices.interval, d.voices.chance
-            );
-            if d.voices.lines.is_empty() {
-                line(out, 1, &format!("{head} />"), self);
-            } else {
-                line(out, 1, &format!("{head}>"), self);
-                for (i, v) in d.voices.lines.iter().enumerate() {
-                    self.eol(out);
-                    self.indent(2, out);
-                    self.tag("voice", &self.voice_pairs(v), &format!("voices.lines[{i}]"), out);
-                }
-                line(out, 1, "</voices>", self);
-            }
-        }
-        if !d.summons.entries.is_empty() || d.summons.max_summons != 0 {
-            let head = format!(r#"<summons maxSummons="{}""#, d.summons.max_summons);
-            if d.summons.entries.is_empty() {
-                line(out, 1, &format!("{head} />"), self);
-            } else {
-                line(out, 1, &format!("{head}>"), self);
-                for (i, e) in d.summons.entries.iter().enumerate() {
-                    self.eol(out);
-                    self.indent(2, out);
-                    self.summon_tag(e, &format!("summons.entries[{i}]"), 2, out);
-                }
-                line(out, 1, "</summons>", self);
-            }
-        }
-        if d.loot.is_empty() {
-            line(out, 1, "<loot />", self);
-        } else {
-            line(out, 1, "<loot>", self);
-            for (i, e) in d.loot.iter().enumerate() {
-                self.eol(out);
-                self.indent(2, out);
-                self.loot_tag(e, &format!("loot[{i}]"), 2, out);
-            }
-            line(out, 1, "</loot>", self);
-        }
-        if !d.events.is_empty() {
-            line(out, 1, "<script>", self);
-            for e in &d.events {
-                line(out, 2, &format!(r#"<event name="{e}" />"#), self);
-            }
-            line(out, 1, "</script>", self);
-        }
-
         self.eol(out);
         out.extend_from_slice(b"</monster>");
         self.eol(out);
     }
+
+    /// One §2 block rendered from the model alone, at root depth, prefixed by
+    /// its own newline and indent. Emits nothing when the model has nothing to
+    /// put in it. Used both for a whole new document and to graft a block onto
+    /// a file that never had one — `canonical` is the former, where `<defenses>`
+    /// and `<loot />` are written even when empty because every file has them.
+    fn section(&self, name: &str, canonical: bool, out: &mut Vec<u8>) {
+        let d = self.doc;
+        let line = |out: &mut Vec<u8>, depth: usize, s: &str, w: &Self| {
+            w.eol(out);
+            w.indent(depth, out);
+            out.extend_from_slice(w.enc(s).as_slice());
+        };
+
+        match name {
+            "flags" if !d.flags.is_empty() => {
+                line(out, 1, "<flags>", self);
+                for (k, v) in &d.flags {
+                    let value = match v {
+                        FlagValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
+                        FlagValue::Num(x) => x.to_string(),
+                    };
+                    line(out, 2, &format!(r#"<flag {k}="{value}" />"#), self);
+                }
+                line(out, 1, "</flags>", self);
+            }
+            "immunities" if !d.immunities.is_empty() => {
+                line(out, 1, "<immunities>", self);
+                for (k, v) in &d.immunities {
+                    line(out, 2, &format!(r#"<immunity {k}="{}" />"#, i32::from(*v)), self);
+                }
+                line(out, 1, "</immunities>", self);
+            }
+            "elements" if !d.elements.is_empty() => {
+                line(out, 1, "<elements>", self);
+                for (k, v) in &d.elements {
+                    line(out, 2, &format!(r#"<element {k}="{v}" />"#), self);
+                }
+                line(out, 1, "</elements>", self);
+            }
+            "attacks" if !d.attacks.is_empty() => {
+                line(out, 1, "<attacks>", self);
+                self.spell_body(1, "attacks", "attack", &d.attacks, 0, out);
+                line(out, 1, "</attacks>", self);
+            }
+            "defenses"
+                if canonical
+                    || !d.defenses.is_empty()
+                    || d.defense_stats.armor != 0
+                    || d.defense_stats.defense != 0 =>
+            {
+                let ds = &d.defense_stats;
+                line(out, 1, &format!(r#"<defenses armor="{}" defense="{}">"#, ds.armor, ds.defense), self);
+                self.spell_body(1, "defenses", "defense", &d.defenses, 0, out);
+                line(out, 1, "</defenses>", self);
+            }
+            // A block with no children can still carry attributes that matter:
+            // `<voices interval chance/>` with every line commented out, and the
+            // pacifist-only voices of man.xml, both still set the yell clock.
+            // Skipping the node because the child list is empty silently drops them.
+            "voices" if !d.voices.lines.is_empty() || d.voices.interval != 0 || d.voices.chance != 0 => {
+                let head = format!(r#"<voices interval="{}" chance="{}""#, d.voices.interval, d.voices.chance);
+                if d.voices.lines.is_empty() {
+                    line(out, 1, &format!("{head} />"), self);
+                } else {
+                    line(out, 1, &format!("{head}>"), self);
+                    self.voice_body(1, &d.voices.lines, 0, out);
+                    line(out, 1, "</voices>", self);
+                }
+            }
+            "summons" if !d.summons.entries.is_empty() || d.summons.max_summons != 0 => {
+                let head = format!(r#"<summons maxSummons="{}""#, d.summons.max_summons);
+                if d.summons.entries.is_empty() {
+                    line(out, 1, &format!("{head} />"), self);
+                } else {
+                    line(out, 1, &format!("{head}>"), self);
+                    self.summon_body(1, &d.summons.entries, 0, out);
+                    line(out, 1, "</summons>", self);
+                }
+            }
+            "loot" if !d.loot.is_empty() => {
+                line(out, 1, "<loot>", self);
+                self.loot_body(1, "loot", &d.loot, 0, out);
+                line(out, 1, "</loot>", self);
+            }
+            "loot" if canonical => line(out, 1, "<loot />", self),
+            "script" if !d.events.is_empty() => {
+                line(out, 1, "<script>", self);
+                for e in &d.events {
+                    line(out, 2, &format!(r#"<event name="{}" />"#, encode_entities(e, b'"')), self);
+                }
+                line(out, 1, "</script>", self);
+            }
+            _ => {}
+        }
+    }
 }
+
+/// The root blocks the model owns, in §2 order. A file that is missing one gets
+/// it appended on save; the ones it already has are edited in place.
+const SECTIONS: [&str; 9] = [
+    "flags",
+    "immunities",
+    "elements",
+    "attacks",
+    "defenses",
+    "voices",
+    "summons",
+    "loot",
+    "script",
+];
 
 /// Damage negative and healing positive, with the smaller magnitude in `min` —
 /// the order the loader would otherwise swap into (§8.2).
