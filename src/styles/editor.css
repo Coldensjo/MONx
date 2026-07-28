@@ -1260,7 +1260,3 @@
 	color: var(--text-muted);
 	font-style: italic;
 }
-
-.mx-stage-trail {
-	z-index: 1;
-}

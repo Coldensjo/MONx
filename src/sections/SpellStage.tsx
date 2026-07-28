@@ -33,8 +33,6 @@ const MIN_ROWS = 7;
 const MAX_ROWS = 13;
 /** Long enough to read, short enough not to overlap the next cast. */
 const FLOATER_MS = 1100;
-/** How far behind the projectile head each ghost sits, as a fraction of the flight. */
-const TRAIL_STEPS = [0.16, 0.32, 0.48];
 
 type Speed = 0.5 | 1 | 2;
 
@@ -252,13 +250,6 @@ export function SpellStage({ block, look, parent }: Props) {
 		[bounds, target]
 	);
 
-	// A few fading copies behind the head. The projectile crosses a handful of
-	// tiles in a third of a second; without a trail it reads as a jump cut.
-	const trail = useMemo(() => {
-		const head = phase === 'flight' ? progress : 1;
-		return TRAIL_STEPS.map(back => head - back).filter(p => p > 0);
-	}, [phase, progress]);
-
 	const shootPattern = missilePattern(target.dx, target.dy);
 	const shootUrl =
 		shoot === null
@@ -400,18 +391,6 @@ export function SpellStage({ block, look, parent }: Props) {
 					<Crosshair size={TILE - 6} />
 				</div>
 
-				{phase === 'flight' &&
-					shootUrl &&
-					!aoeShoot &&
-					trail.map((p, i) => (
-						<div
-							key={`trail${i}`}
-							className="mx-stage-cell mx-stage-missile mx-stage-trail"
-							style={{ ...alongFlight(p), width: TILE, height: TILE, opacity: 0.45 - i * 0.13 }}
-						>
-							<img src={shootUrl} alt="" draggable={false} />
-						</div>
-					))}
 				{phase === 'flight' && shootUrl && !aoeShoot && (
 					<div
 						className="mx-stage-cell mx-stage-missile"
