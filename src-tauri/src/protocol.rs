@@ -84,7 +84,7 @@ fn num<T: std::str::FromStr>(q: &HashMap<String, String>, key: &str, default: T)
 //
 // `dat.rs` is inherited verbatim and renders outfits uncoloured, so the colour
 // pass lives here. An outfit sprite has two layers: layer 0 is the artwork,
-// layer 1 is a template mask whose pure red / green / blue / yellow regions
+// layer 1 is a template mask whose pure yellow / red / green / blue regions
 // select head / body / legs / feet. The chosen colour multiplies the base
 // pixel, which is what the client does.
 
@@ -163,10 +163,10 @@ fn colourize(base: &mut ThingRender, mask: &ThingRender, head: u32, body: u32, l
         // sprite doesn't drop a region.
         let hi = 128;
         let tint = match (mr >= hi, mg >= hi, mb >= hi) {
-            (true, true, false) => feet,  // yellow
-            (true, false, false) => head, // red
-            (false, true, false) => body, // green
-            (false, false, true) => legs, // blue
+            (true, true, false) => head,  // yellow
+            (true, false, false) => body, // red
+            (false, true, false) => legs, // green
+            (false, false, true) => feet, // blue
             _ => continue,
         };
         for (c, t) in [tint.0, tint.1, tint.2].into_iter().enumerate() {
