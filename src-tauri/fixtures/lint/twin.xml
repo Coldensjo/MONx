@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shares raceid 9002 with spells.xml, so the cross-file uniqueness check has
+     something to find. Also an orphan: monsters.xml never lists it. -->
+<monster name="Twin Wreck" nameDescription="a twin wreck" species="test" race="blood" experience="1000" speed="200" manacost="0" raceid="9002">
+	<health now="0" max="0" />
+	<look corpse="0" />
+	<targetchange interval="2000" chance="10" />
+	<flags>
+		<flag attackable="1" />
+		<flag pacifist="1" />
+		<flag hostile="1" />
+	</flags>
+	<summons maxSummons="900">
+		<summon name="demon" interval="2000" chance="10" max="1" />
+	</summons>
+	<loot>
+		<item id="2148" chance="1000" subtype="3" />
+		<item id="2400" chance="1000">
+			<item name="gold coin" chance="1000" />
+		</item>
+	</loot>
+</monster>

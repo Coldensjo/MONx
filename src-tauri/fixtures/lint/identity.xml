@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Root attributes, health, look, targetchange and voices (§3, §4, §7, §12). -->
+<monster name="Identity Wreck" nameDescription="a broken thing" species="test" race="plasma" experience="500" speed="200" manacost="0" raceId="9001" skull="chartreuse">
+	<health now="900" max="400" />
+	<look typeex="1234" head="10" body="20" legs="30" feet="40" addons="3" corpse="0" />
+	<targetchange chance="180" />
+	<flags>
+		<flag summonable="1" />
+		<flag convinceable="1" />
+		<flag staticattack="140" />
+		<flag targetdistance="0" />
+		<flag runonhealth="99999" />
+		<flag deaggroonkill="1" />
+		<flag singletarget="1" />
+		<flag canpushcreatures="1" />
+		<flag pushable="1" />
+		<flag notarealflag="1" />
+		<flag hostile="1" attackable="0" />
+	</flags>
+	<immunities>
+		<immunity name="sunlight" />
+		<immunity fire="1" />
+		<immunity paralyze="1" drunk="1" />
+	</immunities>
+	<elements>
+		<element firePercent="50" />
+		<element icePercent="250" />
+		<element sparklePercent="10" />
+		<element holyPercent="10" deathPercent="20" />
+	</elements>
+	<voices chance="150">
+		<voice sentence="" />
+	</voices>
+	<loot />
+</monster>

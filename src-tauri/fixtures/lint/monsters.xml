@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<monsters>
+	<!-- wrecks -->
+	<monster name="Identity Wreck" file="identity.xml" />
+	<monster name="Spell Wreck" file="spells.xml" />
+	<monster name="Loot Wreck" file="lootsummons.xml" />
+	<monster name="" file="missing.xml" />
+	<!-- twin.xml is deliberately absent: it is the orphan-file case. -->
+	<monster name="Ghost Wreck" file="neverexisted.xml" />
+</monsters>

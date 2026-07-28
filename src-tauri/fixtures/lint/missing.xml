@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Attributes that are absent rather than wrong. These are the rules that
+     only `lint_source` can see: once a document is in memory, "chance was
+     never written" and "chance is 100" look the same. -->
+<monster name="" nameDescription="a nameless thing" species="test" race="blood" experience="0" speed="200" manacost="0" raceid="-4">
+	<health />
+	<look type="35" corpse="0" />
+	<targetchange />
+	<attacks>
+		<attack name="fire" interval="2000" min="-1" max="-5" />
+	</attacks>
+	<voices>
+		<voice sentence="Nothing is set." />
+	</voices>
+	<summons>
+		<summon name="demon" interval="2000" chance="10" max="1" />
+	</summons>
+	<loot />
+</monster>

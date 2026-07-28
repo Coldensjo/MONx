@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Loot rejections and the summon block (§13, §14). `countmax="400"` and the
+     ambiguous name are rejections, not clamps: the whole entry is dropped. -->
+<monster name="Loot Wreck" nameDescription="a loot wreck" species="test" race="blood" experience="2000" speed="250" manacost="0" raceid="9003" script="doesnotexist.lua">
+	<health now="2000" max="2000" />
+	<look type="35" corpse="0" />
+	<targetchange interval="2000" chance="10" />
+	<flags>
+		<flag attackable="1" />
+		<flag hostile="1" />
+	</flags>
+	<attacks>
+		<attack name="outfit" interval="2000" chance="10" duration="5000" monster="no such monster" />
+	</attacks>
+	<summons maxsummons="3">
+		<summon name="a monster that is not registered" interval="2000" chance="140" max="2">
+			<attribute key="effect" value="CONST_ME_NOPE" />
+		</summon>
+		<summon interval="2000" chance="10" max="1" />
+	</summons>
+	<loot>
+		<item chance="5000" />
+		<item name="gold coin" chance="500000" countmax="400" />
+		<item name="gold coin" chance="0" countmax="0" />
+		<item id="999999" chance="1000" />
+		<item name="not a real item at all" chance="1000" />
+		<item name="boots of haste" chance="1000" />
+		<item id="2148" chance="1000" actionid="4500" />
+	</loot>
+	<script>
+		<event name="NeverRegisteredEvent" />
+	</script>
+</monster>
