@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from '../catalog';
 import { EnumSelect, type EnumOption } from './EnumSelect';
+import { EffectGrid } from './EffectGrid';
 import { usePreviewUrl } from './preview';
 
 interface Props {
@@ -40,6 +41,7 @@ export function EffectSelect({ kind, value, onChange, disabled, noneLabel = '(no
 
 	const options = useMemo<EnumOption<string>[]>(() => {
 		const opts: EnumOption<string>[] = [{ value: '', label: noneLabel, group: 'None' }];
+		if (kind === 'shoot') return opts; // the grid below renders these instead
 		for (const e of entries) {
 			if (e.id === 0) continue; // the NONE sentinel is the empty choice above
 			opts.push({
@@ -57,6 +59,21 @@ export function EffectSelect({ kind, value, onChange, disabled, noneLabel = '(no
 	}, [entries, kind, noneLabel]);
 
 	const current = entries.find(e => e.name === value);
+
+	// A projectile is picked by looking at it, so the missile catalogue is a
+	// sprite grid; area effects stay a list, where the names carry the meaning.
+	if (kind === 'shoot') {
+		return (
+			<EffectGrid
+				entries={entries}
+				kind={kind}
+				value={value}
+				onChange={onChange}
+				disabled={disabled}
+				noneLabel={noneLabel}
+			/>
+		);
+	}
 
 	return (
 		<div className="ss-ed-effect">

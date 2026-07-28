@@ -504,6 +504,85 @@
 	flex-shrink: 0;
 }
 
+.ss-ed-effect-gridbar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 2px;
+	color: var(--text-muted);
+}
+
+.ss-ed-effect-gridbar input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	outline: 0;
+	background: transparent;
+	color: var(--text);
+	font-size: 12px;
+	padding: 2px 0;
+}
+
+.ss-ed-effect-current {
+	font-size: 12px;
+	color: var(--text-dim);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 45%;
+}
+
+.ss-ed-effect-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, 38px);
+	gap: 2px;
+	max-height: 190px;
+	overflow-y: auto;
+	padding: 4px;
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.ss-ed-effect-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	background: transparent;
+	cursor: pointer;
+}
+
+.ss-ed-effect-cell:hover:not(:disabled) {
+	border-color: var(--border-strong);
+}
+
+.ss-ed-effect-cell:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.ss-ed-effect-cell-active {
+	border-color: var(--accent);
+	background: var(--accent-dim);
+}
+
+.ss-ed-effect-none {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 3px;
+	background: var(--sprite-bg);
+	color: var(--text-muted);
+}
+
 /* ---------- colour palette ---------- */
 
 .ss-ed-color-chip {
