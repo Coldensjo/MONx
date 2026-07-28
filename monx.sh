@@ -3,4 +3,11 @@
 # so run through XWayland with dmabuf disabled.
 export GDK_BACKEND=x11
 export WEBKIT_DISABLE_DMABUF_RENDERER=1
-exec "$(dirname "$0")/src-tauri/target/release/monx" "$@"
+cd "$(dirname "$0")"
+# `./monx.sh dev` runs the hot-reloading dev app (Vite + Tauri) instead of the
+# release binary — no rebuild needed to see frontend changes.
+if [ "$1" = "dev" ]; then
+	shift
+	exec bun run tauri:dev "$@"
+fi
+exec ./src-tauri/target/release/monx "$@"
