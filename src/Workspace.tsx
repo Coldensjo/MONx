@@ -4,28 +4,47 @@ import {
 	getItem,
 	getMonster,
 	itemsRowUrl,
+	itemUrl,
 	lintMonster,
 	lintWorkspace,
 	listMonsterGroups,
+	listMonsterScripts,
 	listMonsters,
+	listSpellNames,
+	nextFreeRaceid,
 	saveMonster,
 	searchItems,
+	thingsRowUrlFor,
+	thingUrlFor,
+	type SpellName,
 	type ItemInfo,
 	type Lint,
 	type MonsterDoc,
 	type MonsterSummary,
 	type WorkspaceInfo
 } from './monster';
+import { getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
 import MonsterList from './MonsterList';
 import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
+import { MonsterEditor } from './MonsterEditor';
+import type { PreviewUrl } from './fields/preview';
 
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */
 type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles' | 'sprites';
+
+/** The three nav entries backed by a dat category, and that category's own name. */
+type ThingView = 'outfits' | 'effects' | 'missiles';
+
+const THING_CAT: Record<ThingView, 'outfit' | 'effect' | 'missile'> = {
+	outfits: 'outfit',
+	effects: 'effect',
+	missiles: 'missile'
+};
 
 interface Props {
 	info: WorkspaceInfo;
@@ -58,6 +77,14 @@ export default function Workspace({
 	const [items, setItems] = useState<Map<number, ItemInfo>>(new Map());
 	const [itemList, setItemList] = useState<ItemInfo[]>([]);
 	const [saving, setSaving] = useState(false);
+	const [spells, setSpells] = useState<SpellName[]>([]);
+	const [scripts, setScripts] = useState<string[]>([]);
+	const [nextRaceid, setNextRaceid] = useState<number | null>(null);
+	const [things, setThings] = useState<Record<'outfit' | 'effect' | 'missile', ThingSummary[]>>({
+		outfit: [],
+		effect: [],
+		missile: []
+	});
 	const label = workspaceLabel(info.paths.monsters);
 
 	// Fall back to the first monster when the remembered one is gone.
@@ -88,13 +115,62 @@ export default function Workspace({
 
 	useEffect(() => {
 		listMonsterGroups().then(setGroups).catch(() => setGroups([]));
+		listSpellNames().then(setSpells).catch(() => setSpells([]));
+		listMonsterScripts().then(setScripts).catch(() => setScripts([]));
 	}, []);
+
+	// Recomputed per selection: creating or deleting a monster moves the next
+	// free id, and the Identity section shows it beside the raceid field.
+	useEffect(() => {
+		nextFreeRaceid()
+			.then(setNextRaceid)
+			.catch(() => setNextRaceid(null));
+	}, [monsters]);
+
+	/** Client things for the editor's effect, missile and outfit previews. */
+	const previewUrl = useCallback<PreviewUrl>(
+		(kind, id) => {
+			if (kind === 'item') return itemUrl(id);
+			return thingUrlFor(info.sprPath, info.datPath, kind, id, info.transparent);
+		},
+		[info.sprPath, info.datPath, info.transparent]
+	);
+
+	const monsterNames = useMemo(() => monsters.map(m => m.name), [monsters]);
+
+	const editDoc = useCallback(
+		(next: MonsterDoc) => {
+			setDoc(next);
+			onDirtyChange(true);
+			lintMonster(next)
+				.then(setMonsterLints)
+				.catch(() => {});
+		},
+		[onDirtyChange]
+	);
 
 	// The item browser is fed by a search rather than the whole 11k-row index —
 	// `search_items` with an empty query returns the head of the table.
 	useEffect(() => {
 		searchItems('', 500).then(setItemList).catch(() => setItemList([]));
 	}, []);
+
+	// The outfit / effect / missile lists come straight from the dat, through the
+	// inherited `get_things`. Loaded once; the client files never change while a
+	// workspace is open.
+	useEffect(() => {
+		let cancelled = false;
+		Promise.all([
+			getThings(info.datPath, 'outfit').catch(() => []),
+			getThings(info.datPath, 'effect').catch(() => []),
+			getThings(info.datPath, 'missile').catch(() => [])
+		]).then(([outfit, effect, missile]) => {
+			if (!cancelled) setThings({ outfit, effect, missile });
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [info.datPath]);
 
 	// Resolve just the items this monster references, for the preview panel.
 	useEffect(() => {
@@ -162,9 +238,14 @@ export default function Workspace({
 	const nav: { key: View; label: string; icon: JSX.Element; count: number }[] = [
 		{ key: 'monsters', label: 'Monsters', icon: <Skull size={16} />, count: info.monsterCount },
 		{ key: 'items', label: 'Items', icon: <Package size={16} />, count: info.itemCount },
-		{ key: 'outfits', label: 'Outfits', icon: <PersonStanding size={16} />, count: 0 },
-		{ key: 'effects', label: 'Effects', icon: <Sparkles size={16} />, count: 0 },
-		{ key: 'missiles', label: 'Missiles', icon: <Wand2 size={16} />, count: 0 },
+		{
+			key: 'outfits',
+			label: 'Outfits',
+			icon: <PersonStanding size={16} />,
+			count: things.outfit.length
+		},
+		{ key: 'effects', label: 'Effects', icon: <Sparkles size={16} />, count: things.effect.length },
+		{ key: 'missiles', label: 'Missiles', icon: <Wand2 size={16} />, count: things.missile.length },
 		{ key: 'sprites', label: 'Sprites', icon: <Grid3X3 size={16} />, count: info.spriteCount }
 	];
 
@@ -218,21 +299,20 @@ export default function Workspace({
 				<main className="ss-main">
 					{view === 'monsters' ? (
 						doc ? (
-							// Agent 3's MonsterEditor mounts here. Until it lands, the
-							// document is shown read-only so the rest of the shell —
-							// selection, preview, lints, save — is exercisable end to end.
-							<div className="mx-editor-placeholder">
-								<div className="mx-editor-bar">
-									{['Identity', 'Look', 'Combat', 'Attacks', 'Defenses', 'Immunities', 'Voices', 'Summons', 'Loot'].map(
-										s => (
-											<span key={s} className="mx-editor-tab">
-												{s}
-											</span>
-										)
-									)}
-								</div>
-								<pre className="mono mx-editor-json">{JSON.stringify(doc, null, 2)}</pre>
-							</div>
+							<MonsterEditor
+								key={doc.file}
+								doc={doc}
+								onChange={editDoc}
+								lints={monsterLints}
+								spells={spells}
+								readOnly={false}
+								scripts={scripts}
+								monsterNames={monsterNames}
+								nextRaceid={nextRaceid}
+								onSave={() => void save()}
+								onBrowseOutfits={() => setView('outfits')}
+								previewUrl={previewUrl}
+							/>
 						) : (
 							<div className="mx-empty">Select a monster</div>
 						)
@@ -247,13 +327,42 @@ export default function Workspace({
 							selectionMode="single"
 							view="items"
 							draggable
-							dragPayload={i => ({ kind: 'item', serverId: i.serverId, name: i.name })}
+							dragPayload={i => ({
+								kind: 'item',
+								serverId: i.serverId,
+								name: i.name,
+								container: i.container
+							})}
 							searchPlaceholder="Search server id or name"
 						/>
-					) : (
+					) : view === 'sprites' ? (
 						<div className="mx-empty">
-							{nav.find(n => n.key === view)?.label} browser — wiring pending
+							Raw sprite grid — open the client files directly to browse sprites
 						</div>
+					) : (
+						<ThingBrowser<ThingSummary>
+							key={view}
+							items={things[THING_CAT[view as ThingView]]}
+							rowAtlasUrl={(visible, cell) =>
+								thingsRowUrlFor(
+									info.sprPath,
+									info.datPath,
+									THING_CAT[view as ThingView],
+									visible.map(t => t.id),
+									cell,
+									info.transparent
+								)
+							}
+							cellKey={t => t.id}
+							cellLabel={t => t.name ?? String(t.id)}
+							searchId={t => t.id}
+							searchText={t => t.name ?? ''}
+							selectionMode="single"
+							view={view}
+							draggable={view === 'outfits'}
+							dragPayload={t => (view === 'outfits' ? { kind: 'outfit', type: t.id } : null)}
+							searchPlaceholder="Search client id or name"
+						/>
 					)}
 				</main>
 

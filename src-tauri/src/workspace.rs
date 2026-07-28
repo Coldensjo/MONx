@@ -60,6 +60,10 @@ pub struct WorkspaceInfo {
     pub spr_path: String,
     pub dat_path: String,
     pub sprite_count: u32,
+    /// From the sibling `.otfi`. The frontend needs it for the inherited
+    /// `/thing.png` and `/things.png` routes, which take it as a query param;
+    /// the MONx routes read it from workspace state instead.
+    pub transparent: bool,
     /// Workspace-scope lints only (duplicate raceids, orphans, …).
     pub lints: Vec<Lint>,
 }

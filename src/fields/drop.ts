@@ -1,17 +1,24 @@
 import { useCallback, useState } from 'react';
+import { MIME_PREFIX, payloadFromEvent } from '../dnd';
 
 /**
- * Drop payloads the editor accepts (DESIGN §13). The editor owns the targets;
- * Agent 4's browsers and monster list own the matching sources, so these MIME
- * names are the contract between them. Payloads are also mirrored on
- * `text/plain` because dragging out of the app should still produce something
- * legible.
+ * Drop-target adapter for the editor sections.
+ *
+ * The wire format is `dnd.ts`'s — that is the shared contract, and Agent 4's
+ * browsers and monster list are already the sources for it. This file exists
+ * only because the editor's targets were written against a different, briefly
+ * parallel set of MIME names; it keeps their call shape (`{ active, props }`,
+ * MIME strings rather than kinds) so the nine sections did not have to be
+ * rewritten, and translates to the real payloads underneath.
+ *
+ * If the sections are ever touched again, use `dnd.ts` directly and delete this.
  */
-export const DND_ITEM = 'application/x-monx-item';
-export const DND_OUTFIT = 'application/x-monx-outfit';
-export const DND_MONSTER = 'application/x-monx-monster';
-/** Internal reorder within one list; the value is the source index. */
-export const DND_ROW = 'application/x-monx-row';
+export const DND_ITEM = `${MIME_PREFIX}item`;
+export const DND_OUTFIT = `${MIME_PREFIX}outfit`;
+export const DND_MONSTER = `${MIME_PREFIX}monster`;
+/** Internal reorder within one list; the value is the source index. Deliberately
+ *  outside `dnd.ts`'s payload union so its targets ignore it. */
+export const DND_ROW = `${MIME_PREFIX}row`;
 
 export interface ItemDrag {
 	serverId: number;
@@ -28,30 +35,36 @@ export interface MonsterDrag {
 	name: string;
 }
 
-function read<T>(e: React.DragEvent, mime: string): T | null {
-	const raw = e.dataTransfer.getData(mime);
-	if (!raw) return null;
-	try {
-		return JSON.parse(raw) as T;
-	} catch {
-		return null;
-	}
+export function readItemDrag(e: React.DragEvent): ItemDrag | null {
+	const p = payloadFromEvent(e);
+	return p?.kind === 'item'
+		? { serverId: p.serverId, name: p.name, container: p.container }
+		: null;
 }
 
-export const readItemDrag = (e: React.DragEvent) => read<ItemDrag>(e, DND_ITEM);
-export const readOutfitDrag = (e: React.DragEvent) => read<OutfitDrag>(e, DND_OUTFIT);
-export const readMonsterDrag = (e: React.DragEvent) => read<MonsterDrag>(e, DND_MONSTER);
+export function readOutfitDrag(e: React.DragEvent): OutfitDrag | null {
+	const p = payloadFromEvent(e);
+	return p?.kind === 'outfit' ? { type: p.type } : null;
+}
+
+export function readMonsterDrag(e: React.DragEvent): MonsterDrag | null {
+	const p = payloadFromEvent(e);
+	return p?.kind === 'monster' ? { file: p.file, name: p.name } : null;
+}
 
 export function hasType(e: React.DragEvent, mime: string): boolean {
 	return e.dataTransfer.types.includes(mime);
 }
 
 /**
- * Drop target plumbing: accept only the MIMEs a target understands, and report
- * whether a matching drag is currently over it so the caller can paint the
- * `--accent-dim` highlight.
+ * Accept only the MIMEs a target understands, and report whether a matching drag
+ * is currently over it so the caller can paint the `--accent-dim` highlight.
  */
-export function useDropTarget(accepts: string[], onDrop: (e: React.DragEvent) => void, disabled?: boolean) {
+export function useDropTarget(
+	accepts: string[],
+	onDrop: (e: React.DragEvent) => void,
+	disabled?: boolean
+) {
 	const [active, setActive] = useState(false);
 
 	const matches = useCallback(

@@ -40,6 +40,9 @@ export interface WorkspaceInfo {
 	sprPath: string;
 	datPath: string;
 	spriteCount: number;
+	/** From the sibling `.otfi`. The inherited `/thing.png` and `/things.png`
+	 *  routes take it as a query param; the MONx routes read it server-side. */
+	transparent: boolean;
 	/** Workspace-scope lints only (duplicate raceids, orphans, …). */
 	lints: Lint[];
 }
@@ -365,6 +368,55 @@ export function itemsRowUrl(serverIds: number[], cell: number): string {
 		v: String(cacheKey)
 	});
 	return `${protocolBase}/items.png?${q}`;
+}
+
+/**
+ * One cell of any client thing, through the inherited `/thing.png` route.
+ * That route predates the workspace and still takes its file paths as query
+ * params, so they are passed in rather than read from state.
+ */
+export function thingUrlFor(
+	sprPath: string,
+	datPath: string,
+	category: 'item' | 'outfit' | 'effect' | 'missile',
+	id: number,
+	transparent: boolean,
+	opts?: { frame?: number; dir?: number }
+): string {
+	const q = new URLSearchParams({
+		path: sprPath,
+		dat: datPath,
+		cat: category,
+		id: String(id),
+		transparent: transparent ? '1' : '0',
+		v: String(cacheKey)
+	});
+	if (opts?.frame !== undefined) q.set('frame', String(opts.frame));
+	if (opts?.dir !== undefined) q.set('dir', String(opts.dir));
+	return `${protocolBase}/thing.png?${q}`;
+}
+
+/** Row atlas of any client things, through the inherited `/things.png` route. */
+export function thingsRowUrlFor(
+	sprPath: string,
+	datPath: string,
+	category: 'item' | 'outfit' | 'effect' | 'missile',
+	ids: number[],
+	cell: number,
+	transparent: boolean
+): string {
+	const q = new URLSearchParams({
+		path: sprPath,
+		dat: datPath,
+		cat: category,
+		ids: ids.join(','),
+		cell: String(cell),
+		transparent: transparent ? '1' : '0',
+		frame: '0',
+		anim: '0',
+		v: String(cacheKey)
+	});
+	return `${protocolBase}/things.png?${q}`;
 }
 
 /** Horizontal row atlas of monster looks, addressed by monster file name. */

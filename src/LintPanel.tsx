@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, Ghost, ShieldAlert, X } from 'lucide-react';
 import type { Lint, LintSeverity } from './monster';
+import { loadSetting, saveSetting } from './settings';
 
 // The lint drawer (DESIGN §15). It expands from the status bar and is the reason
 // MONx exists: the `silent` class of mistake produces no server output at all
@@ -25,12 +26,12 @@ const SEVERITY_ICON: Record<LintSeverity, typeof AlertTriangle> = {
 
 const FILTER_KEY = 'monx.lintFilter';
 
-// Belongs in settings.ts alongside loadZoomIdx — Agent 1 owns that file, so this
-// pair lives here until it grows a generic string setting helper. See handoff-4.
+// settings.ts handles the storage; the shape validation stays here because a
+// stale or hand-edited key must never leave the drawer filtering on nothing.
 function loadFilter(): Set<LintSeverity> {
+	const raw = loadSetting(FILTER_KEY, null);
+	if (!raw) return new Set(SEVERITIES);
 	try {
-		const raw = localStorage.getItem(FILTER_KEY);
-		if (!raw) return new Set(SEVERITIES);
 		const parsed = JSON.parse(raw) as unknown;
 		if (!Array.isArray(parsed)) return new Set(SEVERITIES);
 		const valid = parsed.filter((s): s is LintSeverity => SEVERITIES.includes(s as LintSeverity));
@@ -41,11 +42,7 @@ function loadFilter(): Set<LintSeverity> {
 }
 
 function saveFilter(set: Set<LintSeverity>): void {
-	try {
-		localStorage.setItem(FILTER_KEY, JSON.stringify([...set]));
-	} catch {
-		// Ignore storage failures (private mode, quota); the filter is non-critical.
-	}
+	saveSetting(FILTER_KEY, JSON.stringify([...set]));
 }
 
 export type LintTab = 'monster' | 'workspace';

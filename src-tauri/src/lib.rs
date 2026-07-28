@@ -749,6 +749,7 @@ fn open_workspace(
         spr_path: spr_path.to_string_lossy().into_owned(),
         dat_path: dat_path.to_string_lossy().into_owned(),
         sprite_count: spr_info.sprite_count,
+        transparent,
         lints,
     };
 

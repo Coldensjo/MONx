@@ -9,6 +9,7 @@ import {
 	type MonsterSummary
 } from './monster';
 import type { Toast } from './App';
+import { loadSetting, saveSetting } from './settings';
 import { useDragSource } from './dnd';
 
 // The sidebar monster list. Virtualized over `/monsters.png` row atlases so every
@@ -23,24 +24,6 @@ const CHUNK = 32;
 const OVERSCAN = 6;
 
 const LAST_MONSTER_KEY = 'monx.lastMonster';
-
-// Belongs in settings.ts next to loadZoomIdx — Agent 1 owns that file, so these
-// live here until it grows a generic string setting pair. See handoff-4.
-function loadLastMonster(): string | null {
-	try {
-		return localStorage.getItem(LAST_MONSTER_KEY);
-	} catch {
-		return null;
-	}
-}
-
-function saveLastMonster(file: string): void {
-	try {
-		localStorage.setItem(LAST_MONSTER_KEY, file);
-	} catch {
-		// Ignore storage failures (private mode, quota); the selection is non-critical.
-	}
-}
 
 interface Props {
 	monsters: MonsterSummary[];
@@ -189,13 +172,13 @@ export default function MonsterList({
 	useEffect(() => {
 		if (restoredRef.current || selectedFile !== null || monsters.length === 0) return;
 		restoredRef.current = true;
-		const last = loadLastMonster();
+		const last = loadSetting(LAST_MONSTER_KEY, null);
 		if (last && monsters.some(m => m.file === last)) onSelect(last);
 	}, [monsters, selectedFile, onSelect]);
 
 	const select = useCallback(
 		(file: string) => {
-			saveLastMonster(file);
+			saveSetting(LAST_MONSTER_KEY, file);
 			onSelect(file);
 		},
 		[onSelect]
@@ -207,6 +190,9 @@ export default function MonsterList({
 		const races = [...new Set(monsters.map(m => m.race).filter((r): r is string => !!r))].sort();
 		const species = [...new Set(monsters.map(m => m.species).filter((s): s is string => !!s))].sort();
 		return [
+			{ key: 'boss', label: 'Boss', section: 'Kind', test: m => m.boss },
+			{ key: 'summonable', label: 'Summonable', section: 'Kind', test: m => m.summonable },
+			{ key: 'has-loot', label: 'Has loot', section: 'Kind', test: m => m.hasLoot },
 			{ key: 'unregistered', label: 'Unregistered', section: 'Status', test: m => !m.registered },
 			{
 				key: 'has-lints',
