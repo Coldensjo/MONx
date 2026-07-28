@@ -1488,6 +1488,12 @@ impl<'a> Writer<'a> {
         }
     }
 
+    /// Discards the indentation already written in front of a node that is
+    /// being dropped, so a deleted entry doesn't leave its own blank line behind.
+    fn drop_pending_ws(&self, out: &mut Vec<u8>) {
+        self.split_pending_ws(out);
+    }
+
     /// Takes the whitespace already written at the end of `out` back off it.
     /// The last child of a container is the indentation in front of its closing
     /// tag; appended nodes have to land *before* that run, or the closing tag
@@ -1936,7 +1942,7 @@ impl<'a> Writer<'a> {
                     match pair_for(self, &key) {
                         // Key removed from the model — drop the node and the
                         // whitespace that introduced it.
-                        None => {}
+                        None => self.drop_pending_ws(out),
                         Some(pair) => {
                             out.extend_from_slice(&self.src[cursor..n.span.start]);
                             if unchanged(self, &key) {
@@ -2078,6 +2084,7 @@ impl<'a> Writer<'a> {
                 Child::Element(n) => {
                     if idx >= new.len() {
                         // Spell deleted — drop it and its leading whitespace.
+                        self.drop_pending_ws(out);
                         cursor = n.span.end;
                         idx += 1;
                         continue;
@@ -2289,6 +2296,7 @@ impl<'a> Writer<'a> {
                         continue;
                     }
                     if idx >= new.len() {
+                        self.drop_pending_ws(out);
                         cursor = v.span.end;
                         idx += 1;
                         continue;
@@ -2376,6 +2384,7 @@ impl<'a> Writer<'a> {
             match child {
                 Child::Element(s) => {
                     if idx >= new.len() {
+                        self.drop_pending_ws(out);
                         cursor = s.span.end;
                         idx += 1;
                         continue;
@@ -2501,6 +2510,7 @@ impl<'a> Writer<'a> {
                         continue;
                     }
                     if idx >= new.len() {
+                        self.drop_pending_ws(out);
                         cursor = item.span.end;
                         idx += 1;
                         continue;
@@ -2604,6 +2614,7 @@ impl<'a> Writer<'a> {
                         continue;
                     }
                     if idx >= new.len() {
+                        self.drop_pending_ws(out);
                         cursor = e.span.end;
                         idx += 1;
                         continue;
