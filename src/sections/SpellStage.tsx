@@ -94,20 +94,25 @@ export function SpellStage({ block, look, parent }: Props) {
 	const areaAnim = useThingAnim('effect', area);
 	const shootAnim = useThingAnim('missile', shoot);
 
+	// `<defenses>` are cast by the monster on itself, so there is no victim to
+	// aim at, nothing for a projectile to cross, and `range` never applies.
+	const selfCast = parent === 'defenses';
 	const melee = block.melee !== null;
 	const range = melee ? 1 : block.range;
 	const distance = tileDistance(target.dx, target.dy);
 	const facing = facingFor(target.dx, target.dy);
 	// `range = 0` is "line of sight only" (§8.2) — nothing on the stage is out of it.
-	const outOfRange = range > 0 && distance > range;
+	const outOfRange = !selfCast && range > 0 && distance > range;
 
-	const shape = useMemo(() => spellShape(block, facing), [block, facing]);
+	const shape = useMemo(() => spellShape(block, facing, selfCast), [block, facing, selfCast]);
+	/** Who the spell lands on: the monster for a defense, the dragged victim otherwise. */
+	const victim = selfCast ? { dx: 0, dy: 0 } : target;
 	const origin = shape.origin === 'target' ? target : { dx: 0, dy: 0 };
 	const tiles = useMemo(
 		() => shape.tiles.map(t => ({ dx: origin.dx + t.dx, dy: origin.dy + t.dy })),
 		[shape, origin.dx, origin.dy]
 	);
-	const hitsTarget = tiles.some(t => t.dx === target.dx && t.dy === target.dy);
+	const hitsTarget = tiles.some(t => t.dx === victim.dx && t.dy === victim.dy);
 
 	const damage = useMemo(() => spellDamageRange(block), [block]);
 	const gain = parent === 'defenses' || block.name === 'healing' || (block.min > 0 && block.max > 0);
@@ -118,8 +123,8 @@ export function SpellStage({ block, look, parent }: Props) {
 	// Sized to whatever the spell actually reaches, so a 1-tile melee doesn't sit
 	// in the middle of a 21-wide field and an 8-radius nova is never clipped.
 	const bounds = useMemo(() => {
-		let w = Math.max(3, Math.abs(target.dx) + 1);
-		let h = Math.max(3, Math.abs(target.dy) + 1);
+		let w = Math.max(3, Math.abs(victim.dx) + 1);
+		let h = Math.max(3, Math.abs(victim.dy) + 1);
 		for (const t of tiles) {
 			w = Math.max(w, Math.abs(t.dx) + 1);
 			h = Math.max(h, Math.abs(t.dy) + 1);
@@ -127,7 +132,7 @@ export function SpellStage({ block, look, parent }: Props) {
 		const cols = Math.min(MAX_COLS, Math.max(MIN_COLS, w * 2 + 1));
 		const rows = Math.min(MAX_ROWS, Math.max(MIN_ROWS, h * 2 + 1));
 		return { cols, rows, cx: (cols - 1) / 2, cy: (rows - 1) / 2 };
-	}, [tiles, target.dx, target.dy]);
+	}, [tiles, victim.dx, victim.dy]);
 
 	const px = useCallback((t: Tile) => ({ left: (bounds.cx + t.dx) * TILE, top: (bounds.cy + t.dy) * TILE }), [bounds]);
 
@@ -137,7 +142,8 @@ export function SpellStage({ block, look, parent }: Props) {
 	const timings = useRef({ cooldown: 0, flight: 0, impact: 0 });
 	timings.current = {
 		cooldown: realCooldown ? Math.max(1, block.interval) : Math.min(Math.max(1, block.interval), COMPRESSED_COOLDOWN_MS),
-		flight: shoot === null ? 0 : flightDuration(distance),
+		// Nothing travels when caster and victim are the same creature.
+		flight: shoot === null || selfCast ? 0 : flightDuration(distance),
 		impact: impactDuration(areaAnim?.frames ?? 1)
 	};
 
@@ -319,7 +325,13 @@ export function SpellStage({ block, look, parent }: Props) {
 						</>
 					) : (
 						<span className="mx-stage-fx-none">
-							{block.kind === 'registered' ? 'from spells.xml' : distance > 1 ? 'none — nothing travels' : 'none'}
+							{block.kind === 'registered'
+								? 'from spells.xml'
+								: selfCast
+								? 'not used — cast on itself'
+								: distance > 1
+								? 'none — nothing travels'
+								: 'none'}
 						</span>
 					)}
 				</span>
@@ -354,13 +366,21 @@ export function SpellStage({ block, look, parent }: Props) {
 					height: bounds.rows * TILE,
 					backgroundSize: `${TILE}px ${TILE}px`
 				}}
-				onPointerDown={e => {
-					(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-					moveTarget(e);
-				}}
-				onPointerMove={e => {
-					if (e.buttons === 1) moveTarget(e);
-				}}
+				onPointerDown={
+					selfCast
+						? undefined
+						: e => {
+								(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+								moveTarget(e);
+						  }
+				}
+				onPointerMove={
+					selfCast
+						? undefined
+						: e => {
+								if (e.buttons === 1) moveTarget(e);
+						  }
+				}
 			>
 				{/* Every tile the spell covers, lit whether or not it is impacting. */}
 				{tiles.map((t, i) => (
@@ -383,13 +403,15 @@ export function SpellStage({ block, look, parent }: Props) {
 					<img src={casterUrl} alt="" draggable={false} />
 				</div>
 
-				<div
-					className={outOfRange ? 'mx-stage-target mx-stage-target-far' : 'mx-stage-target'}
-					style={{ ...px(target), width: TILE, height: TILE }}
-					title={`${distance} ${distance === 1 ? 'tile' : 'tiles'} away — drag to move`}
-				>
-					<Crosshair size={TILE - 6} />
-				</div>
+				{!selfCast && (
+					<div
+						className={outOfRange ? 'mx-stage-target mx-stage-target-far' : 'mx-stage-target'}
+						style={{ ...px(target), width: TILE, height: TILE }}
+						title={`${distance} ${distance === 1 ? 'tile' : 'tiles'} away — drag to move`}
+					>
+						<Crosshair size={TILE - 6} />
+					</div>
+				)}
 
 				{phase === 'flight' && shootUrl && !aoeShoot && (
 					<div
@@ -420,7 +442,7 @@ export function SpellStage({ block, look, parent }: Props) {
 					<div
 						key={cast.id}
 						className={gain ? 'mx-stage-float mx-stage-float-gain' : 'mx-stage-float'}
-						style={px(target)}
+						style={px(victim)}
 					>
 						{gain ? '+' : '−'}
 						{Math.abs(cast.value)}
@@ -446,9 +468,13 @@ export function SpellStage({ block, look, parent }: Props) {
 			</div>
 
 			<div className="mx-stage-legend">
-				<span className="mono">
-					{distance} {distance === 1 ? 'tile' : 'tiles'}
-				</span>
+				{selfCast ? (
+					<span>on itself</span>
+				) : (
+					<span className="mono">
+						{distance} {distance === 1 ? 'tile' : 'tiles'}
+					</span>
+				)}
 				<span className="mono">
 					{tiles.length} {tiles.length === 1 ? 'tile' : 'tiles'} hit
 				</span>
@@ -467,7 +493,14 @@ export function SpellStage({ block, look, parent }: Props) {
 			)}
 			{!hitsTarget && !outOfRange && (
 				<div className="ss-ed-field-note ss-ed-note-warn">
-					The area does not cover the target. {shape.needsDirection ? 'A beam fires along the facing only.' : ''}
+					{selfCast ? 'The area does not cover the monster itself.' : 'The area does not cover the target.'}{' '}
+					{shape.needsDirection ? 'A beam fires along the facing only.' : ''}
+				</div>
+			)}
+			{selfCast && (
+				<div className="ss-ed-field-note">
+					A <code>&lt;defense&gt;</code> rolls in <code>onThinkDefense</code> with the monster as both caster and
+					target, so it lands on itself — <code>range</code> and <code>target</code> have nothing to act on.
 				</div>
 			)}
 			{block.kind !== 'builtin' && (

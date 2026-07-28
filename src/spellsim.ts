@@ -111,9 +111,15 @@ export interface SpellShape {
  * The tiles a spell block covers, relative to its origin. A registered or
  * scripted spell has no XML geometry the loader reads (§8.1), so it resolves to
  * the single target tile — the honest answer, not a guess at the Lua.
+ *
+ * `selfCast` is set for `<defenses>`: those roll in `onThinkDefense` with the
+ * monster as both caster and victim (§23), so a heal or a haste lands on the
+ * monster and `target="1"` recentres on nothing. Every shape stays anchored to
+ * the caster.
  */
-export function spellShape(block: SpellBlock, facing: Facing): SpellShape {
-	const single: SpellShape = { tiles: [{ dx: 0, dy: 0 }], origin: 'target', needsDirection: false };
+export function spellShape(block: SpellBlock, facing: Facing, selfCast = false): SpellShape {
+	const here: SpellShape['origin'] = selfCast ? 'caster' : 'target';
+	const single: SpellShape = { tiles: [{ dx: 0, dy: 0 }], origin: here, needsDirection: false };
 	if (block.kind !== 'builtin' || !block.area) return single;
 
 	const area = block.area;
@@ -122,7 +128,7 @@ export function spellShape(block: SpellBlock, facing: Facing): SpellShape {
 	}
 	const tiles = area.shape === 'ring' ? ringTiles(area.ring) : radiusTiles(area.radius);
 	if (tiles.length === 0) return single;
-	return { tiles, origin: block.target ? 'target' : 'caster', needsDirection: false };
+	return { tiles, origin: block.target && !selfCast ? 'target' : 'caster', needsDirection: false };
 }
 
 /** Chebyshev distance — the tile distance the engine's `range` is measured in. */
