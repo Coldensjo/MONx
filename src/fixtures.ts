@@ -250,6 +250,7 @@ export const FIXTURE_WORKSPACE: WorkspaceInfo = {
 	sprPath: 'C:\\Servers\\Software\\MONx\\assets\\client\\Tibia.spr',
 	datPath: 'C:\\Servers\\Software\\MONx\\assets\\client\\Tibia.dat',
 	spriteCount: 10313,
+	transparent: false,
 	lints: [
 		{
 			severity: 'warning',

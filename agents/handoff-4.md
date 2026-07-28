@@ -1,8 +1,10 @@
 # Handoff 4 — Browse, Preview & Lint
 
-**Status: all four milestones landed and building. Two gates cannot be run yet — see Verification.**
+**Status: all four milestones landed. Three of four gates verified in the running app; the fourth has
+no call site to run against yet.**
 
-Built against Agent 1's M0 (`ef51155`). Nothing outside my ownership column was touched.
+Built against Agent 1's M0 (`ef51155`), then re-verified against M1+M2 (`9703f44`, protocol routes) and
+M3 (`9cb8194`, the shell). Nothing outside my ownership column was touched.
 
 ---
 
@@ -96,10 +98,32 @@ $ cd src-tauri && cargo check
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.40s
 ```
 
-`tsc` runs with `strict`, `noUnusedLocals` and `noUnusedParameters` over all of `src/`, so every file
-above is type-checked even though nothing imports them yet. CSS grew 17.46 → 22.96 kB, which is
-`browse.css` landing. **JS is byte-identical at 222.82 kB — my components are tree-shaken out because
-`App.tsx` is still SPRx's and imports none of them.**
+`tsc` runs with `strict`, `noUnusedLocals` and `noUnusedParameters` over all of `src/`.
+
+### Gates, run against `assets/` in the built portable exe
+
+Driven with `.claude/skills/run-monx/driver.ps1`; screenshots taken at each step.
+
+| Gate | Result |
+|---|---|
+| 382 monsters list with correct outfit sprites, no scroll jank | **Pass.** Sidebar renders every row's real outfit through the CHUNK-aligned `/monsters.png` atlases. Lint-count badges, orphan badges and the accent selection bar all render. |
+| Items browse at SPRx's performance | **Pass.** 11,863 items (not the spec's 5,005 — that count predates OTB `fromid`/`toid` expansion), sprites via `/items.png`, zoom and search working. |
+| All three lint severities render distinctly | **Pass.** Errors red, warnings amber, silent purple, each with its own icon; group headers, severity chips and the `file · code` metadata all correct. |
+| Dragging an item produces a sprite ghost and a typed payload | **Not run — no call site exists.** See below. |
+
+Two checks worth recording beyond the gates:
+
+- **Virtualization at depth.** Searching server id `11000` in the item browser jumped ~1,370 rows in,
+  centred the cell, selected it, and rendered every surrounding cell with correct atlas offsets. That is
+  the case where virtualization math and background-position batching go wrong, and it holds.
+- **Workspace lints.** The Workspace tab lists 42 real cross-file findings from the corpus — 30
+  `registry.orphan`, and 12 silent ones including `summon.unknown-monster` and
+  `outfit.unknown-monster` on `fernfang.xml`. Exactly the §24 class that produces no server output.
+
+The boss filter reports **102 / 382**, which looks wrong against `grep isboss="1"` (11 files) and is
+not: the corpus writes both `isboss="1"` (11) and `isBoss="1"` (91). The loader compares flag names with
+`strcasecmp`, the parser folds case to match, and 11 + 91 = 102. Recorded here because the next person
+to grep that number will have the same doubt.
 
 ### Combat math, run against `FIXTURE_DEMON`
 
@@ -126,50 +150,47 @@ reference's §23 worked example also passes: `maxMeleeDamage(40, 30) === 75`.
 
 ## Not done, and why
 
-1. **Three gates in my brief cannot be run yet.** "383 monsters list with correct outfit sprites", "5,005
-   items browse at SPRx's performance" and "dragging an item produces a sprite ghost" all need pixels on
-   screen. Two things block that, both Agent 1's and both already declared in `handoff-1-m0.md`:
-   `/look.png`, `/item.png`, `/items.png` and `/monsters.png` currently 500 (his M2), and `App.tsx` /
-   `Workspace.tsx` still render SPRx's shell, so nothing mounts my components (his M3). **I am not
-   claiming those gates.** The code is written against the contract and compiles; it has not been seen
-   running. I'll re-run them the moment either lands.
-2. **Three list filters from my brief are not implemented: boss, summonable, has-loot.** `MonsterSummary`
-   (README §5) carries no flags, no loot and no summon data, so they are not derivable — see the request
-   below. Race, species, has-lints, has-errors, missing-raceid and unregistered are implemented, built
-   from the values actually present in the corpus rather than a hardcoded enum.
-3. **The new-monster Group dropdown is populated from a prop, not a command.** There is no
-   `list_monster_groups` in §6 — request below. It renders `(none)` plus whatever it's given.
-4. **"Reveal in folder" renders only when an `onReveal` prop is supplied.** No such command exists in the
+1. **The drag gate cannot be run: there is no matching source/target pair in the app.** The Items
+   browser emits `{ kind: 'item' }`, and today the only mounted drop target is `PreviewPanel`, which
+   accepts `'outfit'`. The Outfits browser is still "wiring pending" in `Workspace.tsx`, and Agent 3's
+   loot / corpse / summon targets do not exist yet. Both halves of the mechanism are landed and
+   compile — `useDragSource` is live on every item cell and every monster row, `[data-drop-active]` is
+   styled — but a drag has never been seen completing. **I am not claiming this gate.** It becomes
+   runnable the moment either the Outfits browser or one of Agent 3's targets lands, and it is a
+   two-minute check at that point.
+2. **The outfit picker cannot be fed a row atlas yet.** `ThingBrowser`'s prop surface is fine — I
+   compile-probed both the outfit and corpse picker call sites and they type-check — but
+   `thingsRowUrl` (the only outfit atlas builder) needs full `OpenFile`/`OpenDat` objects, and
+   `Workspace.tsx` has only `sprPath`/`datPath` strings with no `cacheKey`. See the request below.
+3. **"Reveal in folder" renders only when an `onReveal` prop is supplied.** No such command exists in the
    contract and adding one is not mine to do.
+
+### Resolved since the first draft
+
+Agent 1 landed all four requests in `4fcb0b2`, so the following are now done rather than blocked:
+
+- `loadSetting`/`saveSetting` adopted; the inlined try/catch stand-ins in `MonsterList.tsx` and
+  `LintPanel.tsx` are deleted. `LintPanel` keeps its own shape validation, because a stale or
+  hand-edited `monx.lintFilter` must never leave the drawer filtering on nothing.
+- **boss, summonable and has-loot filters implemented**, in their own `Kind` section of the popover.
+- The new-monster Group dropdown is fed from `list_monster_groups` via `Workspace.tsx`.
 
 ---
 
 ## Changes needed in files I don't own
 
-**Agent 1 — `src/settings.ts`** (2 helpers). I need `monx.lastMonster` and `monx.lintFilter` persisted.
-`settings.ts` has `loadZoomIdx`/`saveZoomIdx` but no general pair, so I inlined four-line
-try/catch helpers in `MonsterList.tsx` and `LintPanel.tsx`, each flagged with a comment pointing here.
-Please add and I'll delete mine:
+**Agent 1 — an outfit row-atlas builder.** This is the one thing still blocking M1's "reused three
+times" requirement. `thingsRowUrl` takes `OpenFile`/`OpenDat`, which the workspace does not hold. The
+route design already solves this for the other two surfaces — `/items.png` takes server ids and
+`/monsters.png` takes file names, neither passes a path, because the backend already knows the open
+client files. An outfit route in the same shape would finish it:
 
 ```ts
-export function loadSetting(key: string, fallback: string | null): string | null;
-export function saveSetting(key: string, value: string): void;
+export function outfitsRowUrl(types: number[], cell: number): string;   // /outfits.png?types=…&cell=…
 ```
 
-**Agent 1 — `src/monster.ts`**, one new command wrapper, and **Agent 2** the Rust side:
-
-| Command | Args → Returns | Why |
-|---|---|---|
-| `list_monster_groups` | `{}` → `string[]` | The `+ New` dialog's Group dropdown reads the comment groups in `monsters.xml` (`<!-- bosses -->`, …). My brief requires it; §6 has no command for it. |
-
-**Agent 2 — three fields on `MonsterSummary`.** Without these the boss / summonable / has-loot filters
-my brief specifies cannot be built, and they're cheap for the parser to fill:
-
-```ts
-boss: boolean;        // <flag boss="1" />
-summonable: boolean;  // <flag summonable="1" />
-hasLoot: boolean;     // loot.length > 0
-```
+Either that, or expose the open `OpenFile`/`OpenDat` pair from the workspace so `thingsRowUrl` can be
+called directly. The first is cleaner and matches §7; the choice is yours since you own the routes.
 
 **Agent 1 — `Workspace.tsx` wiring.** `MonsterList` takes `(monsters, selectedFile, onSelect, onMutated,
 showToast, groups?, onReveal?)`; `PreviewPanel` takes `(doc, items, lintCount, onOpenLints?,
@@ -184,6 +205,18 @@ example, `skill=40 attack=30 → 75`, passes — so it is the stated result that
 **The demon shows 104.** `agents/` and `DESIGN.md` are frozen, so I have not edited either.
 
 ---
+
+## A change someone else made in a file I own
+
+Agent 3 edited `src/dnd.ts` — `{ kind: 'item' }` gained a `container: boolean`, and `MIME_PREFIX` was
+exported. §3 says to route that through Agent 1 rather than edit directly, but **the change is right and
+I have kept it.** The loot editor has to decide whether a dropped entry can nest children at drop time,
+before it has resolved the id through `getItem`, so the flag genuinely has to travel with the payload.
+`Workspace.tsx` supplies it and the build is green.
+
+Flagging it only so the next reader knows the payload union has two authors. If anything else needs to
+ride along on a payload, ask and I'll land it — the union is the contract three streams drag against,
+and it should not drift a field at a time.
 
 ## Contract deviations
 

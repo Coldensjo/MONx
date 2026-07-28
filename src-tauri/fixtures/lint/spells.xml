@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spell blocks: resolution, clamps, geometry, melee conditions, effects
+     (§8, §9, §21 defects). -->
+<monster name="Spell Wreck" nameDescription="a spell wreck" species="test" race="fire" experience="1000" speed="300" manacost="0" raceid="9002">
+	<health now="1000" max="1000" />
+	<look type="35" corpse="0" />
+	<targetchange interval="2000" chance="10" />
+	<flags>
+		<flag attackable="1" />
+		<flag hostile="1" />
+	</flags>
+	<attacks>
+		<attack interval="2000" chance="50" />
+		<attack name="notaspell" interval="2000" chance="50" min="-10" max="-20" />
+		<attack name="fire" interval="0" chance="250" range="40" min="-90" max="-10" />
+		<attack name="fire" interval="2000" min="-1" max="-5" length="8" radius="4" ring="2" />
+		<attack name="energy" interval="2000" chance="10" min="5" max="20" />
+		<attack name="melee" interval="2000" skill="30" bleed="55" />
+		<attack name="melee" interval="2000" skill="30" />
+		<attack name="fire" interval="2000" chance="10" min="-1" max="-5">
+			<attribute key="areaEffect" value="const_me_fireare" />
+			<attribute key="shootEffect" value="CONST_ANI_FROSTARROW" />
+			<attribute key="sparkles" value="1" />
+		</attack>
+		<attack name="fire" interval="2000" chance="10" min="-1" max="-5">
+			<attribute key="areaEffect" value="const_me_firearea" />
+			<attribute key="shootEffect" value="CONST_ANI_KNIFE" />
+		</attack>
+		<attack name="cleave" interval="2000" chance="10" radius="3">
+			<attribute key="areaEffect" value="CONST_ME_FIREAREA" />
+		</attack>
+	</attacks>
+	<defenses armor="10" defense="5">
+		<defense name="speed" interval="2000" chance="10" duration="5000" />
+		<defense name="speed" interval="2000" chance="10" duration="5000" minspeedchange="-4000" maxspeedchange="-5000" />
+		<defense name="healing" interval="2000" chance="10" min="-50" max="-100" />
+	</defenses>
+	<loot />
+</monster>

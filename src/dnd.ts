@@ -5,7 +5,9 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 // target declares exactly which kinds it accepts.
 
 export type DragPayload =
-	| { kind: 'item'; serverId: number; name: string }
+	// `container` travels with the item because the loot editor decides whether a
+	// dropped entry can nest children before it has resolved the id.
+	| { kind: 'item'; serverId: number; name: string; container: boolean }
 	| { kind: 'outfit'; type: number }
 	| { kind: 'monster'; file: string; name: string }
 	| { kind: 'reorder'; list: string; index: number };
@@ -15,7 +17,7 @@ export type DragKind = DragPayload['kind'];
 // The kind is encoded in the MIME type, not just the payload, because
 // `dataTransfer.getData` is blocked during `dragover` — only `types` is readable.
 // Without this a target could not tell whether to accept the drag until the drop.
-const MIME_PREFIX = 'application/x-monx+';
+export const MIME_PREFIX = 'application/x-monx+';
 
 function mimeFor(kind: DragKind): string {
 	return MIME_PREFIX + kind;

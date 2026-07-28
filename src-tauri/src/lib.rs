@@ -1,8 +1,12 @@
+pub mod catalog;
 pub mod dat;
 pub mod items;
+pub mod lint;
 pub mod monster;
 pub mod otb;
 mod protocol;
+pub mod registry;
+pub mod spells;
 pub mod spr;
 pub mod workspace;
 
@@ -714,12 +718,21 @@ fn open_workspace(
     }
 
     let index = items::ItemIndex::load(&items_dir)?;
-    let monsters = monster::scrape_folder(&monsters_dir);
 
-    let registered_count = monsters.iter().filter(|m| m.registered).count() as u32;
-    let orphan_count = monsters.len() as u32 - registered_count;
-    let mut lints = workspace_lints(&monsters);
+    // The whole corpus is parsed up front, mirroring the server's own
+    // `forceMonsterTypesOnLoad = true`: cross-file lints need all of it.
+    let registry = registry::Registry::load(&monsters_dir.join("monsters.xml"));
+    let spells = spells::SpellIndex::load(
+        paths.spells.as_ref().map(std::path::PathBuf::from).as_deref(),
+    );
+    let (docs, read_errors) = monster::read_corpus(&monsters_dir, &registry, &spells);
+
+    let registered_count = docs.iter().filter(|d| d.registered).count() as u32;
+    let orphan_count = docs.len() as u32 - registered_count;
+    let mut lints = lint::lint_workspace(&docs, &registry, &spells, &index, &monsters_dir);
+    lints.extend(read_errors);
     lints.extend(item_lints(&index));
+    let monsters = lint::summaries(&docs, &spells, &index);
 
     let info = WorkspaceInfo {
         paths: WorkspacePaths {
@@ -736,6 +749,7 @@ fn open_workspace(
         spr_path: spr_path.to_string_lossy().into_owned(),
         dat_path: dat_path.to_string_lossy().into_owned(),
         sprite_count: spr_info.sprite_count,
+        transparent,
         lints,
     };
 
@@ -743,6 +757,9 @@ fn open_workspace(
     ws.paths = info.paths.clone();
     ws.items = index;
     ws.monsters = monsters;
+    ws.docs = docs;
+    ws.registry = registry;
+    ws.spells = spells;
     ws.spr_path = info.spr_path.clone();
     ws.dat_path = info.dat_path.clone();
     ws.transparent = transparent;
@@ -755,42 +772,6 @@ fn close_workspace(state: State<WorkspaceState>) -> Result<(), String> {
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
     *ws = workspace::Workspace::default();
     Ok(())
-}
-
-/// Cross-file lints the shallow scrape can already prove: unregistered files
-/// and duplicate raceids. Agent 2's `lint.rs` takes this over and adds the rest.
-fn workspace_lints(monsters: &[MonsterSummary]) -> Vec<Lint> {
-    let mut lints: Vec<Lint> = Vec::new();
-
-    for m in monsters.iter().filter(|m| !m.registered) {
-        lints.push(Lint {
-            severity: "warning".to_string(),
-            code: "registry.orphan".to_string(),
-            message: format!("{} is not listed in monsters.xml — the server never loads it", m.file),
-            file: Some(m.file.clone()),
-            path: None,
-            fixable: true,
-        });
-    }
-
-    let mut seen: std::collections::BTreeMap<i64, String> = std::collections::BTreeMap::new();
-    for m in monsters {
-        let Some(raceid) = m.raceid else { continue };
-        if let Some(first) = seen.get(&raceid) {
-            lints.push(Lint {
-                severity: "error".to_string(),
-                code: "raceid.duplicate".to_string(),
-                message: format!("raceid {raceid} is also used by {first}"),
-                file: Some(m.file.clone()),
-                path: Some("raceid".to_string()),
-                fixable: false,
-            });
-        } else {
-            seen.insert(raceid, m.file.clone());
-        }
-    }
-
-    lints
 }
 
 /// Workspace-scope lints from the OTB ↔ items.xml cross-check. An items.xml
@@ -822,6 +803,21 @@ fn item_lints(index: &items::ItemIndex) -> Vec<Lint> {
 }
 
 // ---------- Monsters (Agent 2) ----------
+//
+// Every handler here is a thin shim: it takes the workspace lock, hands the
+// paths and the parsed corpus to `monster.rs` / `lint.rs`, and refreshes the
+// cached corpus after a mutation. All the format knowledge lives in those
+// modules, none of it here.
+
+/// Re-parses the corpus into the workspace after a mutating command, so the
+/// list, the lint drawer and cross-file checks never see a stale view.
+fn refresh(ws: &mut workspace::Workspace) {
+    let dir = ws.monsters_dir();
+    ws.registry = registry::Registry::load(&dir.join("monsters.xml"));
+    let (docs, _) = monster::read_corpus(&dir, &ws.registry, &ws.spells);
+    ws.monsters = lint::summaries(&docs, &ws.spells, &ws.items);
+    ws.docs = docs;
+}
 
 #[tauri::command]
 fn list_monsters(state: State<WorkspaceState>) -> Result<Vec<MonsterSummary>, String> {
@@ -832,39 +828,33 @@ fn list_monsters(state: State<WorkspaceState>) -> Result<Vec<MonsterSummary>, St
 #[tauri::command]
 fn get_monster(state: State<WorkspaceState>, file: String) -> Result<MonsterDoc, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    // Stub: every monster comes back shaped like the demon, with the summary's
-    // own identity and headline numbers patched in, so the editor renders a
-    // complete document for any selection.
-    let name = ws.monster(&file).map(|m| m.name.clone()).unwrap_or_default();
-    let mut doc = monster::fixture_demon(&file, &name);
-    if let Some(summary) = ws.monster(&file) {
-        doc.registered = summary.registered;
-        doc.raceid = summary.raceid;
-        doc.experience = summary.experience;
-        doc.speed = summary.speed;
-        doc.species = summary.species.clone();
-        doc.race = summary.race.clone();
-        doc.look = summary.look.clone();
-        doc.health = monster::Health {
-            now: summary.health,
-            max: summary.health,
-        };
-    }
+    let mut doc =
+        monster::read_file(&ws.monsters_dir().join(&file), ws.registry.has_file(&file))?.doc;
+    // §8.1 resolution needs spells.xml, which only the workspace has.
+    ws.spells.classify_doc(&mut doc);
     Ok(doc)
 }
 
 #[tauri::command]
-fn save_monster(doc: MonsterDoc) -> Result<Vec<Lint>, String> {
-    // Stub: validates nothing and writes nothing. Agent 2's writer replaces this.
-    Ok(stub_lints(&doc))
+fn save_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<Vec<Lint>, String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    let lints = monster::save(&ws.monsters_dir(), &ws.registry, &doc)?;
+    refresh(&mut ws);
+    let mut all = lints;
+    all.extend(lint::lint_monster(&doc, &ws.spells, &ws.items));
+    Ok(all)
 }
 
 #[tauri::command]
-fn create_monster(name: String, file: String, group: String) -> Result<MonsterDoc, String> {
-    let _ = group;
-    let mut doc = monster::fixture_demon(&file, &name);
-    doc.registered = false;
-    doc.raceid = None;
+fn create_monster(
+    state: State<WorkspaceState>,
+    name: String,
+    file: String,
+    group: String,
+) -> Result<MonsterDoc, String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    let doc = monster::create(&ws.monsters_dir(), &ws.registry, &name, &file, &group)?;
+    refresh(&mut ws);
     Ok(doc)
 }
 
@@ -874,120 +864,81 @@ fn duplicate_monster(
     file: String,
     new_name: String,
 ) -> Result<MonsterDoc, String> {
-    let _ = state;
-    let new_file = format!("{}.xml", new_name.to_lowercase().replace(' ', ""));
-    let _ = file;
-    let mut doc = monster::fixture_demon(&new_file, &new_name);
-    doc.registered = false;
-    doc.raceid = None;
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    let doc = monster::duplicate(&ws.monsters_dir(), &ws.registry, &file, &new_name)?;
+    refresh(&mut ws);
     Ok(doc)
 }
 
 #[tauri::command]
-fn delete_monster(file: String) -> Result<(), String> {
-    let _ = file;
+fn delete_monster(state: State<WorkspaceState>, file: String) -> Result<(), String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    monster::delete(&ws.monsters_dir(), &ws.registry, &file)?;
+    refresh(&mut ws);
     Ok(())
 }
 
 #[tauri::command]
 fn rename_monster(
+    state: State<WorkspaceState>,
     file: String,
     new_name: String,
     new_file: String,
 ) -> Result<MonsterDoc, String> {
-    let _ = file;
-    Ok(monster::fixture_demon(&new_file, &new_name))
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    let doc = monster::rename(&ws.monsters_dir(), &ws.registry, &file, &new_name, &new_file)?;
+    refresh(&mut ws);
+    Ok(doc)
 }
 
 #[tauri::command]
 fn lint_workspace(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    Ok(workspace_lints(&ws.monsters))
+    Ok(lint::lint_workspace(
+        &ws.docs,
+        &ws.registry,
+        &ws.spells,
+        &ws.items,
+        &ws.monsters_dir(),
+    ))
 }
 
 #[tauri::command]
-fn lint_monster(doc: MonsterDoc) -> Result<Vec<Lint>, String> {
-    Ok(stub_lints(&doc))
-}
-
-/// Two fabricated lints, one per severity, so the lint drawer has something to
-/// render at every level before `lint.rs` exists.
-fn stub_lints(doc: &MonsterDoc) -> Vec<Lint> {
-    let file = Some(doc.file.clone());
-    let mut lints = vec![Lint {
-        severity: "warning".to_string(),
-        code: "stub.placeholder".to_string(),
-        message: "Lint engine not implemented yet (Agent 2)".to_string(),
-        file: file.clone(),
-        path: None,
-        fixable: false,
-    }];
-    if doc.health.now > doc.health.max {
-        lints.push(Lint {
-            severity: "error".to_string(),
-            code: "health.now-over-max".to_string(),
-            message: format!(
-                "health now ({}) is greater than max ({})",
-                doc.health.now, doc.health.max
-            ),
-            file: file.clone(),
-            path: Some("health.now".to_string()),
-            fixable: true,
-        });
-    }
-    if doc.raceid.is_none() {
-        lints.push(Lint {
-            severity: "silent".to_string(),
-            code: "raceid.missing".to_string(),
-            message: "No raceid — the bestiary will not track this monster".to_string(),
-            file,
-            path: Some("raceid".to_string()),
-            fixable: true,
-        });
-    }
-    lints
+fn lint_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<Vec<Lint>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    Ok(lint::lint_monster(&doc, &ws.spells, &ws.items))
 }
 
 #[tauri::command]
 fn next_free_raceid(state: State<WorkspaceState>) -> Result<i64, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    let used: std::collections::BTreeSet<i64> = ws.monsters.iter().filter_map(|m| m.raceid).collect();
-    Ok((1..).find(|id| !used.contains(id)).unwrap_or(1))
+    Ok(lint::next_free_raceid(&ws.docs))
 }
 
 #[tauri::command]
-fn list_spell_names() -> Result<Vec<SpellName>, String> {
-    let mut names = monster::builtin_spell_names();
-    names.extend(monster::registered_spell_names());
-    Ok(names)
+fn list_spell_names(state: State<WorkspaceState>) -> Result<Vec<SpellName>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    Ok(ws.spells.all_with_usage(&ws.docs))
 }
 
 #[tauri::command]
 fn list_monster_scripts(state: State<WorkspaceState>) -> Result<Vec<String>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    let scripts_dir = PathBuf::from(&ws.paths.monsters).join("scripts");
-    let mut names: Vec<String> = std::fs::read_dir(scripts_dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.ends_with(".lua"))
-        .collect();
-    names.sort();
-    Ok(names)
+    Ok(spells::monster_scripts(&ws.monsters_dir()))
 }
 
 #[tauri::command]
 fn list_monster_groups(state: State<WorkspaceState>) -> Result<Vec<String>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    Ok(monster::scrape_groups(
-        &PathBuf::from(&ws.paths.monsters).join("monsters.xml"),
-    ))
+    // The registry parses its own comment groups, so a commented-out entry is
+    // never mistaken for a heading — `monsters.xml` has one of those today.
+    Ok(ws.registry.groups.clone())
 }
 
 #[tauri::command]
-fn balance_bands() -> Result<Vec<BalanceBand>, String> {
-    Ok(monster::balance_bands())
+fn balance_bands(state: State<WorkspaceState>) -> Result<Vec<BalanceBand>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    Ok(monster::balance_bands(&ws.docs))
 }
 
 // ---------- Items (Agent 1) ----------

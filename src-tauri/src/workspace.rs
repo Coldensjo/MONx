@@ -15,7 +15,9 @@ use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 
 use crate::items::ItemIndex;
-use crate::monster::{Lint, MonsterSummary};
+use crate::monster::{Lint, MonsterDoc, MonsterSummary};
+use crate::registry::Registry;
+use crate::spells::SpellIndex;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,6 +60,10 @@ pub struct WorkspaceInfo {
     pub spr_path: String,
     pub dat_path: String,
     pub sprite_count: u32,
+    /// From the sibling `.otfi`. The frontend needs it for the inherited
+    /// `/thing.png` and `/things.png` routes, which take it as a query param;
+    /// the MONx routes read it from workspace state instead.
+    pub transparent: bool,
     /// Workspace-scope lints only (duplicate raceids, orphans, …).
     pub lints: Vec<Lint>,
 }
@@ -67,6 +73,11 @@ pub struct Workspace {
     pub paths: WorkspacePaths,
     pub items: ItemIndex,
     pub monsters: Vec<MonsterSummary>,
+    /// The whole corpus, parsed. Cross-file lints (duplicate raceids, orphans,
+    /// unresolved summon targets) are only possible with all of it in memory.
+    pub docs: Vec<MonsterDoc>,
+    pub registry: Registry,
+    pub spells: SpellIndex,
     pub spr_path: String,
     pub dat_path: String,
     /// From the sibling `.otfi`. Selects 3- vs 4-channel sprite decompression;
@@ -83,6 +94,18 @@ impl Workspace {
     /// Looks up a monster summary by file name, e.g. "demon.xml".
     pub fn monster(&self, file: &str) -> Option<&MonsterSummary> {
         self.monsters.iter().find(|m| m.file == file)
+    }
+
+    pub fn doc(&self, file: &str) -> Option<&MonsterDoc> {
+        self.docs.iter().find(|d| d.file == file)
+    }
+
+    pub fn monsters_dir(&self) -> PathBuf {
+        PathBuf::from(&self.paths.monsters)
+    }
+
+    pub fn spells_dir(&self) -> Option<PathBuf> {
+        self.paths.spells.as_ref().map(PathBuf::from)
     }
 }
 
@@ -217,11 +240,22 @@ pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
 
     WorkspaceProbe {
         monsters: slot(Some(&expanded.monsters), |dir| {
-            let files = crate::monster::scrape_folder(dir);
+            // Probing must stay cheap — it runs on every keystroke in the
+            // Landing dialog — so this counts files against the registry
+            // without parsing any of them.
+            let files = crate::monster::monster_files(dir);
             if files.is_empty() {
                 return Err("No monster .xml files here".to_string());
             }
-            let registered = files.iter().filter(|m| m.registered).count();
+            let registry = Registry::load(&dir.join("monsters.xml"));
+            let registered = files
+                .iter()
+                .filter(|p| {
+                    p.file_name()
+                        .map(|n| registry.has_file(&n.to_string_lossy()))
+                        .unwrap_or(false)
+                })
+                .count();
             let orphans = files.len() - registered;
             Ok(format!(
                 "{} files · {} registered · {} orphans",
