@@ -24,10 +24,12 @@ import { usePreviewUrl, useThingAnim } from '../fields/preview';
 // covers, then does it again. Everything on screen is read from the block being
 // edited, so changing `spread` or the impact effect changes the next cast.
 
-const TILE = 22;
-const MIN_COLS = 11;
+/** A Tibia tile is 32 px, and every sprite is drawn at its own size against it —
+ *  a 2×2 thing really is 64 px and overhangs its base tile, same as in game. */
+const TILE = 32;
+const MIN_COLS = 9;
 const MAX_COLS = 21;
-const MIN_ROWS = 9;
+const MIN_ROWS = 7;
 const MAX_ROWS = 13;
 /** Long enough to read, short enough not to overlap the next cast. */
 const FLOATER_MS = 1100;
@@ -71,7 +73,7 @@ const ImpactSprite = memo(function ImpactSprite({ id, frame }: { id: number; fra
 	const previewUrl = usePreviewUrl();
 	const url = previewUrl?.('effect', id, { frame });
 	if (!url) return null;
-	return <img className="mx-stage-effect" src={url} alt="" draggable={false} />;
+	return <img src={url} alt="" draggable={false} />;
 });
 
 export function SpellStage({ block, look, parent }: Props) {
@@ -214,6 +216,16 @@ export function SpellStage({ block, look, parent }: Props) {
 
 	// ---------- Dragging the victim ----------
 	const gridRef = useRef<HTMLDivElement>(null);
+	const viewportRef = useRef<HTMLDivElement>(null);
+
+	// Keep the caster in view when the grid outgrows the column: the interesting
+	// half of a long beam is the half next to the monster.
+	useEffect(() => {
+		const vp = viewportRef.current;
+		if (!vp) return;
+		vp.scrollLeft = Math.max(0, (bounds.cx + 0.5) * TILE - vp.clientWidth / 2);
+	}, [bounds]);
+
 	const moveTarget = useCallback(
 		(e: React.PointerEvent) => {
 			const rect = gridRef.current?.getBoundingClientRect();
@@ -230,7 +242,9 @@ export function SpellStage({ block, look, parent }: Props) {
 	);
 
 	const previewUrl = usePreviewUrl();
-	const casterUrl = lookUrl(look, { dir: facing as number, frame: 0, cell: TILE * 2 });
+	// No `cell`: the route then returns the look at its composed size, so a
+	// two-tile monster arrives as 64 px and is not scaled to fit one tile.
+	const casterUrl = lookUrl(look, { dir: facing as number, frame: 0 });
 
 	/** Position along the caster→victim line at `p` of the way across. */
 	const alongFlight = useCallback(
@@ -338,6 +352,9 @@ export function SpellStage({ block, look, parent }: Props) {
 				</span>
 			</div>
 
+			{/* At true scale a long wave is wider than the editor column, so the grid
+			    pans rather than shrinking the sprites to fit. */}
+			<div className="mx-stage-viewport" ref={viewportRef}>
 			<div
 				className="mx-stage-grid"
 				ref={gridRef}
@@ -392,7 +409,7 @@ export function SpellStage({ block, look, parent }: Props) {
 							className="mx-stage-cell mx-stage-missile mx-stage-trail"
 							style={{ ...alongFlight(p), width: TILE, height: TILE, opacity: 0.45 - i * 0.13 }}
 						>
-							<img className="mx-stage-effect" src={shootUrl} alt="" draggable={false} />
+							<img src={shootUrl} alt="" draggable={false} />
 						</div>
 					))}
 				{phase === 'flight' && shootUrl && !aoeShoot && (
@@ -400,7 +417,7 @@ export function SpellStage({ block, look, parent }: Props) {
 						className="mx-stage-cell mx-stage-missile"
 						style={{ ...alongFlight(progress), width: TILE, height: TILE }}
 					>
-						<img className="mx-stage-effect" src={shootUrl} alt="" draggable={false} />
+						<img src={shootUrl} alt="" draggable={false} />
 					</div>
 				)}
 				{aoeShoot &&
@@ -416,7 +433,7 @@ export function SpellStage({ block, look, parent }: Props) {
 								height: TILE
 							}}
 						>
-							<img className="mx-stage-effect" src={shootUrl} alt="" draggable={false} />
+							<img src={shootUrl} alt="" draggable={false} />
 						</div>
 					))}
 
@@ -432,6 +449,7 @@ export function SpellStage({ block, look, parent }: Props) {
 				)}
 
 				{fizzled && phase === 'cooldown' && <div className="mx-stage-fizzle">chance failed</div>}
+			</div>
 			</div>
 
 			<div className="mx-stage-meter">

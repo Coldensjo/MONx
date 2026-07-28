@@ -1083,9 +1083,16 @@
 
 /* The grid draws its own tile lattice, so a tile div is only needed where the
    spell actually lands. */
+/* Tiles are a fixed 32 px, so a big area is panned rather than scaled down. */
+.mx-stage-viewport {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-bottom: 2px;
+}
+
 .mx-stage-grid {
 	position: relative;
-	align-self: center;
+	margin: 0 auto;
 	background-color: var(--sprite-bg);
 	background-image: linear-gradient(to right, var(--border) 1px, transparent 1px),
 		linear-gradient(to bottom, var(--border) 1px, transparent 1px);
@@ -1113,24 +1120,14 @@
 	background: rgba(77, 184, 150, 0.3);
 }
 
-.mx-stage-cell {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-/* Effect sprites are often taller than one tile; letting them overflow the cell
-   is what the client does, so the impact reads at the right scale. */
-.mx-stage-effect {
-	max-width: 200%;
-	max-height: 200%;
-	image-rendering: pixelated;
-}
-
+/* Sprites keep their own pixel size — 32×32, or 64×64 for a two-tile thing —
+   and hang off the top-left of their base tile, which is how the client
+   anchors anything bigger than one tile. Nothing here may scale them. */
+.mx-stage-cell img,
 .mx-stage-caster img {
-	width: 200%;
-	height: 200%;
-	margin: -50%;
+	position: absolute;
+	right: 0;
+	bottom: 0;
 	image-rendering: pixelated;
 }
 
@@ -1243,19 +1240,20 @@
 
 .mx-stage-fx-slot {
 	display: flex;
-	align-items: center;
+	align-items: flex-end;
 	gap: 6px;
+	min-height: 32px;
 }
 
 .mx-stage-fx-key {
 	color: var(--text-muted);
 }
 
+/* Native size here too, so the chip is a truthful sample of what lands on the
+   grid rather than a thumbnail of it. */
 .mx-stage-fx-icon {
-	width: 24px;
-	height: 24px;
-	object-fit: contain;
 	image-rendering: pixelated;
+	flex: none;
 }
 
 .mx-stage-fx-none {
