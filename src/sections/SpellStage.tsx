@@ -336,7 +336,7 @@ export function SpellStage({ block, look, parent }: Props) {
 					)}
 				</span>
 				<span className="mx-stage-fx-slot">
-					<span className="mx-stage-fx-key">Impact</span>
+					<span className="mx-stage-fx-key">Magic effect</span>
 					{area !== null ? (
 						<>
 							<img

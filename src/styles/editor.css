@@ -481,6 +481,9 @@
 	gap: 4px;
 	flex: 1;
 	min-width: 0;
+	/* Overrides the centring `.ss-ed-combo` wants for a row: this one is a
+	   column, so centring floats the trigger away from its label. */
+	align-items: stretch;
 }
 
 .ss-ed-effect-sprite {
@@ -776,6 +779,14 @@
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
+}
+
+/* The spell picker and the Visualize toggle share the card's top line; the
+   button's own `margin-left: auto` takes it to the far edge. */
+.ss-ed-card-head {
+	display: flex;
+	align-items: flex-end;
+	gap: 12px;
 }
 
 .ss-ed-card-grid {

@@ -113,26 +113,28 @@ export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, on
 					</div>
 				</SubGroup>
 
-				<Field label="Addons" ignored={typeex}>
-					<div className="ss-ed-inline">
-						<Toggle
-							label="First"
-							checked={(look.addons & 1) !== 0}
-							disabled={readOnly || typeex}
-							onChange={v => setLook({ addons: v ? look.addons | 1 : look.addons & ~1 })}
-						/>
-						<Toggle
-							label="Second"
-							checked={(look.addons & 2) !== 0}
-							disabled={readOnly || typeex}
-							onChange={v => setLook({ addons: v ? look.addons | 2 : look.addons & ~2 })}
-						/>
-					</div>
-				</Field>
+				<div className="ss-ed-card-grid">
+					<Field label="Addons" ignored={typeex}>
+						<div className="ss-ed-inline">
+							<Toggle
+								label="First"
+								checked={(look.addons & 1) !== 0}
+								disabled={readOnly || typeex}
+								onChange={v => setLook({ addons: v ? look.addons | 1 : look.addons & ~1 })}
+							/>
+							<Toggle
+								label="Second"
+								checked={(look.addons & 2) !== 0}
+								disabled={readOnly || typeex}
+								onChange={v => setLook({ addons: v ? look.addons | 2 : look.addons & ~2 })}
+							/>
+						</div>
+					</Field>
 
-				<Field label="Mount" lints={lintAt('look.mount')} note="Read in both modes.">
-					<NumberField value={look.mount} onChange={v => setLook({ mount: v })} min={0} width={110} disabled={readOnly} />
-				</Field>
+					<Field label="Mount" lints={lintAt('look.mount')} note="Read in both modes.">
+						<NumberField value={look.mount} onChange={v => setLook({ mount: v })} min={0} width={110} disabled={readOnly} />
+					</Field>
+				</div>
 			</div>
 
 			<SubGroup title="Corpse">

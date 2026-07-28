@@ -520,22 +520,24 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 
 			{showEffects && (
 				<SubGroup title="Effects">
-					<Field label="Projectile" lints={lintAt('effects.shootEffect')}>
-						<EffectSelect
-							kind="shoot"
-							value={block.effects.shootEffect}
-							onChange={v => set({ effects: { ...block.effects, shootEffect: v } })}
-							disabled={readOnly}
-						/>
-					</Field>
-					<Field label="Impact" lints={lintAt('effects.areaEffect')}>
-						<EffectSelect
-							kind="area"
-							value={block.effects.areaEffect}
-							onChange={v => set({ effects: { ...block.effects, areaEffect: v } })}
-							disabled={readOnly}
-						/>
-					</Field>
+					<div className="ss-ed-card-grid">
+						<Field label="Projectile" lints={lintAt('effects.shootEffect')}>
+							<EffectSelect
+								kind="shoot"
+								value={block.effects.shootEffect}
+								onChange={v => set({ effects: { ...block.effects, shootEffect: v } })}
+								disabled={readOnly}
+							/>
+						</Field>
+						<Field label="Magic effect" lints={lintAt('effects.areaEffect')}>
+							<EffectSelect
+								kind="area"
+								value={block.effects.areaEffect}
+								onChange={v => set({ effects: { ...block.effects, areaEffect: v } })}
+								disabled={readOnly}
+							/>
+						</Field>
+					</div>
 					<Toggle
 						label="Draw the projectile to every tile of the area"
 						checked={block.effects.aoeShootEffect}
