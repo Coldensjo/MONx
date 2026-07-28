@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import type { MonsterDoc, SpellName } from '../monster';
+import type { ItemIndex, MonsterDoc, SpellName } from '../monster';
 import type { LintAt } from '../fields/Field';
-import type { ItemIndex } from '../fields/ItemPicker';
 
 export const SECTION_IDS = [
 	'identity',

@@ -1,26 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
-import { itemUrl, searchItems, getItem, type ItemInfo } from '../monster';
-
-/**
- * How the editor reaches the item database. Injected rather than imported so a
- * section can be rendered against fixtures without a backend.
- */
-export interface ItemIndex {
-	search(query: string, limit: number, corpsesOnly?: boolean): Promise<ItemInfo[]>;
-	get(serverId: number): Promise<ItemInfo | null>;
-}
-
-export const tauriItemIndex: ItemIndex = {
-	search: (query, limit, corpsesOnly) => searchItems(query, limit, false, corpsesOnly),
-	get: async serverId => {
-		try {
-			return await getItem(serverId);
-		} catch {
-			return null;
-		}
-	}
-};
+import { itemUrl, type ItemIndex, type ItemInfo } from '../monster';
 
 // Resolutions are stable for the life of a workspace and every loot row wants
 // one, so they are cached per key rather than refetched per render.

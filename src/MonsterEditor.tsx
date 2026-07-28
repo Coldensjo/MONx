@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import type { Lint, MonsterDoc, SpellName } from './monster';
+import { tauriItemIndex, type ItemIndex, type Lint, type MonsterDoc, type SpellName } from './monster';
 import { loadSetting, saveSetting } from './settings';
 import { PreviewProvider, ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
-import { tauriItemIndex, type ItemIndex } from './fields/ItemPicker';
 import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
 import { Identity } from './sections/Identity';
 import { LookSection } from './sections/LookSection';

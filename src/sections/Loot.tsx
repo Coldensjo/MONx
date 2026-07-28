@@ -1,11 +1,11 @@
 import { memo, useState } from 'react';
 import { ChevronDown, ChevronRight, Package, Plus, Trash2 } from 'lucide-react';
-import type { LootEntry } from '../monster';
+import type { ItemIndex, LootEntry } from '../monster';
 import { Field } from '../fields/Field';
 import { FieldLint, type LintAt } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
-import { ItemPicker, ItemSprite, useItemInfo, type ItemIndex } from '../fields/ItemPicker';
+import { ItemPicker, ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { reorder, useDragSource, useDropTarget } from '../dnd';
 import { Section, type SectionId, type SectionProps } from './section';
 

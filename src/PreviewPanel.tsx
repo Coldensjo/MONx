@@ -4,13 +4,14 @@ import {
 	balanceBands,
 	itemUrl,
 	lookUrl,
+	tauriItemIndex,
 	type BalanceBand,
 	type ItemInfo,
 	type LootEntry,
 	type MonsterDoc
 } from './monster';
 import { newLootEntry, percentText } from './sections/Loot';
-import { ItemSprite, tauriItemIndex, useItemInfo } from './fields/ItemPicker';
+import { ItemSprite, useItemInfo } from './fields/ItemPicker';
 import { ANIM_INTERVAL_MS } from './ThingBrowser';
 import {
 	DAMAGE_TYPE_LABEL,
