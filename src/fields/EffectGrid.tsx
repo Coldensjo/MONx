@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
-import { Ban, Search } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Ban, ChevronDown, Search } from 'lucide-react';
 import type { EffectEntry } from '../catalog';
 import { usePreviewUrl } from './preview';
+
+/** Search row + grid at its tallest, matching the CSS below. */
+const GRID_HEIGHT = 290;
 
 interface Props {
 	entries: EffectEntry[];
@@ -10,6 +13,23 @@ interface Props {
 	onChange: (v: string | null) => void;
 	disabled?: boolean;
 	noneLabel?: string;
+}
+
+function Sprite({ id, kind }: { id: number; kind: 'area' | 'shoot' }) {
+	const previewUrl = usePreviewUrl();
+	const url = id > 0 ? previewUrl?.(kind === 'area' ? 'effect' : 'missile', id) : null;
+	if (!url) return <span className="ss-ed-effect-chip">{id}</span>;
+	return (
+		<img
+			className="ss-ed-effect-sprite"
+			src={url}
+			width={32}
+			height={32}
+			alt=""
+			draggable={false}
+			onError={e => (e.currentTarget.style.visibility = 'hidden')}
+		/>
+	);
 }
 
 function Cell({
@@ -25,8 +45,6 @@ function Cell({
 	disabled?: boolean;
 	onPick: () => void;
 }) {
-	const previewUrl = usePreviewUrl();
-	const url = previewUrl?.(kind === 'area' ? 'effect' : 'missile', entry.id);
 	const title = [entry.label, entry.name, entry.unreachable ?? entry.mislabeled].filter(Boolean).join(' — ');
 	return (
 		<button
@@ -36,30 +54,51 @@ function Cell({
 			disabled={disabled}
 			onClick={onPick}
 		>
-			{url ? (
-				<img
-					className="ss-ed-effect-sprite"
-					src={url}
-					width={32}
-					height={32}
-					alt=""
-					draggable={false}
-					onError={e => (e.currentTarget.style.visibility = 'hidden')}
-				/>
-			) : (
-				<span className="ss-ed-effect-chip">{entry.id}</span>
-			)}
+			<Sprite id={entry.id} kind={kind} />
 		</button>
 	);
 }
 
 /**
- * The effect catalogue laid out as sprites. Picking a projectile is a visual
- * choice — one glance at the grid beats reading eighty `CONST_ANI_*` names in a
+ * The effect catalogue laid out as sprites. Picking an effect is a visual
+ * choice — one glance at the grid beats reading eighty `CONST_*` names in a
  * list. Values are still the exact wire spelling (§20).
+ *
+ * The grid stays behind the trigger until it is asked for: a spell is read far
+ * more often than it is re-pointed, and eight rows of sprites per field buried
+ * the rest of the card.
  */
 export function EffectGrid({ entries, kind, value, onChange, disabled, noneLabel = '(none)' }: Props) {
+	const [open, setOpen] = useState(false);
+	const [up, setUp] = useState(false);
 	const [query, setQuery] = useState('');
+	const wrapRef = useRef<HTMLDivElement>(null);
+
+	// The grid is tall enough that a field low in the card would drop it off the
+	// bottom of the window, so it flips above the trigger when it has to.
+	useLayoutEffect(() => {
+		if (!open) return;
+		const rect = wrapRef.current?.getBoundingClientRect();
+		if (!rect) return;
+		const below = window.innerHeight - rect.bottom;
+		setUp(below < GRID_HEIGHT && rect.top > below);
+	}, [open]);
+
+	useEffect(() => {
+		if (!open) return;
+		const onDown = (e: MouseEvent) => {
+			if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+		};
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') setOpen(false);
+		};
+		document.addEventListener('mousedown', onDown);
+		document.addEventListener('keydown', onKey);
+		return () => {
+			document.removeEventListener('mousedown', onDown);
+			document.removeEventListener('keydown', onKey);
+		};
+	}, [open]);
 
 	const shown = useMemo(() => {
 		const q = query.trim().toLowerCase();
@@ -75,41 +114,67 @@ export function EffectGrid({ entries, kind, value, onChange, disabled, noneLabel
 
 	const current = entries.find(e => e.name === value);
 
+	const pick = (name: string | null) => {
+		onChange(name);
+		setOpen(false);
+	};
+
 	return (
-		<div className="ss-ed-effect">
-			<div className="ss-ed-effect-gridbar">
-				<Search size={12} />
-				<input
-					value={query}
-					placeholder="Search"
-					disabled={disabled}
-					onChange={e => setQuery(e.target.value)}
-				/>
-				<span className="ss-ed-effect-current">{current ? current.label : noneLabel}</span>
-			</div>
-			<div className="ss-ed-effect-grid">
-				<button
-					type="button"
-					className={value ? 'ss-ed-effect-cell' : 'ss-ed-effect-cell ss-ed-effect-cell-active'}
-					title={noneLabel}
-					disabled={disabled}
-					onClick={() => onChange(null)}
-				>
+		<div className="ss-ed-effect ss-ed-combo" ref={wrapRef}>
+			<button
+				type="button"
+				className="ss-ed-input ss-ed-combo-trigger"
+				disabled={disabled}
+				onClick={() => {
+					setQuery('');
+					setOpen(o => !o);
+				}}
+			>
+				{current && current.id > 0 ? (
+					<Sprite id={current.id} kind={kind} />
+				) : (
 					<span className="ss-ed-effect-none">
 						<Ban size={14} />
 					</span>
-				</button>
-				{shown.map(e => (
-					<Cell
-						key={e.name}
-						entry={e}
-						kind={kind}
-						active={e.name === value}
-						disabled={disabled || !!e.unreachable}
-						onPick={() => onChange(e.name)}
-					/>
-				))}
-			</div>
+				)}
+				<span className="ss-ed-combo-value">{current ? current.label : noneLabel}</span>
+				<ChevronDown size={14} />
+			</button>
+			{open && (
+				<div className={up ? 'ss-ed-popover ss-ed-popover-up ss-ed-effect-popover' : 'ss-ed-popover ss-ed-effect-popover'}>
+					<div className="ss-ed-popover-search">
+						<Search size={13} />
+						<input
+							autoFocus
+							value={query}
+							placeholder="Search…"
+							onChange={e => setQuery(e.target.value)}
+						/>
+					</div>
+					<div className="ss-ed-effect-grid">
+						<button
+							type="button"
+							className={value ? 'ss-ed-effect-cell' : 'ss-ed-effect-cell ss-ed-effect-cell-active'}
+							title={noneLabel}
+							onClick={() => pick(null)}
+						>
+							<span className="ss-ed-effect-none">
+								<Ban size={14} />
+							</span>
+						</button>
+						{shown.map(e => (
+							<Cell
+								key={e.name}
+								entry={e}
+								kind={kind}
+								active={e.name === value}
+								disabled={!!e.unreachable}
+								onPick={() => pick(e.name)}
+							/>
+						))}
+					</div>
+				</div>
+			)}
 			{current?.unreachable && <div className="ss-ed-field-note ss-ed-note-warn">{current.unreachable}</div>}
 			{current?.mislabeled && <div className="ss-ed-field-note ss-ed-note-warn">{current.mislabeled}</div>}
 			{current?.ironcore && (

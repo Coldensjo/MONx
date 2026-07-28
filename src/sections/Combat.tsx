@@ -55,19 +55,21 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 							);
 						})}
 					</div>
-					{NUMERIC_FLAGS.filter(f => f.group === group).map(f => (
-						<Field key={f.key} label={f.label} lints={lintAt(`flags.${f.key}`)} note={f.note}>
-							<NumberField
-								value={numFlag(f.key, f.default)}
-								onChange={v => setFlag(f.key, v)}
-								min={f.min}
-								max={f.max}
-								width={110}
-								corpusDefault={f.corpusDefault}
-								disabled={readOnly}
-							/>
-						</Field>
-					))}
+					<div className="ss-ed-card-grid">
+						{NUMERIC_FLAGS.filter(f => f.group === group).map(f => (
+							<Field key={f.key} label={f.label} lints={lintAt(`flags.${f.key}`)} note={f.note}>
+								<NumberField
+									value={numFlag(f.key, f.default)}
+									onChange={v => setFlag(f.key, v)}
+									min={f.min}
+									max={f.max}
+									width={110}
+									corpusDefault={f.corpusDefault}
+									disabled={readOnly}
+								/>
+							</Field>
+						))}
+					</div>
 				</SubGroup>
 			))}
 
@@ -78,63 +80,67 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 			)}
 
 			<SubGroup title="Target change">
-				<Field
-					label="Interval"
-					lints={lintAt('targetchange.interval')}
-					hint="ms"
-					note="Milliseconds between target-reselection rolls."
-				>
-					<NumberField
-						value={doc.targetchange.interval}
-						onChange={v => patch({ targetchange: { ...doc.targetchange, interval: v } })}
-						min={0}
-						width={110}
-						disabled={readOnly}
-					/>
-				</Field>
-				<Field
-					label="Chance"
-					lints={lintAt('targetchange.chance')}
-					hint="%"
-					note={
-						doc.targetchange.chance === 0
-							? 'Zero disables retargeting entirely, and also the step-aside behaviour in onWalk.'
-							: undefined
-					}
-				>
-					<NumberField
-						value={doc.targetchange.chance}
-						onChange={v => patch({ targetchange: { ...doc.targetchange, chance: v } })}
-						min={0}
-						max={100}
-						width={110}
-						disabled={readOnly}
-					/>
-				</Field>
+				<div className="ss-ed-card-grid">
+					<Field
+						label="Interval"
+						lints={lintAt('targetchange.interval')}
+						hint="ms"
+						note="Milliseconds between target-reselection rolls."
+					>
+						<NumberField
+							value={doc.targetchange.interval}
+							onChange={v => patch({ targetchange: { ...doc.targetchange, interval: v } })}
+							min={0}
+							width={110}
+							disabled={readOnly}
+						/>
+					</Field>
+					<Field
+						label="Chance"
+						lints={lintAt('targetchange.chance')}
+						hint="%"
+						note={
+							doc.targetchange.chance === 0
+								? 'Zero disables retargeting entirely, and also the step-aside behaviour in onWalk.'
+								: undefined
+						}
+					>
+						<NumberField
+							value={doc.targetchange.chance}
+							onChange={v => patch({ targetchange: { ...doc.targetchange, chance: v } })}
+							min={0}
+							max={100}
+							width={110}
+							disabled={readOnly}
+						/>
+					</Field>
+				</div>
 			</SubGroup>
 
 			<SubGroup
 				title="Defense stats"
 				note="Armor reduces melee and physical hits; defense is only consulted on hits that check it, i.e. melee."
 			>
-				<Field label="Armor" lints={lintAt('defenseStats.armor')}>
-					<NumberField
-						value={doc.defenseStats.armor}
-						onChange={v => patch({ defenseStats: { ...doc.defenseStats, armor: v } })}
-						min={0}
-						width={110}
-						disabled={readOnly}
-					/>
-				</Field>
-				<Field label="Defense" lints={lintAt('defenseStats.defense')}>
-					<NumberField
-						value={doc.defenseStats.defense}
-						onChange={v => patch({ defenseStats: { ...doc.defenseStats, defense: v } })}
-						min={0}
-						width={110}
-						disabled={readOnly}
-					/>
-				</Field>
+				<div className="ss-ed-card-grid">
+					<Field label="Armor" lints={lintAt('defenseStats.armor')}>
+						<NumberField
+							value={doc.defenseStats.armor}
+							onChange={v => patch({ defenseStats: { ...doc.defenseStats, armor: v } })}
+							min={0}
+							width={110}
+							disabled={readOnly}
+						/>
+					</Field>
+					<Field label="Defense" lints={lintAt('defenseStats.defense')}>
+						<NumberField
+							value={doc.defenseStats.defense}
+							onChange={v => patch({ defenseStats: { ...doc.defenseStats, defense: v } })}
+							min={0}
+							width={110}
+							disabled={readOnly}
+						/>
+					</Field>
+				</div>
 			</SubGroup>
 
 			<div className="ss-ed-advanced">
@@ -167,18 +173,20 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 								);
 							})}
 						</div>
-						{NUMERIC_FLAGS.filter(f => f.group === 'pacifist').map(f => (
-							<Field key={f.key} label={f.label} lints={lintAt(`flags.${f.key}`)} note={f.note} ignored={!pacifist}>
-								<NumberField
-									value={numFlag(f.key, f.default)}
-									onChange={v => setFlag(f.key, v)}
-									min={f.min}
-									max={f.max}
-									width={110}
-									disabled={readOnly || !pacifist}
-								/>
-							</Field>
-						))}
+						<div className="ss-ed-card-grid">
+							{NUMERIC_FLAGS.filter(f => f.group === 'pacifist').map(f => (
+								<Field key={f.key} label={f.label} lints={lintAt(`flags.${f.key}`)} note={f.note} ignored={!pacifist}>
+									<NumberField
+										value={numFlag(f.key, f.default)}
+										onChange={v => setFlag(f.key, v)}
+										min={f.min}
+										max={f.max}
+										width={110}
+										disabled={readOnly || !pacifist}
+									/>
+								</Field>
+							))}
+						</div>
 					</SubGroup>
 				)}
 			</div>
