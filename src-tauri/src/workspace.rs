@@ -96,16 +96,8 @@ impl Workspace {
         self.monsters.iter().find(|m| m.file == file)
     }
 
-    pub fn doc(&self, file: &str) -> Option<&MonsterDoc> {
-        self.docs.iter().find(|d| d.file == file)
-    }
-
     pub fn monsters_dir(&self) -> PathBuf {
         PathBuf::from(&self.paths.monsters)
-    }
-
-    pub fn spells_dir(&self) -> Option<PathBuf> {
-        self.paths.spells.as_ref().map(PathBuf::from)
     }
 }
 

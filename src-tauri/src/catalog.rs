@@ -269,13 +269,6 @@ pub fn is_builtin_spell(name: &str) -> bool {
         .any(|(n, _, _)| n.eq_ignore_ascii_case(name))
 }
 
-pub fn spell_group(name: &str) -> Option<&'static str> {
-    BUILTIN_SPELLS
-        .iter()
-        .find(|(n, _, _)| n.eq_ignore_ascii_case(name))
-        .map(|(_, g, _)| *g)
-}
-
 /// `(name, default tick ms)` for the §9.3 condition spells.
 pub const CONDITION_SPELL_TICKS: &[(&str, i64)] = &[
     ("firecondition", 10000),
@@ -585,8 +578,6 @@ pub const MAX_SPELL_RANGE: i64 = 22;
 /// `maxSummons` is clamped to 100 (§14).
 pub const MAX_SUMMONS: i64 = 100;
 
-/// `Weapons::getMaxMeleeDamage` (§23) — the number the XML never states, and
-/// the most useful thing the editor can show on a melee block.
-pub fn max_melee_damage(skill: i64, attack: i64) -> i64 {
-    (skill as f64 * attack as f64 * 0.05 + attack as f64 * 0.5).ceil() as i64
-}
+// `Weapons::getMaxMeleeDamage` (§23) deliberately has no Rust twin: Agent 4
+// owns derived combat math in `src/derive.ts`, and one formula in two languages
+// is one formula that can disagree with itself.

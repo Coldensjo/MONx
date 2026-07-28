@@ -88,10 +88,34 @@ parsed 382 files in 36ms · round-trip identical: 382 · differing: 0
 
 ```
 $ cargo run --release --example probe_monster -- ../assets/monsters --mutate --canonical
-parsed 382 files in 94ms · round-trip identical: 382 · differing: 0
+parsed 382 files in 85ms · round-trip identical: 382 · differing: 0
 canonical re-render identical: 0/382 (informational — the gate is the round-trip number above)
+canonical re-read equal: 382/382 (0 failed) — this one is a gate: it is what create_monster writes
+canonical normalisation: 7 documents drop something the engine already ignores
+  NORM  giantscorpion.xml: attacks[2]
+  NORM  gobbler elite.xml: attacks[2]
+  NORM  gobbler.xml: attacks[2]
+  NORM  gobblerking.xml: attacks[2]
+  NORM  theminstrel.xml: attacks[1]
+  NORM  valacrax.xml: attacks[6]
+  NORM  wardenvalarion.xml: attacks[3]
 edit round-trip: 382/382 files re-read equal after an edit · 1726 lines changed in total (0 failed)
 ```
+
+The canonical renderer is what `create_monster` writes, and it had no gate of
+its own until late — the splice writer covers every existing file, so nothing
+was exercising it. Adding one caught a real bug: a `<voices>` or `<summons>`
+block whose children were all commented out, or which held only
+`pacifist`/`leash` voices, was dropped whole, silently taking `interval`,
+`chance` and `maxSummons` with it. `man.xml`, `woman.xml` and
+`vampireinvoker.xml` are the corpus cases. Fixed; the block is now emitted
+self-closing when it has attributes but no children.
+
+The gate is **idempotence**, not "equals the original document", because the
+renderer is *supposed* to drop data the engine ignores — the inert `length` on a
+block that also sets `radius` (§8.3, §29). Those 7 normalisations are counted
+and named separately so an accidental drop can never hide among them; they are
+the same 7 documents behind the 10 `spell.multiple-geometry` lints.
 
 ```
 $ cargo run --release --example probe_monster -- ../assets/monsters --lint
@@ -210,7 +234,9 @@ it changes a contract.
 **`src-tauri/src/workspace.rs`**
 
 7. `Workspace` gained `docs: Vec<MonsterDoc>`, `registry: Registry`,
-   `spells: SpellIndex`, plus `doc()`, `monsters_dir()` and `spells_dir()`.
+   `spells: SpellIndex` and `monsters_dir()`. Nothing else — I had also added
+   `doc()` and `spells_dir()`, found neither had a caller, and removed them
+   rather than leave speculative API in a file I don't own.
 8. `probe()` no longer parses: it counts files against the registry instead.
    Probing runs on every keystroke in the Landing dialog and a full parse there
    was ~40 ms of wasted work per character.
@@ -282,3 +308,38 @@ Nothing blocking. Two things worth a decision:
   keeps the id.
 * Lints with `severity: "silent"` are the ones the server never reports. They
   deserve the loudest treatment in the UI, not the quietest.
+* `catalog.rs` deliberately has **no** `max_melee_damage`. Agent 4 already owns
+  that formula in `derive.ts` (§23), and one formula in two languages is one
+  formula that can disagree with itself. If the Rust side ever needs it, move
+  it — don't copy it.
+
+---
+
+## 7. How to re-run any of this
+
+```sh
+cd src-tauri
+cargo check --all-targets
+
+# the gate: read every file, write it back unchanged, diff bytes
+cargo run --release --example probe_monster -- ../assets/monsters
+
+# canonical-writer gate + the edit-round-trip proof
+cargo run --release --example probe_monster -- ../assets/monsters --canonical --mutate
+
+# §24 at all three scopes, grouped by code
+cargo run --release --example probe_monster -- ../assets/monsters --lint
+
+# the deliberately broken fixture — every rule fires here
+cargo run --release --example probe_monster -- fixtures/lint --items ../assets/items --lint
+
+# the save pipeline, against a throwaway copy
+cargo run --release --example probe_monster -- ../assets/monsters --crud <scratch-dir>
+
+# recomputed §26 bands
+cargo run --release --example probe_monster -- ../assets/monsters --bands
+```
+
+Add `--verbose` to any of them to list every finding instead of the first
+handful. The probe exits non-zero if any gate fails, so it drops straight into
+CI or a pre-merge check.

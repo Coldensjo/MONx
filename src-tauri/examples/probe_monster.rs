@@ -61,6 +61,8 @@ fn main() {
     let mut differing: Vec<(String, String)> = Vec::new();
     let mut failed: Vec<(String, String)> = Vec::new();
     let mut canonical_ok = 0usize;
+    let mut canonical_bad: Vec<String> = Vec::new();
+    let mut canonical_normalised: Vec<String> = Vec::new();
     let mut mutate_ok = 0usize;
     let mut mutate_bad: Vec<String> = Vec::new();
     let mut mutate_lines = 0usize;
@@ -86,6 +88,25 @@ fn main() {
                     let canon = monster::write_new(&parsed.doc);
                     if canon == parsed.bytes {
                         canonical_ok += 1;
+                    }
+                    // The canonical renderer is what `create_monster` writes, so
+                    // its output must parse, and rendering it again must produce
+                    // the same bytes. Idempotence is the right gate rather than
+                    // "equals the original document": the renderer deliberately
+                    // drops data the engine ignores, such as the inert `length`
+                    // on a block that also sets `radius` (§8.3, §29). Those
+                    // normalisations are counted separately and named, so that
+                    // dropping something by accident can never hide among them.
+                    match monster::read_bytes(&name, &canon, parsed.doc.registered) {
+                        Err(e) => canonical_bad.push(format!("{name}: does not parse — {e}")),
+                        Ok(reread) => {
+                            if monster::write_new(&reread.doc) != canon {
+                                canonical_bad.push(format!("{name}: renderer is not idempotent"));
+                            }
+                            if let Some(field) = first_doc_difference(&parsed.doc, &reread.doc) {
+                                canonical_normalised.push(format!("{name}: {field}"));
+                            }
+                        }
                     }
                 }
                 if want_mutate {
@@ -124,6 +145,22 @@ fn main() {
             "canonical re-render identical: {canonical_ok}/{parsed_ok} \
              (informational — the gate is the round-trip number above)"
         );
+        println!(
+            "canonical re-read equal: {}/{parsed_ok} ({} failed) — this one is a gate: \
+             it is what create_monster writes",
+            parsed_ok - canonical_bad.len(),
+            canonical_bad.len()
+        );
+        for why in canonical_bad.iter().take(if verbose { usize::MAX } else { 15 }) {
+            println!("  CANON {why}");
+        }
+        println!(
+            "canonical normalisation: {} documents drop something the engine already ignores",
+            canonical_normalised.len()
+        );
+        for what in canonical_normalised.iter().take(if verbose { usize::MAX } else { 15 }) {
+            println!("  NORM  {what}");
+        }
     }
     if want_mutate {
         println!(
@@ -211,9 +248,72 @@ fn main() {
         }
     }
 
-    if !differing.is_empty() || !failed.is_empty() || !mutate_bad.is_empty() || crud_failed {
+    if !differing.is_empty()
+        || !failed.is_empty()
+        || !mutate_bad.is_empty()
+        || !canonical_bad.is_empty()
+        || crud_failed
+    {
         std::process::exit(1);
     }
+}
+
+/// Names the first field that differs between two documents. `assert_eq!` on a
+/// whole `MonsterDoc` prints two screens of struct and leaves you to find the
+/// one changed number yourself.
+fn first_doc_difference(a: &monster::MonsterDoc, b: &monster::MonsterDoc) -> Option<String> {
+    macro_rules! check {
+        ($($field:ident),* $(,)?) => {
+            $(if a.$field != b.$field {
+                return Some(stringify!($field).to_string());
+            })*
+        };
+    }
+    check!(
+        name,
+        name_description,
+        race,
+        species,
+        experience,
+        speed,
+        manacost,
+        raceid,
+        skull,
+        script,
+        health,
+        look,
+        targetchange,
+        flags,
+        immunities,
+        elements,
+        defense_stats,
+        voices,
+        summons,
+        events,
+    );
+
+    for (label, x, y) in [
+        ("attacks", &a.attacks, &b.attacks),
+        ("defenses", &a.defenses, &b.defenses),
+    ] {
+        if x.len() != y.len() {
+            return Some(format!("{label}: {} blocks became {}", x.len(), y.len()));
+        }
+        for (i, (l, r)) in x.iter().zip(y.iter()).enumerate() {
+            if l != r {
+                return Some(format!("{label}[{i}]"));
+            }
+        }
+    }
+    if a.loot.len() != b.loot.len() {
+        return Some(format!("loot: {} entries became {}", a.loot.len(), b.loot.len()));
+    }
+    for (i, (l, r)) in a.loot.iter().zip(b.loot.iter()).enumerate() {
+        if l != r {
+            return Some(format!("loot[{i}]"));
+        }
+    }
+    None
 }
 
 /// End-to-end exercise of the save pipeline against a throwaway copy of the
