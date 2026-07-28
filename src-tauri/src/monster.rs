@@ -288,6 +288,13 @@ pub struct Voices {
     pub interval: i64,
     pub chance: i64,
     pub lines: Vec<VoiceLine>,
+    /// `<voice pacifist="…"/>` — said once when a pacifist monster is first
+    /// attacked (§5.1, §12). The loader stores it as a single string and keeps
+    /// it out of the random pool, so it is a field here, not a line.
+    pub pacifist: Option<String>,
+    /// `<voice leash="…"/>` — said when a triggered pacifist walks past
+    /// `leashradius`. Also a single string.
+    pub leash: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -385,6 +392,8 @@ impl Default for MonsterDoc {
                 interval: 0,
                 chance: 0,
                 lines: Vec::new(),
+                pacifist: None,
+                leash: None,
             },
             summons: Summons {
                 max_summons: 0,
@@ -920,6 +929,10 @@ fn known_attrs(node_kind: &str) -> &'static [&'static str] {
         "defenses" => &["armor", "defense"],
         "voices" => &["interval", "speed", "chance"],
         "voice" => &["sentence", "yell"],
+        // A `<voice>` with no `sentence` carries the pacifist/leash strings,
+        // which the model names. On a node that also has a `sentence` they are
+        // not read as those fields, so they stay unknown attributes there.
+        "voice.extra" => &["pacifist", "leash"],
         "summons" => &["maxSummons"],
         "summon" => &["name", "interval", "speed", "chance", "max", "force"],
         "item" => &[
@@ -1170,7 +1183,13 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
                     ctx.keep_unknown(&format!("voices.lines[{i}]"), n, "voice");
                 }
                 None => {
-                    ctx.keep_unknown(&format!("voices.extra[{extra}]"), n, "voice");
+                    if let Some(text) = n.attr("pacifist") {
+                        doc.voices.pacifist = Some(text.to_string());
+                    }
+                    if let Some(text) = n.attr("leash") {
+                        doc.voices.leash = Some(text.to_string());
+                    }
+                    ctx.keep_unknown(&format!("voices.extra[{extra}]"), n, "voice.extra");
                     extra += 1;
                 }
             }
@@ -2246,8 +2265,12 @@ impl<'a> Writer<'a> {
     // ---------- voices, summons, loot ----------
 
     fn voices(&self, n: &Node, depth: usize, out: &mut Vec<u8>) {
-        // A `<voices … />` that gained lines has to grow a body.
-        let expand = n.self_closed && !self.doc.voices.lines.is_empty();
+        // A `<voices … />` that gained lines, or a pacifist/leash string, has to
+        // grow a body.
+        let expand = n.self_closed
+            && (!self.doc.voices.lines.is_empty()
+                || self.doc.voices.pacifist.is_some()
+                || self.doc.voices.leash.is_some());
         let open_end = self.open_tag_end(n);
         let head_same = self.base.voices.interval == self.doc.voices.interval
             && self.base.voices.chance == self.doc.voices.chance
@@ -2273,7 +2296,9 @@ impl<'a> Writer<'a> {
         }
         if n.self_closed {
             if expand {
+                let extras = self.voice_extras(0, true, true);
                 self.voice_body(depth, &self.doc.voices.lines, 0, out);
+                self.emit_voice_extras(depth, &extras, out);
                 self.eol(out);
                 self.indent(depth, out);
                 out.extend_from_slice(b"</voices>");
@@ -2284,14 +2309,48 @@ impl<'a> Writer<'a> {
         let base = &self.base.voices.lines;
         let new = &self.doc.voices.lines;
         let mut idx = 0usize;
+        let mut extra = 0usize;
+        let (mut has_pacifist, mut has_leash) = (false, false);
         let mut cursor = open_end;
         for child in &n.children {
             match child {
                 Child::Element(v) => {
                     // `pacifist=`/`leash=` voices carry no `sentence` and are not
-                    // model lines (§12) — pass them through untouched.
+                    // model lines (§12) — they are the two single-string fields
+                    // on the block, so each is rewritten in place.
                     if v.attr("sentence").is_none() {
-                        out.extend_from_slice(&self.src[cursor..v.span.end]);
+                        let path = format!("voices.extra[{extra}]");
+                        extra += 1;
+                        let key = if v.attr("pacifist").is_some() {
+                            has_pacifist = true;
+                            Some("pacifist")
+                        } else if v.attr("leash").is_some() {
+                            has_leash = true;
+                            Some("leash")
+                        } else {
+                            None
+                        };
+                        let changed = match key {
+                            Some("pacifist") => self.doc.voices.pacifist != self.base.voices.pacifist,
+                            Some("leash") => self.doc.voices.leash != self.base.voices.leash,
+                            // A `<voice>` that names neither is not ours to touch.
+                            _ => false,
+                        };
+                        let now = match key {
+                            Some("pacifist") => self.doc.voices.pacifist.as_ref(),
+                            Some("leash") => self.doc.voices.leash.as_ref(),
+                            _ => None,
+                        };
+                        if !changed && self.unknown_same(&path) {
+                            out.extend_from_slice(&self.src[cursor..v.span.end]);
+                        } else if let Some(text) = now {
+                            out.extend_from_slice(&self.src[cursor..v.span.start]);
+                            let pairs = vec![Pair(key.unwrap().into(), text.clone())];
+                            self.tag("voice", &pairs, &path, out);
+                        } else {
+                            // Cleared: the node goes with it.
+                            self.drop_pending_ws(out);
+                        }
                         cursor = v.span.end;
                         continue;
                     }
@@ -2318,9 +2377,11 @@ impl<'a> Writer<'a> {
             }
         }
         let tail = self.src[cursor..n.span.end].to_vec();
-        if idx < new.len() {
+        let extras = self.voice_extras(extra, !has_pacifist, !has_leash);
+        if idx < new.len() || !extras.is_empty() {
             let ws = self.split_pending_ws(out);
             self.voice_body(depth, new, idx, out);
+            self.emit_voice_extras(depth, &extras, out);
             out.extend_from_slice(&ws);
         }
         out.extend_from_slice(&tail);
@@ -2332,6 +2393,33 @@ impl<'a> Writer<'a> {
             self.eol(out);
             self.indent(depth + 1, out);
             self.tag("voice", &self.voice_pairs(line), &format!("voices.lines[{i}]"), out);
+        }
+    }
+
+    /// The pacifist/leash nodes the block needs but does not already have, as
+    /// `(path, pairs)`. `want_*` is false for one the document already carries
+    /// somewhere — that node was rewritten in place and must not be duplicated.
+    /// `from` continues the `voices.extra[n]` numbering past the existing nodes.
+    fn voice_extras(&self, from: usize, want_pacifist: bool, want_leash: bool) -> Vec<(String, Vec<Pair>)> {
+        let v = &self.doc.voices;
+        let mut out = Vec::new();
+        let mut i = from;
+        for (key, text) in [
+            ("pacifist", if want_pacifist { v.pacifist.as_ref() } else { None }),
+            ("leash", if want_leash { v.leash.as_ref() } else { None }),
+        ] {
+            let Some(text) = text else { continue };
+            out.push((format!("voices.extra[{i}]"), vec![Pair(key.into(), text.clone())]));
+            i += 1;
+        }
+        out
+    }
+
+    fn emit_voice_extras(&self, depth: usize, extras: &[(String, Vec<Pair>)], out: &mut Vec<u8>) {
+        for (path, pairs) in extras {
+            self.eol(out);
+            self.indent(depth + 1, out);
+            self.tag("voice", pairs, path, out);
         }
     }
 
@@ -2776,12 +2864,21 @@ impl<'a> Writer<'a> {
             // `<voices interval chance/>` with every line commented out, and the
             // pacifist-only voices of man.xml, both still set the yell clock.
             // Skipping the node because the child list is empty silently drops them.
-            "voices" if !d.voices.lines.is_empty() || d.voices.interval != 0 || d.voices.chance != 0 => {
+            "voices"
+                if !d.voices.lines.is_empty()
+                    || d.voices.pacifist.is_some()
+                    || d.voices.leash.is_some()
+                    || d.voices.interval != 0
+                    || d.voices.chance != 0 =>
+            {
                 let head = format!(r#"<voices interval="{}" chance="{}""#, d.voices.interval, d.voices.chance);
-                if d.voices.lines.is_empty() {
+                // Pacifist and leash lead the block, as the corpus writes them.
+                let extras = self.voice_extras(0, true, true);
+                if d.voices.lines.is_empty() && extras.is_empty() {
                     line(out, 1, &format!("{head} />"), self);
                 } else {
                     line(out, 1, &format!("{head}>"), self);
+                    self.emit_voice_extras(1, &extras, out);
                     self.voice_body(1, &d.voices.lines, 0, out);
                     line(out, 1, "</voices>", self);
                 }

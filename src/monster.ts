@@ -151,6 +151,18 @@ export interface VoiceLine {
 	yell: boolean;
 }
 
+export interface Voices {
+	interval: number;
+	chance: number;
+	lines: VoiceLine[];
+	/** `<voice pacifist="…"/>` — said once when a pacifist monster is first
+	 *  attacked. A single string, not part of the random pool. */
+	pacifist: string | null;
+	/** `<voice leash="…"/>` — said when a triggered pacifist walks past its
+	 *  `leashradius`. Also a single string. */
+	leash: string | null;
+}
+
 export interface MonsterDoc {
 	file: string;
 	registered: boolean;
@@ -173,7 +185,7 @@ export interface MonsterDoc {
 	defenseStats: { armor: number; defense: number };
 	attacks: SpellBlock[];
 	defenses: SpellBlock[];
-	voices: { interval: number; chance: number; lines: VoiceLine[] };
+	voices: Voices;
 	summons: { maxSummons: number; entries: SummonEntry[] };
 	loot: LootEntry[];
 	events: string[];

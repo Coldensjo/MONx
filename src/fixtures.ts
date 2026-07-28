@@ -206,7 +206,9 @@ export const FIXTURE_DEMON: MonsterDoc = {
 			{ sentence: "You shouldn't have come here!", yell: false },
 			{ sentence: 'CHAMEK ATH UTHUL ARAK!', yell: false },
 			{ sentence: 'NOW YOU SHALL DIE!', yell: false }
-		]
+		],
+		pacifist: null,
+		leash: null
 	},
 	summons: { maxSummons: 0, entries: [] },
 	loot: [

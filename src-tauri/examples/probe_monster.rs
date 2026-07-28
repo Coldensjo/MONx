@@ -66,6 +66,7 @@ fn main() {
     let mut mutate_ok = 0usize;
     let mut mutate_bad: Vec<String> = Vec::new();
     let mut mutate_lines = 0usize;
+    let mut voice_ok = 0usize;
     let mut docs = Vec::new();
 
     for path in &files {
@@ -117,6 +118,10 @@ fn main() {
                         }
                         Err(why) => mutate_bad.push(format!("{name}: {why}")),
                     }
+                    match voice_extras_survive(&parsed) {
+                        Ok(()) => voice_ok += 1,
+                        Err(why) => mutate_bad.push(format!("{name}: voice extras — {why}")),
+                    }
                 }
                 docs.push(parsed.doc);
             }
@@ -167,6 +172,9 @@ fn main() {
             "edit round-trip: {mutate_ok}/{parsed_ok} files re-read equal after an edit \
              · {mutate_lines} lines changed in total ({} failed)",
             mutate_bad.len()
+        );
+        println!(
+            "pacifist/leash voices: {voice_ok}/{parsed_ok} files survive set → edit → clear"
         );
         for why in mutate_bad.iter().take(if verbose { usize::MAX } else { 20 }) {
             println!("  MUTATE {why}");
@@ -440,6 +448,15 @@ fn mutation_survives(parsed: &monster::Parsed) -> Result<usize, String> {
     if let Some(first) = edited.voices.lines.first_mut() {
         first.sentence.push('!');
     }
+    // Only where they already exist: adding or removing one adds or removes a
+    // line, and the line count below is the point of this check. Grafting and
+    // clearing are covered by `voice_extras_survive`.
+    if let Some(text) = &mut edited.voices.pacifist {
+        text.push('!');
+    }
+    if let Some(text) = &mut edited.voices.leash {
+        text.push('!');
+    }
 
     let written = monster::write_bytes(parsed, &edited);
     if written == parsed.bytes {
@@ -464,6 +481,55 @@ fn mutation_survives(parsed: &monster::Parsed) -> Result<usize, String> {
         return Err(format!("{changed} lines changed for a 5-field edit"));
     }
     Ok(changed)
+}
+
+/// `<voice pacifist=…/>` and `<voice leash=…/>` are single strings on the block,
+/// not lines (§12), and each owns a node of its own. This walks a document
+/// through the three transitions that node can make — grafted on where there was
+/// none, edited in place, and taken away when the value is cleared — and checks
+/// the document re-reads equal after each. Line counts are not a gate here:
+/// adding or removing a node moves every line under it.
+fn voice_extras_survive(parsed: &monster::Parsed) -> Result<(), String> {
+    let step = |from: &monster::Parsed, doc: monster::MonsterDoc| -> Result<monster::Parsed, String> {
+        let written = monster::write_bytes(from, &doc);
+        let reread = monster::read_bytes(&doc.file, &written, doc.registered)
+            .map_err(|e| format!("re-read failed: {e}"))?;
+        if reread.doc != doc {
+            return Err("re-read document differs from the one written".into());
+        }
+        Ok(reread)
+    };
+
+    let mut set = parsed.doc.clone();
+    set.voices.pacifist = Some("Help!".into());
+    set.voices.leash = Some("Get off my land!".into());
+    let after_set = step(parsed, set)?;
+
+    let mut edited = after_set.doc.clone();
+    edited.voices.pacifist = Some("What are you doing!".into());
+    let after_edit = step(&after_set, edited)?;
+
+    let mut cleared = after_edit.doc.clone();
+    cleared.voices.pacifist = None;
+    cleared.voices.leash = None;
+    let after_clear = step(&after_edit, cleared)?;
+
+    let text = String::from_utf8_lossy(&after_clear.bytes).into_owned();
+    // `<voice …`, not just the attribute: `<flag pacifist="1">` is a different
+    // thing entirely and man.xml has one.
+    if text.contains("<voice pacifist=") || text.contains("<voice leash=") {
+        return Err("a cleared value left its <voice> node behind".into());
+    }
+    // Everything else about the block has to come back as it started. (The block
+    // itself may now exist where it did not: no section is ever deleted, and an
+    // empty `<voices>` is the corpus's own idiom for a silent monster.)
+    let mut want = parsed.doc.voices.clone();
+    want.pacifist = None;
+    want.leash = None;
+    if after_clear.doc.voices != want {
+        return Err("clearing both changed something else in the block".into());
+    }
+    Ok(())
 }
 
 fn file_name(path: &Path) -> String {

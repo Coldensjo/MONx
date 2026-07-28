@@ -19,6 +19,8 @@ export function VoicesEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle
 	const setLines = (lines: VoiceLine[]) => patch({ voices: { ...voices, lines } });
 
 	const silent = voices.chance === 0 || voices.lines.length === 0;
+	// The two pacifist strings do nothing on a monster that isn't one (§5.1).
+	const pacifist = doc.flags.pacifist === true;
 
 	return (
 		<Section
@@ -89,6 +91,32 @@ export function VoicesEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle
 				<Plus size={14} />
 				Add line
 			</button>
+
+			<SubGroup
+				title="Pacifist lines (Ironcore)"
+				note={
+					pacifist
+						? 'Said once when it wakes, and when it walks past its leash radius. Neither is part of the random pool above.'
+						: 'Only spoken by a pacifist monster — turn Pacifist on in Combat, or these never fire.'
+				}
+			>
+				<Field label="On waking" lints={lintAt('voices.pacifist')}>
+					<TextField
+						value={voices.pacifist ?? ''}
+						onChange={v => patch({ voices: { ...voices, pacifist: v === '' ? null : v } })}
+						placeholder="Said when first attacked"
+						disabled={readOnly}
+					/>
+				</Field>
+				<Field label="On leashing" lints={lintAt('voices.leash')}>
+					<TextField
+						value={voices.leash ?? ''}
+						onChange={v => patch({ voices: { ...voices, leash: v === '' ? null : v } })}
+						placeholder="Said when it walks too far"
+						disabled={readOnly}
+					/>
+				</Field>
+			</SubGroup>
 
 			<SubGroup
 				title="Creature events"
