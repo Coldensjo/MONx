@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Grid3X3, Package, PersonStanding, Save, Skull, Sparkles, Wand2 } from 'lucide-react';
+import { confirm } from '@tauri-apps/plugin-dialog';
+import { Package, PersonStanding, Save, Skull, Sparkles, Wand2 } from 'lucide-react';
 import {
 	getItem,
 	getMonster,
@@ -35,7 +36,7 @@ import type { PreviewUrl } from './fields/preview';
 
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */
-type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles' | 'sprites';
+type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
 
 /** The three nav entries backed by a dat category, and that category's own name. */
 type ThingView = 'outfits' | 'effects' | 'missiles';
@@ -149,10 +150,27 @@ export default function Workspace({
 		[onDirtyChange]
 	);
 
-	// The item browser is fed by a search rather than the whole 11k-row index —
-	// `search_items` with an empty query returns the head of the table.
+	// Double-clicking an outfit in the browser adopts it as the monster's look,
+	// after a confirmation — same mutation as dropping it on the Look section.
+	const pickOutfit = useCallback(
+		async (t: ThingSummary) => {
+			if (!doc) return;
+			const label = t.name ? `${t.name} (${t.id})` : `#${t.id}`;
+			const ok = await confirm(`Set ${doc.name}'s outfit to ${label}?`, { title: 'Change outfit' });
+			if (!ok) return;
+			editDoc({ ...doc, look: { ...doc.look, mode: 'type', type: t.id } });
+			setView('monsters');
+			showToast('ok', `Outfit set to ${label}`);
+		},
+		[doc, editDoc, showToast]
+	);
+
+	// The item browser gets every pickupable item — the grid virtualizes rows,
+	// so the full list costs no more than a page of it. Only pickupable items:
+	// the browser exists to feed loot, and walls or ground tiles can never be
+	// carried. The corpse/typeex pickers search unfiltered.
 	useEffect(() => {
-		searchItems('', 500).then(setItemList).catch(() => setItemList([]));
+		searchItems('', Number.MAX_SAFE_INTEGER, true).then(setItemList).catch(() => setItemList([]));
 	}, []);
 
 	// The outfit / effect / missile lists come straight from the dat, through the
@@ -245,8 +263,7 @@ export default function Workspace({
 			count: things.outfit.length
 		},
 		{ key: 'effects', label: 'Effects', icon: <Sparkles size={16} />, count: things.effect.length },
-		{ key: 'missiles', label: 'Missiles', icon: <Wand2 size={16} />, count: things.missile.length },
-		{ key: 'sprites', label: 'Sprites', icon: <Grid3X3 size={16} />, count: info.spriteCount }
+		{ key: 'missiles', label: 'Missiles', icon: <Wand2 size={16} />, count: things.missile.length }
 	];
 
 	const itemRowUrl = useCallback(
@@ -254,7 +271,7 @@ export default function Workspace({
 		[]
 	);
 	const itemKey = useCallback((i: ItemInfo) => i.serverId, []);
-	const itemLabel = useCallback((i: ItemInfo) => i.name, []);
+	const itemLabel = useCallback((i: ItemInfo) => i.name || `#${i.serverId}`, []);
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
 
@@ -286,10 +303,7 @@ export default function Workspace({
 					<MonsterList
 						monsters={monsters}
 						selectedFile={selected}
-						onSelect={file => {
-							setSelected(file);
-							setView('monsters');
-						}}
+						onSelect={setSelected}
 						onMutated={refreshMonsters}
 						showToast={showToast}
 						groups={groups}
@@ -309,7 +323,6 @@ export default function Workspace({
 								scripts={scripts}
 								monsterNames={monsterNames}
 								nextRaceid={nextRaceid}
-								onSave={() => void save()}
 								onBrowseOutfits={() => setView('outfits')}
 								previewUrl={previewUrl}
 							/>
@@ -335,10 +348,6 @@ export default function Workspace({
 							})}
 							searchPlaceholder="Search server id or name"
 						/>
-					) : view === 'sprites' ? (
-						<div className="mx-empty">
-							Raw sprite grid — open the client files directly to browse sprites
-						</div>
 					) : (
 						<ThingBrowser<ThingSummary>
 							key={view}
@@ -361,21 +370,27 @@ export default function Workspace({
 							view={view}
 							draggable={view === 'outfits'}
 							dragPayload={t => (view === 'outfits' ? { kind: 'outfit', type: t.id } : null)}
+							onPick={view === 'outfits' && doc ? t => void pickOutfit(t) : undefined}
 							searchPlaceholder="Search client id or name"
 						/>
 					)}
 				</main>
 
-				<aside className="ss-details">
-					{doc ? (
-						<PreviewPanel
-							doc={doc}
-							items={items}
-							lintCount={monsterLints.length}
-							onOpenLints={() => setLintsOpen(true)}
-						/>
-					) : null}
-				</aside>
+				{/* PreviewPanel's root is itself the `.ss-details` column — never wrap
+				    it in another one, or the panel becomes a column inside a column
+				    and its scroll area collapses. */}
+				{doc ? (
+					<PreviewPanel
+						doc={doc}
+						items={items}
+						lintCount={monsterLints.length}
+						onOpenLints={() => setLintsOpen(true)}
+						onLookType={type => editDoc({ ...doc, look: { ...doc.look, mode: 'type', type } })}
+						onLootChange={loot => editDoc({ ...doc, loot })}
+					/>
+				) : (
+					<aside className="ss-details" />
+				)}
 			</div>
 
 			<div className="ss-statusbar mx-statusbar">
