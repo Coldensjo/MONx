@@ -255,7 +255,7 @@ export default function Workspace({
 
 	const nav: { key: View; label: string; icon: JSX.Element; count: number }[] = [
 		{ key: 'monsters', label: 'Monsters', icon: <Skull size={16} />, count: info.monsterCount },
-		{ key: 'items', label: 'Items', icon: <Package size={16} />, count: info.itemCount },
+		{ key: 'items', label: 'Items', icon: <Package size={16} />, count: itemList.length },
 		{
 			key: 'outfits',
 			label: 'Outfits',
