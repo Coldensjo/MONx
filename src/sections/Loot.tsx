@@ -6,8 +6,7 @@ import { FieldLint, type LintAt } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
 import { ItemPicker, ItemSprite, useItemInfo, type ItemIndex } from '../fields/ItemPicker';
-import { DND_ITEM, hasType, readItemDrag, useDropTarget } from '../fields/drop';
-import { moveItem } from '../fields/SortableList';
+import { reorder, useDragSource, useDropTarget } from '../dnd';
 import { Section, type SectionId, type SectionProps } from './section';
 
 interface Props extends SectionProps {
@@ -33,7 +32,8 @@ export function newLootEntry(item: { serverId: number }): LootEntry {
 	};
 }
 
-const isItemDrag = (e: React.DragEvent) => hasType(e, DND_ITEM);
+/** Namespaces the reorder payload so another list's rows cannot land here. */
+const LOOT_LIST = 'loot';
 
 function percentText(chance: number): string {
 	const pct = chance / 1000;
@@ -58,8 +58,9 @@ interface RowProps {
 	depth: number;
 	onChange: (e: LootEntry) => void;
 	onRemove: () => void;
-	onDragStart: () => void;
-	onDropRow: () => void;
+	/** Position in the list this row belongs to; null for nested children, which do not reorder. */
+	rowIndex: number | null;
+	onReorder: (from: number, to: number) => void;
 }
 
 const LootRow = memo(function LootRow({
@@ -71,22 +72,24 @@ const LootRow = memo(function LootRow({
 	depth,
 	onChange,
 	onRemove,
-	onDragStart,
-	onDropRow
+	rowIndex,
+	onReorder
 }: RowProps) {
 	const [expanded, setExpanded] = useState(false);
 	const info = useItemInfo(index, entry.id, entry.name);
 	const serverId = entry.id ?? info?.serverId ?? null;
 	const container = info?.container ?? entry.children.length > 0;
 
-	const nest = useDropTarget(
-		[DND_ITEM],
-		e => {
-			const drag = readItemDrag(e);
-			if (drag) onChange({ ...entry, children: [...entry.children, newLootEntry(drag)] });
-		},
-		readOnly || !container
-	);
+	const drag = useDragSource(() => (rowIndex === null || readOnly ? null : { kind: 'reorder', list: LOOT_LIST, index: rowIndex }));
+
+	// One target for both gestures: an item nests into a container, a row
+	// reorders. A non-container row does not accept items at all, so the drag
+	// falls through to the list behind it and appends instead.
+	const drop = useDropTarget(container && !readOnly ? ['item', 'reorder'] : ['reorder'], p => {
+		if (readOnly) return;
+		if (p.kind === 'item') onChange({ ...entry, children: [...entry.children, newLootEntry(p)] });
+		else if (p.kind === 'reorder' && p.list === LOOT_LIST && rowIndex !== null) onReorder(p.index, rowIndex);
+	});
 
 	const countLints = lintAt(`${path}.countmax`);
 	const chanceLints = lintAt(`${path}.chance`);
@@ -94,25 +97,10 @@ const LootRow = memo(function LootRow({
 	return (
 		<>
 			<div
-				className={`ss-ed-loot-row${nest.active ? ' ss-ed-drop-active' : ''}`}
+				className="ss-ed-loot-row"
 				style={depth ? { paddingLeft: 16 + depth * 20 } : undefined}
-				draggable={!readOnly}
-				onDragStart={onDragStart}
-				onDragLeave={nest.props.onDragLeave}
-				onDragOver={e => {
-					// A container row accepts both an item (nest it) and another
-					// loot row (reorder), so the two handlers share one element.
-					if (container && isItemDrag(e)) nest.props.onDragOver(e);
-					else e.preventDefault();
-				}}
-				onDrop={e => {
-					if (container && isItemDrag(e)) {
-						nest.props.onDrop(e);
-						return;
-					}
-					e.preventDefault();
-					onDropRow();
-				}}
+				{...drag}
+				{...drop}
 			>
 				<button
 					type="button"
@@ -232,8 +220,8 @@ const LootRow = memo(function LootRow({
 					depth={depth + 1}
 					onChange={next => onChange({ ...entry, children: entry.children.map((c, j) => (j === i ? next : c)) })}
 					onRemove={() => onChange({ ...entry, children: entry.children.filter((_, j) => j !== i) })}
-					onDragStart={() => undefined}
-					onDropRow={() => undefined}
+					rowIndex={null}
+					onReorder={() => undefined}
 				/>
 			))}
 		</>
@@ -242,18 +230,12 @@ const LootRow = memo(function LootRow({
 
 export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle }: Props) {
 	const [adding, setAdding] = useState(false);
-	const [dragIndex, setDragIndex] = useState<number | null>(null);
 
 	const setLoot = (next: LootEntry[]) => patch({ loot: next });
 
-	const listDrop = useDropTarget(
-		[DND_ITEM],
-		e => {
-			const drag = readItemDrag(e);
-			if (drag) setLoot([...doc.loot, newLootEntry(drag)]);
-		},
-		readOnly
-	);
+	const listDrop = useDropTarget(['item'], p => {
+		if (p.kind === 'item' && !readOnly) setLoot([...doc.loot, newLootEntry(p)]);
+	});
 
 	return (
 		<Section
@@ -262,10 +244,7 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 			onToggle={() => onToggle('loot')}
 			summary={doc.loot.length === 1 ? '1 drop' : `${doc.loot.length} drops`}
 		>
-			<div
-				{...listDrop.props}
-				className={listDrop.active ? 'ss-ed-loot ss-ed-drop-active' : 'ss-ed-loot'}
-			>
+			<div className="ss-ed-loot" {...listDrop}>
 				{doc.loot.length === 0 && <div className="ss-ed-empty">No loot. Drop items here from the Items browser.</div>}
 				{doc.loot.map((entry, i) => (
 					<LootRow
@@ -278,11 +257,8 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 						depth={0}
 						onChange={next => setLoot(doc.loot.map((e, j) => (j === i ? next : e)))}
 						onRemove={() => setLoot(doc.loot.filter((_, j) => j !== i))}
-						onDragStart={() => setDragIndex(i)}
-						onDropRow={() => {
-							if (dragIndex !== null) setLoot(moveItem(doc.loot, dragIndex, i));
-							setDragIndex(null);
-						}}
+						rowIndex={i}
+						onReorder={(from, to) => setLoot(reorder(doc.loot, from, to))}
 					/>
 				))}
 			</div>
@@ -292,6 +268,7 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 					<ItemPicker
 						index={items}
 						value={null}
+						defaultOpen
 						onChange={item => {
 							setLoot([...doc.loot, newLootEntry(item)]);
 							setAdding(false);

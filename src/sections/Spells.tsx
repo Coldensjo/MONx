@@ -48,6 +48,7 @@ export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed,
 			<SortableList
 				items={blocks}
 				onChange={setBlocks}
+				list={which}
 				keyOf={(_, i) => String(i)}
 				disabled={readOnly}
 				empty={which === 'attacks' ? 'No attacks — this monster cannot hurt anything.' : 'No defenses.'}

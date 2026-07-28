@@ -7,7 +7,7 @@ import { ColorSwatchGrid } from '../fields/ColorSwatchGrid';
 import { OutfitPicker } from '../fields/OutfitPicker';
 import { ItemPicker, ItemSprite } from '../fields/ItemPicker';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
-import { DND_ITEM, DND_OUTFIT, readItemDrag, readOutfitDrag, useDropTarget } from '../fields/drop';
+import { useDropTarget } from '../dnd';
 import { Banner, Section, SubGroup, type SectionId, type SectionProps } from './section';
 
 interface Props extends SectionProps {
@@ -31,34 +31,19 @@ export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, on
 	const setLook = (p: Partial<Look>) => patch({ look: { ...look, ...p } });
 	const typeex = look.mode === 'typeex';
 
-	const outfitDrop = useDropTarget(
-		[DND_OUTFIT],
-		e => {
-			const drag = readOutfitDrag(e);
-			if (drag) setLook({ mode: 'type', type: drag.type });
-		},
-		readOnly
-	);
+	const outfitDrop = useDropTarget(['outfit'], p => {
+		if (p.kind === 'outfit' && !readOnly) setLook({ mode: 'type', type: p.type });
+	});
 
-	const corpseDrop = useDropTarget(
-		[DND_ITEM],
-		e => {
-			const drag = readItemDrag(e);
-			if (drag) setLook({ corpse: drag.serverId });
-		},
-		readOnly
-	);
+	const corpseDrop = useDropTarget(['item'], p => {
+		if (p.kind === 'item' && !readOnly) setLook({ corpse: p.serverId });
+	});
 
-	const typeexDrop = useDropTarget(
-		[DND_ITEM],
-		e => {
-			const drag = readItemDrag(e);
-			// Dropping an item onto typeex also switches the mode — that is the
-			// only way the value has any effect.
-			if (drag) setLook({ mode: 'typeex', typeex: drag.serverId });
-		},
-		readOnly
-	);
+	const typeexDrop = useDropTarget(['item'], p => {
+		// Dropping an item onto typeex also switches the mode — that is the only
+		// way the value has any effect.
+		if (p.kind === 'item' && !readOnly) setLook({ mode: 'typeex', typeex: p.serverId });
+	});
 
 	return (
 		<Section
@@ -67,7 +52,7 @@ export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, on
 			onToggle={() => onToggle('look')}
 			summary={typeex ? `item ${look.typeex ?? 0}` : `type ${look.type ?? 0}`}
 		>
-			<div {...outfitDrop.props} className={outfitDrop.active ? 'ss-ed-drop ss-ed-drop-active' : 'ss-ed-drop'}>
+			<div className="ss-ed-drop" {...outfitDrop}>
 				<Field label="Mode" note="The parser takes type first; the two are mutually exclusive.">
 					<ToggleGroup
 						value={look.mode}
@@ -82,7 +67,7 @@ export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, on
 
 				{typeex ? (
 					<Field label="Item" lints={lintAt('look.typeex')}>
-						<span {...typeexDrop.props} className={typeexDrop.active ? 'ss-ed-drop ss-ed-drop-active' : 'ss-ed-drop'}>
+						<span className="ss-ed-drop" {...typeexDrop}>
 							<ItemPicker
 								index={items}
 								value={look.typeex}
@@ -151,7 +136,7 @@ export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, on
 
 			<SubGroup title="Corpse">
 				<Field label="Corpse item" lints={lintAt('look.corpse')} hint={look.corpse === 0 ? 'no corpse' : undefined}>
-					<span {...corpseDrop.props} className={corpseDrop.active ? 'ss-ed-drop ss-ed-drop-active' : 'ss-ed-drop'}>
+					<span className="ss-ed-drop" {...corpseDrop}>
 						<ItemPicker
 							index={items}
 							value={look.corpse === 0 ? null : look.corpse}

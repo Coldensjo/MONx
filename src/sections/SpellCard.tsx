@@ -7,6 +7,7 @@ import {
 	type SpellFamily
 } from '../catalog';
 import type { AreaShape, Lint, SpellBlock, SpellName } from '../monster';
+import { maxMeleeDamage } from '../derive';
 import { Field } from '../fields/Field';
 import { EnumSelect, type EnumOption } from '../fields/EnumSelect';
 import { EffectSelect } from '../fields/EffectSelect';
@@ -16,11 +17,6 @@ import { Toggle, ToggleGroup } from '../fields/Toggle';
 import { Banner, SubGroup } from './section';
 
 const REGISTERED_GROUP = 'Registered (###)';
-
-/** §23 — the number the XML never states, and the most useful thing to show. */
-export function maxMeleeDamage(skill: number, attack: number): number {
-	return Math.ceil(skill * attack * 0.05 + attack * 0.5);
-}
 
 function familyOf(block: SpellBlock): SpellFamily | 'registered' | 'script' {
 	if (block.kind === 'script') return 'script';

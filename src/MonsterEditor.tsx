@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import type { Lint, MonsterDoc, SpellName } from './monster';
+import { loadSetting, saveSetting } from './settings';
 import { PreviewProvider, type PreviewUrl } from './fields/preview';
 import { tauriItemIndex, type ItemIndex } from './fields/ItemPicker';
 import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
@@ -21,7 +22,7 @@ interface EditorState {
 
 function loadState(): EditorState {
 	try {
-		const raw = localStorage.getItem(STATE_KEY);
+		const raw = loadSetting(STATE_KEY, null);
 		if (!raw) return { collapsed: [] };
 		const parsed = JSON.parse(raw) as Partial<EditorState>;
 		const valid = (parsed.collapsed ?? []).filter((id): id is SectionId =>
@@ -75,7 +76,7 @@ export function MonsterEditor({
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
-		localStorage.setItem(STATE_KEY, JSON.stringify({ collapsed: [...collapsed] } satisfies EditorState));
+		saveSetting(STATE_KEY, JSON.stringify({ collapsed: [...collapsed] } satisfies EditorState));
 	}, [collapsed]);
 
 	useEffect(() => {

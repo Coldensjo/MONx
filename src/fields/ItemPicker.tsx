@@ -98,12 +98,23 @@ interface Props {
 	placeholder?: string;
 	/** Restricts results to containers — used when nesting loot. */
 	containersOnly?: boolean;
+	/** Opens the search straight away, for pickers summoned by an "Add" button. */
+	defaultOpen?: boolean;
 }
 
 /** Search over the item index with a sprite on every row. Entries can only be
     created from here, which is what keeps unknown ids out of the document. */
-export function ItemPicker({ index, value, onChange, onClear, disabled, placeholder = 'Pick an item…', containersOnly }: Props) {
-	const [open, setOpen] = useState(false);
+export function ItemPicker({
+	index,
+	value,
+	onChange,
+	onClear,
+	disabled,
+	placeholder = 'Pick an item…',
+	containersOnly,
+	defaultOpen
+}: Props) {
+	const [open, setOpen] = useState(!!defaultOpen);
 	const [query, setQuery] = useState('');
 	const [rows, setRows] = useState<ItemInfo[]>([]);
 	const [busy, setBusy] = useState(false);

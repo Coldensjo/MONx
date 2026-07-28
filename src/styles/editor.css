@@ -617,11 +617,6 @@
 	background: var(--bg);
 }
 
-.ss-ed-row-over {
-	border-color: var(--accent);
-	background: var(--accent-dim);
-}
-
 .ss-ed-row-body {
 	flex: 1;
 	min-width: 0;
@@ -955,12 +950,8 @@
 
 /* ---------- drop targets ---------- */
 
+/* The highlight itself is browse.css's shared [data-drop-active] rule, so every
+   target in the app lights up the same way; this only shapes the outline. */
 .ss-ed-drop {
 	border-radius: var(--radius);
-	transition: background 120ms ease, box-shadow 120ms ease;
-}
-
-.ss-ed-drop-active {
-	background: var(--accent-dim);
-	box-shadow: inset 0 0 0 1px var(--accent);
 }

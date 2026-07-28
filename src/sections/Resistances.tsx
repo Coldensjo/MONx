@@ -1,4 +1,5 @@
 import { COMMON_IMMUNITY_PRESET, CONDITION_IMMUNITIES, DAMAGE_TYPES, type DamageType } from '../catalog';
+import { elementPercent, isImmune, type DamageType as CombatType } from '../derive';
 import { FieldLint } from '../fields/Field';
 import { PercentSlider } from '../fields/PercentSlider';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
@@ -11,17 +12,9 @@ interface Props extends SectionProps {
 
 type Mode = 'normal' | 'immune' | 'percent';
 
-function immuneTo(immunities: Record<string, boolean>, d: DamageType): boolean {
-	return d.immunityKeys.some(k => immunities[k] === true);
-}
-
-function elementOf(elements: Record<string, number>, d: DamageType): number {
-	for (const k of d.elementKeys) {
-		const v = elements[k];
-		if (typeof v === 'number' && v !== 0) return v;
-	}
-	return 0;
-}
+// The catalog row carries the UI metadata (colour, both attribute spellings);
+// derive.ts owns reading the document. The keys are the same ten §16 names.
+const combatType = (d: DamageType) => d.key as CombatType;
 
 /** The attribute a write goes to: whichever spelling the file already uses,
     else the canonical first one. Keeps `poisonPercent` files as they were. */
@@ -40,7 +33,7 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 			for (const k of d.elementKeys) if (k in elements) elements[k] = 0;
 		} else {
 			for (const k of d.immunityKeys) if (immunities[k]) immunities[k] = false;
-			if (mode === 'percent' && elementOf(elements, d) === 0) elements[elementKey(elements, d)] = 50;
+			if (mode === 'percent' && elementPercent(doc, combatType(d)) === 0) elements[elementKey(elements, d)] = 50;
 			if (mode === 'normal') for (const k of d.elementKeys) if (k in elements) elements[k] = 0;
 		}
 		patch({ immunities, elements });
@@ -57,7 +50,7 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 	};
 
 	const presetApplied = COMMON_IMMUNITY_PRESET.every(k => doc.immunities[k] === true);
-	const immuneCount = DAMAGE_TYPES.filter(d => immuneTo(doc.immunities, d)).length;
+	const immuneCount = DAMAGE_TYPES.filter(d => isImmune(doc, combatType(d))).length;
 
 	return (
 		<Section
@@ -68,8 +61,8 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 		>
 			<div className="ss-ed-resists">
 				{DAMAGE_TYPES.map(d => {
-					const immune = immuneTo(doc.immunities, d);
-					const percent = elementOf(doc.elements, d);
+					const immune = isImmune(doc, combatType(d));
+					const percent = elementPercent(doc, combatType(d));
 					const mode: Mode = immune ? 'immune' : percent !== 0 ? 'percent' : 'normal';
 					return (
 						<div key={d.key} className="ss-ed-resist-row">

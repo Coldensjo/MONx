@@ -17,7 +17,7 @@ export type DragKind = DragPayload['kind'];
 // The kind is encoded in the MIME type, not just the payload, because
 // `dataTransfer.getData` is blocked during `dragover` — only `types` is readable.
 // Without this a target could not tell whether to accept the drag until the drop.
-export const MIME_PREFIX = 'application/x-monx+';
+const MIME_PREFIX = 'application/x-monx+';
 
 function mimeFor(kind: DragKind): string {
 	return MIME_PREFIX + kind;

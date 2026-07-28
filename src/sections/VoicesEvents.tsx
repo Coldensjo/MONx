@@ -57,6 +57,7 @@ export function VoicesEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle
 			<SortableList
 				items={voices.lines}
 				onChange={setLines}
+				list="voices"
 				keyOf={(_, i) => String(i)}
 				disabled={readOnly}
 				empty="No voice lines."
@@ -96,6 +97,7 @@ export function VoicesEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle
 				<SortableList
 					items={doc.events}
 					onChange={events => patch({ events })}
+					list="events"
 					keyOf={(e, i) => `${e}-${i}`}
 					disabled={readOnly}
 					empty="No events registered."
