@@ -6,7 +6,7 @@ import { TextField } from '../fields/TextField';
 import { EffectSelect } from '../fields/EffectSelect';
 import { Toggle } from '../fields/Toggle';
 import { SortableList } from '../fields/SortableList';
-import { DND_MONSTER, readMonsterDrag, useDropTarget } from '../fields/drop';
+import { useDropTarget } from '../dnd';
 import { Banner, Section, type SectionId, type SectionProps } from './section';
 
 interface Props extends SectionProps {
@@ -24,14 +24,9 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 
 	const known = new Set(monsterNames.map(n => n.toLowerCase()));
 
-	const drop = useDropTarget(
-		[DND_MONSTER],
-		e => {
-			const drag = readMonsterDrag(e);
-			if (drag) setEntries([...summons.entries, blankSummon(drag.name)]);
-		},
-		readOnly
-	);
+	const drop = useDropTarget(['monster'], p => {
+		if (p.kind === 'monster' && !readOnly) setEntries([...summons.entries, blankSummon(p.name)]);
+	});
 
 	return (
 		<Section
@@ -61,10 +56,11 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 				/>
 			</Field>
 
-			<div {...drop.props} className={drop.active ? 'ss-ed-drop ss-ed-drop-active' : 'ss-ed-drop'}>
+			<div className="ss-ed-drop" {...drop}>
 				<SortableList
 					items={summons.entries}
 					onChange={setEntries}
+					list="summons"
 					keyOf={(_, i) => String(i)}
 					disabled={readOnly}
 					empty="No summons. Drag a monster here from the list."
