@@ -122,7 +122,9 @@ const LootRow = memo(function LootRow({
 							className="ss-ed-ambiguous"
 							disabled={readOnly}
 							title="This name belongs to more than one item, so the server drops the entry. Pin it to a single id."
-							onClick={() => onChange({ ...entry, id: info.serverId, name: null })}
+							// The name is what made the row readable, so it moves into a
+							// trailing comment — the file keeps saying what the id is.
+							onClick={() => onChange({ ...entry, id: info.serverId, name: null, comment: entry.comment ?? info.name })}
 						>
 							ambiguous — pin id
 						</button>
