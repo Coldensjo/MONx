@@ -1,0 +1,129 @@
+import { Plus } from 'lucide-react';
+import type { VoiceLine } from '../monster';
+import { Field } from '../fields/Field';
+import { NumberField } from '../fields/NumberField';
+import { TextField } from '../fields/TextField';
+import { Toggle } from '../fields/Toggle';
+import { SortableList } from '../fields/SortableList';
+import { Section, SubGroup, type SectionId, type SectionProps } from './section';
+
+interface Props extends SectionProps {
+	collapsed: boolean;
+	onToggle: (id: SectionId) => void;
+	/** Event names registered in creaturescripts.xml, when that folder is reachable. */
+	knownEvents?: string[];
+}
+
+export function VoicesEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle, knownEvents }: Props) {
+	const voices = doc.voices;
+	const setLines = (lines: VoiceLine[]) => patch({ voices: { ...voices, lines } });
+
+	const silent = voices.chance === 0 || voices.lines.length === 0;
+
+	return (
+		<Section
+			id="voices"
+			collapsed={collapsed}
+			onToggle={() => onToggle('voices')}
+			summary={`${voices.lines.length} lines · ${doc.events.length} events`}
+		>
+			<div className="ss-ed-card-grid">
+				<Field label="Interval" lints={lintAt('voices.interval')} hint="ms">
+					<NumberField
+						value={voices.interval}
+						onChange={v => patch({ voices: { ...voices, interval: v } })}
+						min={0}
+						width={110}
+						disabled={readOnly}
+					/>
+				</Field>
+				<Field
+					label="Chance"
+					lints={lintAt('voices.chance')}
+					hint="%"
+					note={silent ? 'Silent monster — nothing will ever be said.' : undefined}
+				>
+					<NumberField
+						value={voices.chance}
+						onChange={v => patch({ voices: { ...voices, chance: v } })}
+						min={0}
+						max={100}
+						width={110}
+						disabled={readOnly}
+					/>
+				</Field>
+			</div>
+
+			<SortableList
+				items={voices.lines}
+				onChange={setLines}
+				keyOf={(_, i) => String(i)}
+				disabled={readOnly}
+				empty="No voice lines."
+				renderRow={(line, i) => (
+					<div className="ss-ed-voice-row">
+						<TextField
+							value={line.sentence}
+							onChange={v => setLines(voices.lines.map((l, j) => (j === i ? { ...l, sentence: v } : l)))}
+							placeholder="What it says"
+							disabled={readOnly}
+						/>
+						<Toggle
+							label="Yell"
+							title="Heard further away; conventionally written in upper case"
+							checked={line.yell}
+							disabled={readOnly}
+							onChange={v => setLines(voices.lines.map((l, j) => (j === i ? { ...l, yell: v } : l)))}
+						/>
+					</div>
+				)}
+			/>
+
+			<button
+				type="button"
+				className="ss-btn"
+				disabled={readOnly}
+				onClick={() => setLines([...voices.lines, { sentence: '', yell: false }])}
+			>
+				<Plus size={14} />
+				Add line
+			</button>
+
+			<SubGroup
+				title="Creature events"
+				note="Registered from creaturescripts — onKill, onDeath, onPrepareDeath and friends. Not the same thing as the monster script in Identity."
+			>
+				<SortableList
+					items={doc.events}
+					onChange={events => patch({ events })}
+					keyOf={(e, i) => `${e}-${i}`}
+					disabled={readOnly}
+					empty="No events registered."
+					renderRow={(event, i) => {
+						const unknown = knownEvents && knownEvents.length > 0 && !knownEvents.includes(event);
+						return (
+							<div className={unknown ? 'ss-ed-invalid' : undefined} title={unknown ? 'Not found in creaturescripts.xml' : undefined}>
+								<TextField
+									value={event}
+									onChange={v => patch({ events: doc.events.map((e, j) => (j === i ? v : e)) })}
+									placeholder="EventName"
+									monospace
+									disabled={readOnly}
+								/>
+							</div>
+						);
+					}}
+				/>
+				<button
+					type="button"
+					className="ss-btn"
+					disabled={readOnly}
+					onClick={() => patch({ events: [...doc.events, ''] })}
+				>
+					<Plus size={14} />
+					Add event
+				</button>
+			</SubGroup>
+		</Section>
+	);
+}

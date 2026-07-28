@@ -1,1 +1,966 @@
-/* Agent 3 — the nine editor sections and their field controls. */
+/* Agent 3 — the nine editor sections and their field controls.
+   index.css is frozen SPRx, so everything here is additive and `ss-ed-`
+   prefixed. Palette variables come from index.css and shell.css. */
+
+.ss-ed {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	flex: 1;
+}
+
+/* ---------- section bar ---------- */
+
+.ss-ed-bar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 12px;
+	height: 38px;
+	border-bottom: 1px solid var(--border);
+	background: var(--surface);
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.ss-ed-bar::-webkit-scrollbar {
+	display: none;
+}
+
+.ss-ed-tab {
+	padding: 6px 10px;
+	font-size: 13px;
+	color: var(--text-muted);
+	border: 0;
+	border-radius: var(--radius);
+	background: transparent;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.ss-ed-tab:hover {
+	color: var(--text);
+	background: var(--surface-2);
+}
+
+.ss-ed-tab-active {
+	color: var(--accent);
+	background: var(--accent-dim);
+}
+
+.ss-ed-bar-lints {
+	display: inline-flex;
+	gap: 6px;
+	margin-left: auto;
+	padding-left: 12px;
+}
+
+/* ---------- scrolling form ---------- */
+
+.ss-ed-scroll {
+	flex: 1;
+	overflow-y: auto;
+	padding: 20px 16px 64px;
+}
+
+/* Long labels stay readable only in a narrow column — full-bleed forms at
+   1200px are the thing --editor-w exists to prevent. */
+.ss-ed-column {
+	max-width: var(--editor-w);
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.ss-ed-section {
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	scroll-margin-top: 12px;
+}
+
+.ss-ed-section-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--border);
+}
+
+.ss-ed-section-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	border: 0;
+	background: transparent;
+	color: var(--text);
+	cursor: pointer;
+	padding: 0;
+}
+
+.ss-ed-section-toggle h2 {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	margin: 0;
+}
+
+.ss-ed-section-summary {
+	margin-left: auto;
+	font-size: 12px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-section-body {
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.ss-ed-subgroup {
+	border-top: 1px solid var(--border);
+	padding-top: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+/* A column flex parent would otherwise stretch buttons to the full width. */
+.ss-ed-section-body > .ss-btn,
+.ss-ed-subgroup > .ss-btn {
+	align-self: flex-start;
+}
+
+.ss-ed-subgroup-title {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+/* ---------- fields ---------- */
+
+.ss-ed-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ss-ed-field-ignored {
+	opacity: 0.45;
+}
+
+.ss-ed-field-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.ss-ed-field-control {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.ss-ed-field-hint {
+	font-size: 12px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-field-note {
+	font-size: 11px;
+	color: var(--text-muted);
+	line-height: 1.45;
+}
+
+.ss-ed-note-warn {
+	color: var(--warn);
+}
+
+.ss-ed-input {
+	min-height: 30px;
+	padding: 4px 8px;
+	background: var(--bg);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	font-size: 13px;
+	outline: 0;
+	min-width: 0;
+	flex: 1;
+}
+
+.ss-ed-input:focus {
+	border-color: var(--accent);
+}
+
+.ss-ed-input:disabled {
+	opacity: 0.45;
+}
+
+.ss-ed-input-num {
+	flex: 0 0 auto;
+	width: 110px;
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-input-mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ss-ed-select {
+	flex: 0 0 auto;
+}
+
+.ss-ed-number {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.ss-ed-default-mark {
+	font-size: 11px;
+	color: var(--text-muted);
+	border: 1px dashed var(--border-strong);
+	border-radius: var(--radius);
+	background: transparent;
+	padding: 1px 6px;
+	cursor: pointer;
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-default-mark:hover:not(:disabled) {
+	color: var(--text);
+	border-color: var(--accent);
+}
+
+.ss-ed-derived {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--accent);
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-invalid input {
+	border-color: var(--destructive);
+}
+
+.ss-ed-mini {
+	min-height: 24px;
+	padding: 2px 8px;
+	font-size: 12px;
+}
+
+.ss-ed-inline {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+
+/* ---------- lint badges ---------- */
+
+.ss-ed-lint {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: 8px;
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1;
+	cursor: help;
+}
+
+.ss-ed-lint-error {
+	color: var(--destructive);
+	background: var(--destructive-dim);
+}
+
+.ss-ed-lint-warning {
+	color: var(--warn);
+	background: var(--warn-dim);
+}
+
+.ss-ed-lint-silent {
+	color: var(--silent);
+	background: var(--silent-dim);
+}
+
+/* ---------- banners ---------- */
+
+.ss-ed-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border-radius: var(--radius);
+	font-size: 12px;
+	line-height: 1.5;
+	border: 1px solid transparent;
+}
+
+.ss-ed-banner code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 11px;
+}
+
+.ss-ed-banner-info {
+	color: var(--text-muted);
+	background: var(--surface-2);
+	border-color: var(--border);
+}
+
+.ss-ed-banner-warn {
+	color: var(--warn);
+	background: var(--warn-dim);
+	border-color: var(--warn-dim);
+}
+
+.ss-ed-banner-error {
+	color: var(--destructive);
+	background: var(--destructive-dim);
+	border-color: var(--destructive-dim);
+}
+
+.ss-ed-readonly {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+
+/* ---------- combo / popover ---------- */
+
+.ss-ed-combo,
+.ss-ed-colorpick,
+.ss-ed-itempick {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.ss-ed-combo-trigger,
+.ss-ed-color-trigger,
+.ss-ed-item-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+	text-align: left;
+}
+
+.ss-ed-combo-value,
+.ss-ed-item-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ss-ed-item-id {
+	font-size: 11px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-popover {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	z-index: 40;
+	min-width: 260px;
+	max-width: 380px;
+	background: var(--surface);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+	overflow: hidden;
+}
+
+.ss-ed-popover-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--border);
+}
+
+.ss-ed-popover-search svg {
+	color: var(--text-muted);
+}
+
+.ss-ed-popover-search input {
+	flex: 1;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--text);
+	font-size: 13px;
+}
+
+.ss-ed-popover-list {
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.ss-ed-popover-group {
+	padding: 6px 10px 2px;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--text-muted);
+}
+
+.ss-ed-popover-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 5px 10px;
+	border: 0;
+	background: transparent;
+	color: var(--text);
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.ss-ed-popover-item:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+
+.ss-ed-popover-item:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.ss-ed-popover-item-active {
+	color: var(--accent);
+	background: var(--accent-dim);
+}
+
+.ss-ed-popover-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ss-ed-popover-usage {
+	font-size: 11px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-popover-empty {
+	padding: 12px;
+	font-size: 12px;
+	color: var(--text-muted);
+	text-align: center;
+}
+
+/* ---------- effect previews ---------- */
+
+.ss-ed-effect {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	flex: 1;
+	min-width: 0;
+}
+
+.ss-ed-effect-sprite {
+	background: var(--sprite-bg);
+	border-radius: 3px;
+	image-rendering: pixelated;
+	flex-shrink: 0;
+}
+
+.ss-ed-effect-chip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	background: var(--sprite-bg);
+	border-radius: 3px;
+	font-size: 10px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+	flex-shrink: 0;
+}
+
+/* ---------- colour palette ---------- */
+
+.ss-ed-color-chip {
+	width: 18px;
+	height: 18px;
+	border-radius: 3px;
+	border: 1px solid var(--border-strong);
+	flex-shrink: 0;
+}
+
+.ss-ed-color-index {
+	font-size: 12px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-popover-palette {
+	padding: 8px;
+	min-width: 0;
+	max-width: none;
+}
+
+.ss-ed-palette {
+	display: grid;
+	gap: 2px;
+}
+
+.ss-ed-swatch {
+	width: 14px;
+	height: 14px;
+	border: 1px solid transparent;
+	border-radius: 2px;
+	padding: 0;
+	cursor: pointer;
+}
+
+.ss-ed-swatch:hover {
+	border-color: var(--text);
+}
+
+.ss-ed-swatch-active {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 1px var(--accent);
+}
+
+.ss-ed-colour-row {
+	display: flex;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+
+.ss-ed-colour-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ss-ed-colour-label {
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.ss-ed-blood {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 1px solid transparent;
+	flex-shrink: 0;
+}
+
+/* ---------- outfit ---------- */
+
+.ss-ed-outfitpick {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.ss-ed-outfit-preview {
+	width: 64px;
+	height: 64px;
+	background: var(--sprite-bg);
+	border-radius: var(--radius);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	image-rendering: pixelated;
+}
+
+.ss-ed-outfit-controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* ---------- lists ---------- */
+
+.ss-ed-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ss-ed-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 8px;
+	background: var(--bg);
+}
+
+.ss-ed-row-over {
+	border-color: var(--accent);
+	background: var(--accent-dim);
+}
+
+.ss-ed-row-body {
+	flex: 1;
+	min-width: 0;
+}
+
+.ss-ed-row-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.ss-ed-grip {
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: grab;
+	padding: 4px 2px;
+}
+
+.ss-ed-grip:active {
+	cursor: grabbing;
+}
+
+.ss-ed-empty {
+	padding: 16px;
+	text-align: center;
+	font-size: 12px;
+	color: var(--text-muted);
+	border: 1px dashed var(--border-strong);
+	border-radius: var(--radius);
+}
+
+/* ---------- spell cards ---------- */
+
+.ss-ed-card {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.ss-ed-card-grid {
+	display: flex;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+
+.ss-ed-flags {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+	gap: 6px 14px;
+}
+
+.ss-ed-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 13px;
+	color: var(--text);
+	cursor: pointer;
+}
+
+.ss-ed-toggle-changed span {
+	color: var(--accent);
+}
+
+.ss-ed-toggle input {
+	accent-color: var(--accent);
+}
+
+.ss-ed-toggle-group {
+	display: inline-flex;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.ss-ed-seg {
+	padding: 5px 10px;
+	font-size: 12px;
+	border: 0;
+	border-right: 1px solid var(--border);
+	background: var(--surface-2);
+	color: var(--text-muted);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.ss-ed-seg:last-child {
+	border-right: 0;
+}
+
+.ss-ed-seg:hover:not(:disabled) {
+	color: var(--text);
+}
+
+.ss-ed-seg-active {
+	background: var(--accent-dim);
+	color: var(--accent);
+}
+
+.ss-ed-seg:disabled {
+	opacity: 0.45;
+}
+
+.ss-ed-advanced {
+	border-top: 1px solid var(--border);
+	padding-top: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	align-items: flex-start;
+}
+
+/* ---------- resistances ---------- */
+
+.ss-ed-resists {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ss-ed-resist-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.ss-ed-resist-icon {
+	width: 12px;
+	height: 12px;
+	border-radius: 3px;
+	flex-shrink: 0;
+}
+
+.ss-ed-resist-label {
+	width: 92px;
+	font-size: 13px;
+}
+
+.ss-ed-resist-note {
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.ss-ed-percent {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.ss-ed-percent-track {
+	position: relative;
+	width: 180px;
+	height: 20px;
+	display: flex;
+	align-items: center;
+}
+
+.ss-ed-percent-track input[type='range'] {
+	position: relative;
+	z-index: 2;
+	width: 100%;
+	margin: 0;
+	background: transparent;
+	accent-color: var(--accent);
+}
+
+.ss-ed-percent-fill {
+	position: absolute;
+	top: 8px;
+	height: 4px;
+	background: var(--accent);
+	border-radius: 2px;
+	z-index: 1;
+}
+
+.ss-ed-percent-weak {
+	background: var(--destructive);
+}
+
+.ss-ed-percent-zero {
+	position: absolute;
+	top: 4px;
+	width: 1px;
+	height: 12px;
+	background: var(--border-strong);
+	z-index: 1;
+}
+
+.ss-ed-percent-tag {
+	font-size: 11px;
+	color: var(--text-muted);
+	width: 84px;
+}
+
+/* ---------- loot ---------- */
+
+.ss-ed-loot {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.ss-ed-loot-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--border);
+}
+
+.ss-ed-loot-row:last-child {
+	border-bottom: 0;
+}
+
+.ss-ed-loot-row:hover {
+	background: var(--surface-2);
+}
+
+.ss-ed-loot-expand {
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	padding: 2px;
+}
+
+.ss-ed-item-sprite {
+	background: var(--sprite-bg);
+	border-radius: 3px;
+	image-rendering: pixelated;
+	flex-shrink: 0;
+}
+
+.ss-ed-item-sprite-empty {
+	display: inline-block;
+}
+
+.ss-ed-loot-name {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ss-ed-loot-container-mark {
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.ss-ed-loot-comment {
+	font-size: 11px;
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.ss-ed-ambiguous {
+	font-size: 10px;
+	color: var(--warn);
+	background: var(--warn-dim);
+	border: 0;
+	border-radius: 3px;
+	padding: 1px 5px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.ss-ed-loot-chance,
+.ss-ed-loot-count {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.ss-ed-rarity {
+	position: relative;
+	width: 56px;
+	height: 5px;
+	border-radius: 3px;
+	background: var(--surface-2);
+	overflow: hidden;
+}
+
+.ss-ed-rarity-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	background: var(--accent);
+}
+
+.ss-ed-loot-id {
+	width: 52px;
+	text-align: right;
+	font-size: 11px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.ss-ed-loot-detail {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	padding: 8px;
+	border-bottom: 1px solid var(--border);
+	background: var(--surface-2);
+}
+
+.ss-ed-loot-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+/* ---------- voices ---------- */
+
+.ss-ed-voice-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+/* ---------- drop targets ---------- */
+
+.ss-ed-drop {
+	border-radius: var(--radius);
+	transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.ss-ed-drop-active {
+	background: var(--accent-dim);
+	box-shadow: inset 0 0 0 1px var(--accent);
+}

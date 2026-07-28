@@ -1,0 +1,137 @@
+import { Plus } from 'lucide-react';
+import type { SummonEntry } from '../monster';
+import { Field } from '../fields/Field';
+import { NumberField } from '../fields/NumberField';
+import { TextField } from '../fields/TextField';
+import { EffectSelect } from '../fields/EffectSelect';
+import { Toggle } from '../fields/Toggle';
+import { SortableList } from '../fields/SortableList';
+import { DND_MONSTER, readMonsterDrag, useDropTarget } from '../fields/drop';
+import { Banner, Section, type SectionId, type SectionProps } from './section';
+
+interface Props extends SectionProps {
+	collapsed: boolean;
+	onToggle: (id: SectionId) => void;
+}
+
+function blankSummon(name: string): SummonEntry {
+	return { name, interval: 2000, chance: 30, max: 1, force: false, effect: null, masterEffect: null };
+}
+
+export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed, onToggle }: Props) {
+	const summons = doc.summons;
+	const setEntries = (entries: SummonEntry[]) => patch({ summons: { ...summons, entries } });
+
+	const known = new Set(monsterNames.map(n => n.toLowerCase()));
+
+	const drop = useDropTarget(
+		[DND_MONSTER],
+		e => {
+			const drag = readMonsterDrag(e);
+			if (drag) setEntries([...summons.entries, blankSummon(drag.name)]);
+		},
+		readOnly
+	);
+
+	return (
+		<Section
+			id="summons"
+			collapsed={collapsed}
+			onToggle={() => onToggle('summons')}
+			summary={`${summons.entries.length} of max ${summons.maxSummons}`}
+		>
+			<Banner kind="info">Summons never drop loot and never grant experience.</Banner>
+
+			<Field
+				label="Max live summons"
+				lints={lintAt('summons.maxSummons')}
+				note={
+					summons.maxSummons === 0 && summons.entries.length > 0
+						? 'Zero means the monster can never summon, whatever the entries below say.'
+						: 'Total across all entries, clamped to 100.'
+				}
+			>
+				<NumberField
+					value={summons.maxSummons}
+					onChange={v => patch({ summons: { ...summons, maxSummons: v } })}
+					min={0}
+					max={100}
+					width={100}
+					disabled={readOnly}
+				/>
+			</Field>
+
+			<div {...drop.props} className={drop.active ? 'ss-ed-drop ss-ed-drop-active' : 'ss-ed-drop'}>
+				<SortableList
+					items={summons.entries}
+					onChange={setEntries}
+					keyOf={(_, i) => String(i)}
+					disabled={readOnly}
+					empty="No summons. Drag a monster here from the list."
+					renderRow={(entry, i) => {
+						const update = (p: Partial<SummonEntry>) =>
+							setEntries(summons.entries.map((e, j) => (j === i ? { ...e, ...p } : e)));
+						const unknown = monsterNames.length > 0 && !known.has(entry.name.toLowerCase());
+						return (
+							<div className="ss-ed-card">
+								<Field
+									label="Monster"
+									lints={lintAt(`summons.entries[${i}].name`)}
+									note={
+										unknown
+											? 'No monster with this name is registered — the server does not check this, so at runtime it silently summons nothing.'
+											: undefined
+									}
+								>
+									<span className={unknown ? 'ss-ed-invalid' : undefined}>
+										<TextField value={entry.name} onChange={v => update({ name: v })} disabled={readOnly} />
+									</span>
+								</Field>
+								<div className="ss-ed-card-grid">
+									<Field label="Interval" hint="ms">
+										<NumberField value={entry.interval} onChange={v => update({ interval: v })} min={1} width={100} disabled={readOnly} />
+									</Field>
+									<Field label="Chance" hint="%">
+										<NumberField value={entry.chance} onChange={v => update({ chance: v })} min={0} max={100} width={100} disabled={readOnly} />
+									</Field>
+									<Field label="Max" note="Per-entry cap; inherits the section maximum when absent.">
+										<NumberField value={entry.max} onChange={v => update({ max: v })} min={0} width={100} disabled={readOnly} />
+									</Field>
+								</div>
+								<Toggle
+									label="Force placement"
+									title="Ironcore — places the summon even on an occupied or blocked tile"
+									checked={entry.force}
+									disabled={readOnly}
+									onChange={v => update({ force: v })}
+								/>
+								<Field label="Effect at the summon" note="Defaults to a teleport effect.">
+									<EffectSelect
+										kind="area"
+										value={entry.effect}
+										onChange={v => update({ effect: v })}
+										disabled={readOnly}
+										noneLabel="(default teleport)"
+									/>
+								</Field>
+								<Field label="Effect at the summoner" note="Ironcore — a casting telegraph on the summoner's own tile.">
+									<EffectSelect kind="area" value={entry.masterEffect} onChange={v => update({ masterEffect: v })} disabled={readOnly} />
+								</Field>
+							</div>
+						);
+					}}
+				/>
+			</div>
+
+			<button
+				type="button"
+				className="ss-btn"
+				disabled={readOnly}
+				onClick={() => setEntries([...summons.entries, blankSummon('')])}
+			>
+				<Plus size={14} />
+				Add summon
+			</button>
+		</Section>
+	);
+}
