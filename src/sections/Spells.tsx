@@ -60,6 +60,7 @@ export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed,
 						lintAt={suffix => lintAt(`${which}[${i}].${suffix}`)}
 						readOnly={readOnly}
 						parent={which}
+						look={doc.look}
 					/>
 				)}
 			/>

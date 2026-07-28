@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 /**
  * Renders one client thing to a URL. The editor never owns the .spr/.dat
@@ -7,8 +7,15 @@ import { createContext, useContext, type ReactNode } from 'react';
  *
  * `id` is the raw enum value — `CONST_ME_FIREAREA` passes 7 — so the mapping
  * from effect id to dat entry stays in one place outside the editor.
+ *
+ * `opts` selects one cell of an animated or patterned thing: `frame` steps the
+ * animation, `dir`/`diry` index the pattern grid (a missile's travel angle).
  */
-export type PreviewUrl = (kind: 'effect' | 'missile' | 'outfit' | 'item', id: number) => string | null;
+export type PreviewUrl = (
+	kind: 'effect' | 'missile' | 'outfit' | 'item',
+	id: number,
+	opts?: { frame?: number; dir?: number; diry?: number }
+) => string | null;
 
 const PreviewContext = createContext<PreviewUrl | null>(null);
 
@@ -18,4 +25,47 @@ export function PreviewProvider({ value, children }: { value: PreviewUrl | null;
 
 export function usePreviewUrl(): PreviewUrl | null {
 	return useContext(PreviewContext);
+}
+
+// ---------- Thing animation metadata ----------
+
+/** How many frames and pattern cells a thing has — what an animation loop needs. */
+export interface ThingAnim {
+	frames: number;
+	patternX: number;
+	patternY: number;
+}
+
+export type ThingAnimLookup = (kind: 'effect' | 'missile' | 'outfit' | 'item', id: number) => Promise<ThingAnim | null>;
+
+const ThingAnimContext = createContext<ThingAnimLookup | null>(null);
+
+export function ThingAnimProvider({ value, children }: { value: ThingAnimLookup | null; children: ReactNode }) {
+	return <ThingAnimContext.Provider value={value}>{children}</ThingAnimContext.Provider>;
+}
+
+/**
+ * Frame count for one thing, or null while it loads or when nothing can resolve
+ * it. Callers must cope with null — a stage that waits for this would never
+ * start in fixture-only rendering, where no lookup is provided.
+ */
+export function useThingAnim(kind: 'effect' | 'missile' | 'outfit' | 'item', id: number | null): ThingAnim | null {
+	const lookup = useContext(ThingAnimContext);
+	const [anim, setAnim] = useState<ThingAnim | null>(null);
+
+	useEffect(() => {
+		setAnim(null);
+		if (!lookup || id === null || id <= 0) return;
+		let cancelled = false;
+		lookup(kind, id)
+			.then(a => {
+				if (!cancelled) setAnim(a);
+			})
+			.catch(() => undefined);
+		return () => {
+			cancelled = true;
+		};
+	}, [lookup, kind, id]);
+
+	return anim;
 }

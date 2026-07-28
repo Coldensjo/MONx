@@ -24,7 +24,7 @@ import {
 	type MonsterSummary,
 	type WorkspaceInfo
 } from './monster';
-import { getThings, type ThingSummary } from './spr';
+import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
 import MonsterList from './MonsterList';
@@ -32,7 +32,7 @@ import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
-import type { PreviewUrl } from './fields/preview';
+import type { PreviewUrl, ThingAnimLookup } from './fields/preview';
 
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */
@@ -130,11 +130,26 @@ export default function Workspace({
 
 	/** Client things for the editor's effect, missile and outfit previews. */
 	const previewUrl = useCallback<PreviewUrl>(
-		(kind, id) => {
+		(kind, id, opts) => {
 			if (kind === 'item') return itemUrl(id);
-			return thingUrlFor(info.sprPath, info.datPath, kind, id, info.transparent);
+			return thingUrlFor(info.sprPath, info.datPath, kind, id, info.transparent, opts);
 		},
 		[info.sprPath, info.datPath, info.transparent]
+	);
+
+	/** Frame and pattern counts, so the spell stage animates the real cycle length. */
+	const thingAnim = useCallback<ThingAnimLookup>(
+		async (kind, id) => {
+			if (kind === 'item') return null;
+			try {
+				const t = await getThing(info.datPath, kind, id);
+				return { frames: t.frames, patternX: t.patternX, patternY: t.patternY };
+			} catch {
+				// An unknown id is a lint elsewhere; here it just means "don't animate".
+				return null;
+			}
+		},
+		[info.datPath]
 	);
 
 	const monsterNames = useMemo(() => monsters.map(m => m.name), [monsters]);
@@ -325,6 +340,7 @@ export default function Workspace({
 								nextRaceid={nextRaceid}
 								onBrowseOutfits={() => setView('outfits')}
 								previewUrl={previewUrl}
+								thingAnim={thingAnim}
 							/>
 						) : (
 							<div className="mx-empty">Select a monster</div>

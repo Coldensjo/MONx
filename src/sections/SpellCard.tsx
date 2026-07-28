@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import {
 	BUILTIN_SPELLS,
 	BUILTIN_SPELL_BY_NAME,
@@ -6,7 +7,8 @@ import {
 	SPELL_GROUP_ORDER,
 	type SpellFamily
 } from '../catalog';
-import type { AreaShape, Lint, SpellBlock, SpellName } from '../monster';
+import type { AreaShape, Lint, Look, SpellBlock, SpellName } from '../monster';
+import { SpellStage } from './SpellStage';
 import { maxMeleeDamage } from '../derive';
 import { Field } from '../fields/Field';
 import { EnumSelect, type EnumOption } from '../fields/EnumSelect';
@@ -43,6 +45,8 @@ interface Props {
 	readOnly: boolean;
 	/** `<defenses>` cards default healing/haste; `<attacks>` default damage. */
 	parent: 'attacks' | 'defenses';
+	/** The monster's own look, so the re-enactment casts with the right sprite. */
+	look: Look;
 }
 
 /**
@@ -50,7 +54,8 @@ interface Props {
  * actually reads — picking a different name reshapes it — because every other
  * field is silently ignored by the loader (§8.1, §9).
  */
-export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent }: Props) {
+export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, look }: Props) {
+	const [staged, setStaged] = useState(false);
 	const family = familyOf(block);
 	const registered = family === 'registered';
 	const scripted = family === 'script';
@@ -145,9 +150,20 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent }:
 						/>
 					</Field>
 				)}
+				<button
+					type="button"
+					className={staged ? 'ss-btn mx-stage-open mx-stage-open-on' : 'ss-btn mx-stage-open'}
+					onClick={() => setStaged(s => !s)}
+					title="Watch this spell play out"
+				>
+					{staged ? <EyeOff size={13} /> : <Eye size={13} />}
+					Visualize
+				</button>
 			</div>
 
-			{builtin?.note && <div className="ss-ed-field-note">{builtin.note}</div>}
+			{staged && <SpellStage block={block} look={look} parent={parent} />}
+
+			{builtin?.note &&<div className="ss-ed-field-note">{builtin.note}</div>}
 			{builtin?.aliasOf && (
 				<div className="ss-ed-field-note">
 					Identical to <code>{builtin.aliasOf}</code> — two spellings of one spell.

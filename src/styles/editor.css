@@ -1017,3 +1017,216 @@
 .ss-ed-drop {
 	border-radius: var(--radius);
 }
+
+/* ---------- spell re-enactment stage (SpellStage.tsx) ---------- */
+
+.mx-stage-open {
+	margin-left: auto;
+	align-self: flex-end;
+}
+
+.mx-stage-open-on {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.mx-stage {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+}
+
+.mx-stage-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.mx-stage-btn {
+	padding: 4px 6px;
+}
+
+.mx-stage-speeds {
+	display: flex;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.mx-stage-speed {
+	padding: 3px 8px;
+	font-size: 11px;
+	color: var(--text-muted);
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+}
+
+.mx-stage-speed-on {
+	background: var(--accent-dim);
+	color: var(--accent);
+}
+
+.mx-stage-toggle {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11px;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+/* The grid draws its own tile lattice, so a tile div is only needed where the
+   spell actually lands. */
+.mx-stage-grid {
+	position: relative;
+	align-self: center;
+	background-color: var(--sprite-bg);
+	background-image: linear-gradient(to right, var(--border) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius);
+	overflow: hidden;
+	cursor: crosshair;
+	touch-action: none;
+}
+
+.mx-stage-tile,
+.mx-stage-cell,
+.mx-stage-caster,
+.mx-stage-target {
+	position: absolute;
+	pointer-events: none;
+}
+
+.mx-stage-tile {
+	background: var(--accent-dim);
+	box-shadow: inset 0 0 0 1px rgba(77, 184, 150, 0.35);
+}
+
+.mx-stage-tile-hot {
+	background: rgba(77, 184, 150, 0.3);
+}
+
+.mx-stage-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Effect sprites are often taller than one tile; letting them overflow the cell
+   is what the client does, so the impact reads at the right scale. */
+.mx-stage-effect {
+	max-width: 200%;
+	max-height: 200%;
+	image-rendering: pixelated;
+}
+
+.mx-stage-caster img {
+	width: 200%;
+	height: 200%;
+	margin: -50%;
+	image-rendering: pixelated;
+}
+
+.mx-stage-target {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 3;
+	color: var(--text);
+	pointer-events: none;
+}
+
+.mx-stage-target-far {
+	color: var(--destructive);
+}
+
+.mx-stage-missile {
+	transition: none;
+	z-index: 2;
+}
+
+/* Sits a little above the tile it belongs to: the impact effect covers the tile
+   itself, and a number hidden behind a fireball is a number nobody reads. */
+.mx-stage-float {
+	position: absolute;
+	z-index: 4;
+	margin-top: -13px;
+	font-size: 13px;
+	font-weight: 700;
+	color: #ff8a8a;
+	text-shadow: 0 0 3px #000, 0 1px 2px #000;
+	pointer-events: none;
+	animation: mx-stage-rise 1.1s ease-out forwards;
+}
+
+.mx-stage-float-gain {
+	color: #6ee7b7;
+}
+
+@keyframes mx-stage-rise {
+	0% {
+		opacity: 1;
+		transform: translateY(4px);
+	}
+	45% {
+		opacity: 1;
+		transform: translateY(-8px);
+	}
+	100% {
+		opacity: 0;
+		transform: translateY(-26px);
+	}
+}
+
+.mx-stage-fizzle {
+	position: absolute;
+	left: 6px;
+	bottom: 4px;
+	font-size: 10px;
+	color: var(--text-muted);
+	pointer-events: none;
+}
+
+.mx-stage-meter {
+	position: relative;
+	height: 14px;
+	border-radius: var(--radius);
+	background: var(--surface-2);
+	overflow: hidden;
+}
+
+.mx-stage-meter-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	background: var(--border-strong);
+}
+
+.mx-stage-meter-flight,
+.mx-stage-meter-impact {
+	background: var(--accent-dim);
+}
+
+.mx-stage-meter-label {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 10px;
+	color: var(--text-muted);
+}
+
+.mx-stage-legend {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	font-size: 11px;
+	color: var(--text-muted);
+}
