@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 // Typed drag-and-drop. Drag is the primary interaction in MONx (DESIGN §13), not
 // a shortcut, so the payloads are a closed union and every drop target declares
@@ -179,11 +179,13 @@ function onPointerMove(e: PointerEvent): void {
 function onPointerUp(e: PointerEvent): void {
 	if (!session) return;
 	const p = session.live;
-	// Resolved from the release point rather than the last hover, so a drop always
-	// lands where the cursor is even if the final move event was coalesced away.
-	const target = p ? targetAt(e.clientX, e.clientY, p.kind) : null;
+	// Tear down first so the ghost is out of the DOM, then resolve from the release
+	// point rather than the last hover — a drop lands where the cursor is even if
+	// the final move event was coalesced away.
 	endSession();
-	if (p && target) target.drop(p);
+	if (!p) return;
+	const target = targetAt(e.clientX, e.clientY, p.kind);
+	if (target) target.drop(p);
 }
 
 // ---------- Sources ----------
@@ -282,6 +284,10 @@ export function useDropTarget(accept: DragKind[], onDrop: (p: DragPayload) => vo
 		};
 	}
 
+	// Registration lives entirely in the ref — React already calls it with null on
+	// unmount. It must NOT be mirrored in a useEffect cleanup: StrictMode runs
+	// setup/cleanup/setup on mount without re-invoking refs, so the cleanup would
+	// deregister a still-mounted target and every drop would land on nothing.
 	const ref = useCallback((el: HTMLElement | null) => {
 		const t = targetRef.current!;
 		if (t.el) targets.delete(t.el);
@@ -291,15 +297,6 @@ export function useDropTarget(accept: DragKind[], onDrop: (p: DragPayload) => vo
 		// it as the active one would strand the highlight and the drop.
 		else if (activeTarget === t) activeTarget = null;
 	}, []);
-
-	useEffect(
-		() => () => {
-			const t = targetRef.current!;
-			if (t.el) targets.delete(t.el);
-			if (activeTarget === t) activeTarget = null;
-		},
-		[]
-	);
 
 	return useMemo(() => ({ ref, 'data-drop-active': active || undefined }), [ref, active]);
 }

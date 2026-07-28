@@ -1,0 +1,59 @@
+/* UI inspector overlay — hold F2. See UiInspector.tsx. */
+
+.mx-inspect {
+	position: fixed;
+	inset: 0;
+	z-index: 9000;
+	pointer-events: none;
+}
+
+.mx-inspect-box {
+	position: fixed;
+	border: 1px solid var(--accent);
+	background: var(--accent-dim);
+	border-radius: 2px;
+}
+
+.mx-inspect-card {
+	position: fixed;
+	max-width: 312px;
+	padding: 5px 8px;
+	background: var(--surface-2);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+	font-size: 11px;
+	line-height: 1.45;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mx-inspect-name {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.mx-inspect-sel,
+.mx-inspect-size {
+	color: var(--text-muted);
+	font-family: ui-monospace, Consolas, monospace;
+	font-size: 10px;
+}
+
+.mx-inspect-label {
+	color: var(--text);
+}
+
+.mx-inspect-hint {
+	position: fixed;
+	right: 12px;
+	bottom: 12px;
+	padding: 4px 9px;
+	background: var(--accent);
+	color: var(--accent-text);
+	border-radius: var(--radius);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}

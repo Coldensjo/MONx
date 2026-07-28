@@ -16,6 +16,7 @@ import { openDat, openSpr } from './spr';
 import { loadWorkspaces, saveWorkspace, type RecentWorkspace } from './settings';
 import Landing from './Landing';
 import Workspace from './Workspace';
+import UiInspector from './UiInspector';
 
 export interface Toast {
 	kind: 'ok' | 'error';
@@ -186,6 +187,8 @@ export default function App() {
 					onOpenRecent={entry => void open(entry.paths)}
 				/>
 			)}
+
+			<UiInspector />
 
 			{toast && (
 				<div className={`ss-toast ${toast.kind === 'ok' ? 'ss-toast-ok' : 'ss-toast-error'}`}>
