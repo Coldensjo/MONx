@@ -2517,28 +2517,43 @@ impl<'a> Writer<'a> {
             }
             line(out, 1, "</defenses>", self);
         }
-        if !d.voices.lines.is_empty() {
-            line(
-                out,
-                1,
-                &format!(r#"<voices interval="{}" chance="{}">"#, d.voices.interval, d.voices.chance),
-                self,
+        // A block with no children can still carry attributes that matter:
+        // `<voices interval chance/>` with every line commented out, and the
+        // pacifist-only voices of man.xml, both still set the yell clock.
+        // Skipping the node because the child list is empty silently drops them.
+        let voices_meaningful = !d.voices.lines.is_empty()
+            || d.voices.interval != 0
+            || d.voices.chance != 0;
+        if voices_meaningful {
+            let head = format!(
+                r#"<voices interval="{}" chance="{}""#,
+                d.voices.interval, d.voices.chance
             );
-            for (i, v) in d.voices.lines.iter().enumerate() {
-                self.eol(out);
-                self.indent(2, out);
-                self.tag("voice", &self.voice_pairs(v), &format!("voices.lines[{i}]"), out);
+            if d.voices.lines.is_empty() {
+                line(out, 1, &format!("{head} />"), self);
+            } else {
+                line(out, 1, &format!("{head}>"), self);
+                for (i, v) in d.voices.lines.iter().enumerate() {
+                    self.eol(out);
+                    self.indent(2, out);
+                    self.tag("voice", &self.voice_pairs(v), &format!("voices.lines[{i}]"), out);
+                }
+                line(out, 1, "</voices>", self);
             }
-            line(out, 1, "</voices>", self);
         }
-        if !d.summons.entries.is_empty() {
-            line(out, 1, &format!(r#"<summons maxSummons="{}">"#, d.summons.max_summons), self);
-            for (i, e) in d.summons.entries.iter().enumerate() {
-                self.eol(out);
-                self.indent(2, out);
-                self.summon_tag(e, &format!("summons.entries[{i}]"), 2, out);
+        if !d.summons.entries.is_empty() || d.summons.max_summons != 0 {
+            let head = format!(r#"<summons maxSummons="{}""#, d.summons.max_summons);
+            if d.summons.entries.is_empty() {
+                line(out, 1, &format!("{head} />"), self);
+            } else {
+                line(out, 1, &format!("{head}>"), self);
+                for (i, e) in d.summons.entries.iter().enumerate() {
+                    self.eol(out);
+                    self.indent(2, out);
+                    self.summon_tag(e, &format!("summons.entries[{i}]"), 2, out);
+                }
+                line(out, 1, "</summons>", self);
             }
-            line(out, 1, "</summons>", self);
         }
         if d.loot.is_empty() {
             line(out, 1, "<loot />", self);
