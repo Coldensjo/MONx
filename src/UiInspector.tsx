@@ -35,7 +35,10 @@ function componentPath(node: Element): string[] {
 	while (fiber && names.length < 4) {
 		const type = fiber.type;
 		if (typeof type === 'function') {
-			const name = type.displayName || type.name;
+			// `const X = memo(function X(){})` puts two X bindings in one scope,
+			// so esbuild renames the inner one to `X2`. Drop that suffix — no
+			// component here legitimately ends in a digit.
+			const name = (type.displayName || type.name || '').replace(/\d+$/, '');
 			if (name && name !== 'Anonymous' && names[0] !== name) names.unshift(name);
 		}
 		fiber = fiber.return;
@@ -82,12 +85,17 @@ export default function UiInspector() {
 	const current = useRef<Info | null>(null);
 
 	useEffect(() => {
+		const show = (next: Info | null) => {
+			current.current = next;
+			setInfo(next);
+		};
+
 		// Always tracked so the first frame after F2 already has a target —
 		// waiting for a mousemove would leave the overlay blank until the user
 		// jiggles the mouse.
 		const onMove = (e: MouseEvent) => {
 			pointer.current = { x: e.clientX, y: e.clientY };
-			if (active.current) setInfo(describe(e.clientX, e.clientY));
+			if (active.current) show(describe(e.clientX, e.clientY));
 		};
 
 		const onDown = (e: KeyboardEvent) => {
@@ -95,13 +103,13 @@ export default function UiInspector() {
 			e.preventDefault();
 			active.current = true;
 			setCopied(false);
-			setInfo(describe(pointer.current.x, pointer.current.y));
+			show(describe(pointer.current.x, pointer.current.y));
 		};
 
 		const stop = () => {
 			if (!active.current) return;
 			active.current = false;
-			setInfo(null);
+			show(null);
 			setCopied(false);
 		};
 
@@ -111,10 +119,11 @@ export default function UiInspector() {
 
 		// Swallow the click so inspecting a Save button doesn't save.
 		const onClick = (e: MouseEvent) => {
-			if (!active.current || !info) return;
+			const hit = current.current;
+			if (!active.current || !hit) return;
 			e.preventDefault();
 			e.stopPropagation();
-			const text = [info.path, info.selector].filter(Boolean).join('  ');
+			const text = [hit.path, hit.selector].filter(Boolean).join('  ');
 			void navigator.clipboard.writeText(text).then(() => setCopied(true)).catch(() => {});
 		};
 
@@ -130,7 +139,7 @@ export default function UiInspector() {
 			window.removeEventListener('blur', stop);
 			window.removeEventListener('click', onClick, true);
 		};
-	}, [info]);
+	}, []);
 
 	if (!info) return null;
 

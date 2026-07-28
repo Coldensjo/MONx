@@ -185,6 +185,7 @@ Three rules that come up constantly:
 - Frameless window with custom titlebar (`data-tauri-drag-region`); dirty state shows as `•`.
 - Drag-and-drop via `getCurrentWebview().onDragDropEvent` (folder drops) and HTML5 DnD (sprite → field).
 - `Ctrl/Cmd+O` opens the workspace picker.
+- Hold `F2` for the UI inspector (`UiInspector.tsx`): outlines whatever is under the cursor and names it — React component path, `ss-`/`mx-` classes, accessible name. Click while held to copy. Names come from React fibers, so nothing needs annotating; `esbuild.keepNames` in `vite.config.ts` keeps them readable in release builds.
 - Lists virtualize rows and fetch one row-atlas image per visible row, not one per cell.
 
 ## What not to do
