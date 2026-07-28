@@ -6,6 +6,7 @@ import { NumberField } from '../fields/NumberField';
 import { ColorSwatchGrid } from '../fields/ColorSwatchGrid';
 import { OutfitPicker } from '../fields/OutfitPicker';
 import { ItemPicker, ItemSprite } from '../fields/ItemPicker';
+import { DecayChain } from '../fields/DecayChain';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
 import { useDropTarget } from '../dnd';
 import { Banner, Section, SubGroup, type SectionId, type SectionProps } from './section';
@@ -144,10 +145,13 @@ export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, on
 							onClear={() => setLook({ corpse: 0 })}
 							disabled={readOnly}
 							placeholder="No corpse"
+							corpseFilter
 						/>
 					</span>
 					<ItemSprite serverId={look.corpse === 0 ? null : look.corpse} size={32} />
 				</Field>
+
+				<DecayChain serverId={look.corpse === 0 ? null : look.corpse} />
 
 				<Field
 					label="Corpse action id"

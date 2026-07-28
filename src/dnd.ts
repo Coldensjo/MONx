@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Typed drag-and-drop over the HTML5 API. Drag is the primary interaction in MONx
 // (DESIGN §13), not a shortcut, so the payloads are a closed union and every drop
@@ -156,6 +156,23 @@ export function useDropTarget(accept: DragKind[], onDrop: (p: DragPayload) => vo
 	const accepts = useCallback((e: React.DragEvent) => {
 		const kind = kindOf(e.dataTransfer);
 		return kind !== null && acceptRef.current.includes(kind);
+	}, []);
+
+	// A drop on a nested target stops propagation, and a cancelled drag fires
+	// dragend on the source — in both cases the ancestors under the pointer never
+	// see dragleave, so their highlight would stick. A capture-phase listener
+	// sees every drop/dragend first and clears the state unconditionally.
+	useEffect(() => {
+		const reset = () => {
+			depth.current = 0;
+			setActive(false);
+		};
+		window.addEventListener('drop', reset, true);
+		window.addEventListener('dragend', reset, true);
+		return () => {
+			window.removeEventListener('drop', reset, true);
+			window.removeEventListener('dragend', reset, true);
+		};
 	}, []);
 
 	const handlers = useMemo(

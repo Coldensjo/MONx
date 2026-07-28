@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { AlertCircle, CheckCircle2, Minus, Square, X } from 'lucide-react';
 import {
 	closeWorkspace,
@@ -79,7 +80,7 @@ export default function App() {
 	);
 
 	const close = useCallback(async () => {
-		if (dirty && !window.confirm('You have unsaved changes. Close the workspace anyway?')) return;
+		if (dirty && !(await confirm('You have unsaved changes. Close the workspace anyway?'))) return;
 		await closeWorkspace().catch(() => {});
 		setInfo(null);
 		setMonsters([]);
@@ -126,7 +127,7 @@ export default function App() {
 	// Never let the window close on unsaved work.
 	useEffect(() => {
 		const un = getCurrentWindow().onCloseRequested(async event => {
-			if (dirty && !window.confirm('You have unsaved changes. Quit anyway?')) {
+			if (dirty && !(await confirm('You have unsaved changes. Quit anyway?'))) {
 				event.preventDefault();
 			}
 		});

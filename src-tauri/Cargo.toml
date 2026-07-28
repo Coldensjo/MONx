@@ -10,6 +10,13 @@ license = "MIT"
 name = "monx_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Embeds `../dist` and serves it over the custom protocol. Without it a release
+# binary keeps the devUrl baked in and needs the Vite server running. Default so
+# plain `cargo build --release` works; `tauri dev` passes --no-default-features.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

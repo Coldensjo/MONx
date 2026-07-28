@@ -31,6 +31,8 @@ pub struct ItemInfo {
     pub attributes: BTreeMap<String, String>,
     pub stackable: bool,
     pub container: bool,
+    /// From the OTB node flags — false for anything without an OTB entry.
+    pub pickupable: bool,
     /// True when this name resolves to more than one server id (§13).
     pub ambiguous_name: bool,
 }
@@ -87,13 +89,29 @@ impl ItemIndex {
 
     /// Prefix matches first, then substring, then by id — the ordering the loot
     /// picker wants when the user is typing a name they already know.
-    pub fn search(&self, query: &str, limit: usize) -> Vec<ItemInfo> {
+    /// `pickupable_only` is for the Items browser, which exists to feed loot —
+    /// the pickers keep it off because corpses and `typeex` looks are not
+    /// pickupable. `corpses_only` keeps items carrying a `corpseType`
+    /// attribute, for the corpse picker's filter.
+    pub fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        pickupable_only: bool,
+        corpses_only: bool,
+    ) -> Vec<ItemInfo> {
         let q = query.trim().to_lowercase();
         // Ids below FIRST_ITEM_ID are the fluid/splash name table, not items.
         // They have no sprite and can't be a loot id, so they'd render as a row
         // of blank cells at the head of every browse. `get_item` still resolves
         // them for callers that address one directly.
-        let items = || self.by_id.values().filter(|i| i.server_id >= FIRST_ITEM_ID);
+        let items = || {
+            self.by_id
+                .values()
+                .filter(|i| i.server_id >= FIRST_ITEM_ID)
+                .filter(move |i| !pickupable_only || i.pickupable)
+                .filter(move |i| !corpses_only || i.attributes.contains_key("corpseType"))
+        };
 
         if q.is_empty() {
             return items().take(limit).cloned().collect();
@@ -101,7 +119,12 @@ impl ItemIndex {
         // A bare number is an id lookup, not a name search.
         if let Ok(id) = q.parse::<u32>() {
             if let Some(item) = self.by_id.get(&id) {
-                return vec![item.clone()];
+                if (!pickupable_only || item.pickupable)
+                    && (!corpses_only || item.attributes.contains_key("corpseType"))
+                {
+                    return vec![item.clone()];
+                }
+                return Vec::new();
             }
         }
 
@@ -140,6 +163,7 @@ impl ItemIndex {
     fn apply_otb(&mut self, otb: &Otb) {
         let mut missing_from_otb = Vec::new();
         for (id, item) in self.by_id.iter_mut() {
+            item.pickupable = otb.pickupable(*id);
             match otb.client_id(*id) {
                 Some(client_id) => item.client_id = client_id,
                 None => {
@@ -156,15 +180,38 @@ impl ItemIndex {
             }
         }
 
-        let missing_from_xml = otb
-            .server_ids()
-            .filter(|id| !self.by_id.contains_key(id))
-            .count() as u32;
+        let xml_count = self.by_id.len() as u32;
+
+        // Items the OTB defines but items.xml never names. The server's item
+        // table comes from the OTB, so these are valid loot ids with real
+        // sprites — synthesize a bare entry so the browser and id lookups see
+        // them. `by_name` is left alone: an empty name resolves nothing.
+        let mut missing_from_xml = 0u32;
+        for sid in otb.server_ids() {
+            if sid < FIRST_ITEM_ID || self.by_id.contains_key(&sid) {
+                continue;
+            }
+            missing_from_xml += 1;
+            self.by_id.insert(
+                sid,
+                ItemInfo {
+                    server_id: sid,
+                    client_id: otb.client_id(sid).unwrap_or(0),
+                    name: otb.name(sid).unwrap_or("").to_string(),
+                    article: None,
+                    attributes: BTreeMap::new(),
+                    stackable: false,
+                    container: false,
+                    pickupable: otb.pickupable(sid),
+                    ambiguous_name: false,
+                },
+            );
+        }
 
         self.otb_version = otb.version.clone();
         self.cross_check = ItemCrossCheck {
             otb_count: otb.len() as u32,
-            xml_count: self.by_id.len() as u32,
+            xml_count,
             missing_from_otb,
             missing_from_xml,
         };
@@ -223,6 +270,7 @@ impl ItemIndex {
                         attributes: attributes.clone(),
                         stackable,
                         container,
+                        pickupable: false,
                         ambiguous_name: false,
                     },
                 );

@@ -16,8 +16,8 @@ import { useDragSource } from './dnd';
 // row shows the monster's real outfit at one request per chunk, not per monster —
 // the same batching ThingsView uses for the item grid.
 
-const ROW_H = 30;
-const SPRITE = 24;
+const ROW_H = 38;
+const SPRITE = 32;
 // Atlases are cut on fixed index boundaries rather than on the scroll window, so
 // the URLs stay stable (and cached) while scrolling instead of changing per frame.
 const CHUNK = 32;

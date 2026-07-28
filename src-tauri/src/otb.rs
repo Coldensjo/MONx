@@ -13,7 +13,7 @@
 //! `0xFE <type> <flags:u32> (<attr:u8> <len:u16> <data>)* (children)* 0xFF`.
 //! Only three attributes are read; everything else is skipped by its length.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 use std::path::Path;
 
@@ -29,6 +29,12 @@ const ITEM_ATTR_SERVERID: u8 = 0x10;
 const ITEM_ATTR_CLIENTID: u8 = 0x11;
 const ITEM_ATTR_NAME: u8 = 0x12;
 
+/// Bit 5 of the node flags word. Not taken from upstream docs: verified against
+/// this workspace's client files, where it matches the .dat's own `pickupable`
+/// flag on 13,480/13,480 mapped items (probe, 2026-07-28) — every other bit
+/// disagrees on thousands.
+const ITEM_FLAG_PICKUPABLE: u32 = 1 << 5;
+
 #[derive(Debug, Default)]
 pub struct Otb {
     /// e.g. "OTB 2.7.2", read from the root node's version attribute.
@@ -39,6 +45,7 @@ pub struct Otb {
     server_to_client: BTreeMap<u32, u32>,
     client_to_server: BTreeMap<u32, u32>,
     names: BTreeMap<u32, String>,
+    pickupable: BTreeSet<u32>,
 }
 
 impl Otb {
@@ -62,6 +69,10 @@ impl Otb {
     /// the naming authority — but the few that do are useful for diagnostics.
     pub fn name(&self, server_id: u32) -> Option<&str> {
         self.names.get(&server_id).map(String::as_str)
+    }
+
+    pub fn pickupable(&self, server_id: u32) -> bool {
+        self.pickupable.contains(&server_id)
     }
 
     pub fn server_ids(&self) -> impl Iterator<Item = u32> + '_ {
@@ -181,6 +192,12 @@ fn parse(bytes: &[u8]) -> Result<Otb, String> {
         let _group = r.u8()?;
         let props = r.read_props();
 
+        // The fixed header before the attribute list is the node's flags word.
+        let flags = match props.get(..4) {
+            Some(f) => u32::from_le_bytes([f[0], f[1], f[2], f[3]]),
+            None => 0,
+        };
+
         let mut server_id = None;
         let mut client_id = None;
         let mut name = None;
@@ -205,6 +222,9 @@ fn parse(bytes: &[u8]) -> Result<Otb, String> {
             // Several server ids can share a client id (a re-skinned duplicate);
             // the reverse map keeps the lowest, which is the canonical one.
             otb.client_to_server.entry(cid).or_insert(sid);
+            if flags & ITEM_FLAG_PICKUPABLE != 0 {
+                otb.pickupable.insert(sid);
+            }
             if let Some(name) = name {
                 if !name.is_empty() {
                     otb.names.insert(sid, name);

@@ -1,6 +1,14 @@
 import { lookUrl, type Look } from '../monster';
 import { NumberField } from './NumberField';
 
+/** Outfit pattern_x order in the dat: 0=N, 1=E, 2=S, 3=W. */
+const DIRECTIONS = [
+	{ dir: 0, label: 'N' },
+	{ dir: 1, label: 'E' },
+	{ dir: 2, label: 'S' },
+	{ dir: 3, label: 'W' }
+];
+
 interface Props {
 	look: Look;
 	onChangeType: (type: number) => void;
@@ -14,16 +22,23 @@ interface Props {
 export function OutfitPicker({ look, onChangeType, onBrowse, disabled }: Props) {
 	return (
 		<div className="ss-ed-outfitpick">
-			<div className="ss-ed-outfit-preview">
-				<img
-					src={lookUrl(look, { cell: 64 })}
-					width={64}
-					height={64}
-					alt=""
-					draggable={false}
-					onError={e => (e.currentTarget.style.visibility = 'hidden')}
-					onLoad={e => (e.currentTarget.style.visibility = 'visible')}
-				/>
+			<div className="ss-ed-outfit-dirs">
+				{DIRECTIONS.map(d => (
+					<div key={d.dir} className="ss-ed-outfit-dir">
+						<div className="ss-ed-outfit-preview">
+							<img
+								src={lookUrl(look, { dir: d.dir, cell: 64 })}
+								width={64}
+								height={64}
+								alt=""
+								draggable={false}
+								onError={e => (e.currentTarget.style.visibility = 'hidden')}
+								onLoad={e => (e.currentTarget.style.visibility = 'visible')}
+							/>
+						</div>
+						<span className="ss-ed-outfit-dir-label">{d.label}</span>
+					</div>
+				))}
 			</div>
 			<div className="ss-ed-outfit-controls">
 				<NumberField

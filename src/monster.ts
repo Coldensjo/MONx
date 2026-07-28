@@ -209,6 +209,8 @@ export interface ItemInfo {
 	attributes: Record<string, string>;
 	stackable: boolean;
 	container: boolean;
+	/** From the OTB node flags — false for anything without an OTB entry. */
+	pickupable: boolean;
 	/** True when this name resolves to more than one server id (§13 — entry gets dropped). */
 	ambiguousName: boolean;
 }
@@ -306,8 +308,13 @@ export function listMonsterGroups(): Promise<string[]> {
 	return invoke<string[]>('list_monster_groups', {});
 }
 
-export function searchItems(query: string, limit: number): Promise<ItemInfo[]> {
-	return invoke<ItemInfo[]>('search_items', { query, limit });
+export function searchItems(
+	query: string,
+	limit: number,
+	pickupableOnly = false,
+	corpsesOnly = false
+): Promise<ItemInfo[]> {
+	return invoke<ItemInfo[]>('search_items', { query, limit, pickupableOnly, corpsesOnly });
 }
 
 export function getItem(serverId: number): Promise<ItemInfo> {

@@ -948,9 +948,16 @@ fn search_items(
     state: State<WorkspaceState>,
     query: String,
     limit: usize,
+    pickupable_only: bool,
+    corpses_only: Option<bool>,
 ) -> Result<Vec<ItemInfo>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    Ok(ws.items.search(&query, limit.clamp(1, 500)))
+    Ok(ws.items.search(
+        &query,
+        limit.max(1),
+        pickupable_only,
+        corpses_only.unwrap_or(false),
+    ))
 }
 
 #[tauri::command]

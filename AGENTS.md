@@ -118,7 +118,6 @@ src/
   ThingBrowser.tsx     Items/outfits/effects/missiles browser (from SPRx ThingsView)
   PreviewPanel.tsx     Right-hand preview + derived math
   LintPanel.tsx        Lint drawer
-  Viewer.tsx           Raw sprite grid (inherited)
   monster.ts           Monster/workspace types, invoke wrappers, protocol URL builders
   spr.ts               Inherited invoke wrappers + protocol URLs
   settings.ts          localStorage (monx.* keys)

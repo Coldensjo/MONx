@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Pause, Play } from 'lucide-react';
-import { balanceBands, itemUrl, lookUrl, type BalanceBand, type ItemInfo, type MonsterDoc } from './monster';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Package, Pause, Play } from 'lucide-react';
+import {
+	balanceBands,
+	itemUrl,
+	lookUrl,
+	type BalanceBand,
+	type ItemInfo,
+	type LootEntry,
+	type MonsterDoc
+} from './monster';
+import { newLootEntry, percentText } from './sections/Loot';
+import { ItemSprite, tauriItemIndex, useItemInfo } from './fields/ItemPicker';
 import { ANIM_INTERVAL_MS } from './ThingBrowser';
 import {
 	DAMAGE_TYPE_LABEL,
@@ -37,6 +47,10 @@ interface Props {
 	onOpenLints?: () => void;
 	/** Set `look.type` when an outfit is dropped on the preview (DESIGN §13). */
 	onLookType?: (type: number) => void;
+	/** Replace the loot list when an item is dropped here. The panel stays visible
+	 *  while the Items browser fills the centre column, so this is what makes the
+	 *  §13 "item cell → loot list" drag possible at all. */
+	onLootChange?: (loot: LootEntry[]) => void;
 }
 
 function fmt(n: number): string {
@@ -47,7 +61,51 @@ function verdictClass(v: BalanceVerdict): string {
 	return `ss-balance-${v}`;
 }
 
-export default function PreviewPanel({ doc, items, lintCount, onOpenLints, onLookType }: Props) {
+interface LootRowProps {
+	entry: LootEntry;
+	depth: number;
+	onChange?: (e: LootEntry) => void;
+}
+
+/** A read-mostly loot row: sprite, name, chance. Container rows accept an item
+ *  drop and nest it, same as the editor's loot list (§13). */
+function PreviewLootRow({ entry, depth, onChange }: LootRowProps) {
+	const info = useItemInfo(tauriItemIndex, entry.id, entry.name);
+	const serverId = entry.id ?? info?.serverId ?? null;
+	const container = info?.container ?? entry.children.length > 0;
+
+	const drop = useDropTarget(container && onChange ? ['item'] : [], p => {
+		if (p.kind === 'item') onChange?.({ ...entry, children: [...entry.children, newLootEntry(p)] });
+	});
+
+	return (
+		<>
+			<div className="ss-loot-mini-row" style={depth ? { paddingLeft: 6 + depth * 16 } : undefined} {...drop}>
+				<ItemSprite serverId={serverId} size={32} />
+				<span className="ss-loot-mini-name">
+					{info?.name ?? entry.name ?? (entry.id !== null ? `id ${entry.id}` : 'unresolved')}
+					{container && <Package size={11} className="ss-loot-mini-container" />}
+				</span>
+				<span className="ss-loot-mini-pct mono" title={`chance="${entry.chance}" of 100,000`}>
+					{percentText(entry.chance)}
+				</span>
+			</div>
+			{entry.children.map((child, i) => (
+				<PreviewLootRow
+					key={i}
+					entry={child}
+					depth={depth + 1}
+					onChange={
+						onChange &&
+						(next => onChange({ ...entry, children: entry.children.map((c, j) => (j === i ? next : c)) }))
+					}
+				/>
+			))}
+		</>
+	);
+}
+
+export default function PreviewPanel({ doc, items, lintCount, onOpenLints, onLookType, onLootChange }: Props) {
 	const [dir, setDir] = useState(2);
 	const [frame, setFrame] = useState(0);
 	const [playing, setPlaying] = useState(true);
@@ -75,12 +133,21 @@ export default function PreviewPanel({ doc, items, lintCount, onOpenLints, onLoo
 			setFrame(0);
 			return;
 		}
-		const t = setInterval(() => setFrame(f => (f + 1) % FRAME_COUNT), ANIM_INTERVAL_MS);
+		// Frame 0 is the standing pose; the walk cycle is frames 1..n-1, same as
+		// SPRx's outfit animation.
+		setFrame(1);
+		const t = setInterval(() => setFrame(f => (f + 1 < FRAME_COUNT ? f + 1 : 1)), ANIM_INTERVAL_MS);
 		return () => clearInterval(t);
 	}, [playing, typeex]);
 
 	const drop = useDropTarget(['outfit'], p => {
 		if (p.kind === 'outfit') onLookType?.(p.type);
+	});
+
+	// Dropping anywhere on the list (or the hint underneath it) appends; a drop
+	// on a container row is consumed by the row first and nests instead.
+	const lootDrop = useDropTarget(onLootChange ? ['item'] : [], p => {
+		if (p.kind === 'item') onLootChange?.([...doc.loot, newLootEntry(p)]);
 	});
 
 	// Every frame is mounted once and toggled with `display`, so stepping the
@@ -249,6 +316,23 @@ export default function PreviewPanel({ doc, items, lintCount, onOpenLints, onLoo
 							<img src={itemUrl(doc.look.corpse, 32)} width={32} height={32} draggable={false} alt="" />
 							<span className="mono">{doc.look.corpse}</span>
 							<span className="ss-corpse-name">{items.get(doc.look.corpse)?.name ?? ''}</span>
+						</div>
+					</>
+				)}
+
+				{onLootChange && (
+					<>
+						<div className="ss-details-section">Loot</div>
+						<div className="ss-loot-mini" {...lootDrop}>
+							{doc.loot.map((entry, i) => (
+								<PreviewLootRow
+									key={i}
+									entry={entry}
+									depth={0}
+									onChange={next => onLootChange(doc.loot.map((e, j) => (j === i ? next : e)))}
+								/>
+							))}
+							<div className="ss-loot-mini-hint">Drag items from the Items browser to add loot</div>
 						</div>
 					</>
 				)}

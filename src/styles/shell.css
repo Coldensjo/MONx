@@ -127,12 +127,16 @@
 
 /* ---------- Workspace ---------- */
 
-.ss-details {
-	width: var(--details-w);
-	flex: 0 0 var(--details-w);
-	border-left: 1px solid var(--border);
-	background: var(--surface);
-	overflow-y: auto;
+/* `.ss-details` (the right column) is fully defined by the inherited index.css:
+   a flex column whose `.ss-details-scroll` child owns the scrolling. A second
+   definition here once added `flex-basis` + `overflow-y` that broke the panel
+   whenever the two rules met — keep this file silent about it. */
+
+/* index.css gives the nav `flex: 1`, which pushes the monster list halfway
+   down the sidebar. The nav should hug its five entries so the list starts
+   right under Missiles and takes every remaining row. */
+.ss-sidebar-nav {
+	flex: 0 0 auto;
 }
 
 .mx-empty {

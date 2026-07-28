@@ -35,7 +35,7 @@ export function newLootEntry(item: { serverId: number }): LootEntry {
 /** Namespaces the reorder payload so another list's rows cannot land here. */
 const LOOT_LIST = 'loot';
 
-function percentText(chance: number): string {
+export function percentText(chance: number): string {
 	const pct = chance / 1000;
 	if (pct >= 10) return `${pct.toFixed(0)}%`;
 	if (pct >= 1) return `${pct.toFixed(1)}%`;

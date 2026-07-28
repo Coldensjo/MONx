@@ -199,6 +199,63 @@
 	white-space: nowrap;
 }
 
+/* The compact loot list — the drop target that stays on screen while the Items
+   browser fills the centre column (§13 "item cell → loot list"). */
+.ss-loot-mini {
+	display: flex;
+	flex-direction: column;
+	padding: 2px 0 8px;
+	border-radius: var(--radius);
+}
+
+.ss-loot-mini-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 4px;
+	border-radius: 3px;
+	min-width: 0;
+}
+
+.ss-loot-mini-row img {
+	background: var(--sprite-bg);
+	border-radius: 3px;
+	image-rendering: pixelated;
+	flex: none;
+}
+
+.ss-loot-mini-name {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ss-loot-mini-container {
+	color: var(--text-muted);
+	flex: none;
+}
+
+.ss-loot-mini-pct {
+	color: var(--text-muted);
+	font-size: 11px;
+	flex: none;
+}
+
+.ss-loot-mini-hint {
+	margin-top: 4px;
+	padding: 8px 6px;
+	border: 1px dashed var(--border);
+	border-radius: var(--radius);
+	color: var(--text-muted);
+	font-size: 11px;
+	text-align: center;
+}
+
 /* Advisory only — deliberately quiet, and never styled as an error (§14.3). */
 .ss-balance {
 	padding: 4px 0 8px;

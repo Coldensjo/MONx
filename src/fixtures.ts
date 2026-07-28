@@ -320,13 +320,13 @@ export const FIXTURE_LINTS: Lint[] = [
 // ---------- Items ----------
 
 export const FIXTURE_ITEMS: ItemInfo[] = [
-	{ serverId: 2148, clientId: 2148, name: 'gold coin', article: null, attributes: { weight: '10', worth: '1' }, stackable: true, container: false, ambiguousName: false },
-	{ serverId: 2160, clientId: 2160, name: 'crystal coin', article: null, attributes: { weight: '10', worth: '10000' }, stackable: true, container: false, ambiguousName: false },
-	{ serverId: 2520, clientId: 2520, name: 'demon shield', article: 'a', attributes: { weight: '2600', defense: '35', slotType: 'shield' }, stackable: false, container: false, ambiguousName: false },
-	{ serverId: 2493, clientId: 2493, name: 'devil helmet', article: 'a', attributes: { weight: '2700', armor: '9', slotType: 'head' }, stackable: false, container: false, ambiguousName: false },
-	{ serverId: 2645, clientId: 2645, name: 'talon', article: 'a', attributes: { weight: '80' }, stackable: false, container: false, ambiguousName: false },
-	{ serverId: 1988, clientId: 1988, name: 'bag', article: 'a', attributes: { weight: '180', containerSize: '8' }, stackable: false, container: true, ambiguousName: false },
+	{ serverId: 2148, clientId: 2148, name: 'gold coin', article: null, attributes: { weight: '10', worth: '1' }, stackable: true, container: false, pickupable: true, ambiguousName: false },
+	{ serverId: 2160, clientId: 2160, name: 'crystal coin', article: null, attributes: { weight: '10', worth: '10000' }, stackable: true, container: false, pickupable: true, ambiguousName: false },
+	{ serverId: 2520, clientId: 2520, name: 'demon shield', article: 'a', attributes: { weight: '2600', defense: '35', slotType: 'shield' }, stackable: false, container: false, pickupable: true, ambiguousName: false },
+	{ serverId: 2493, clientId: 2493, name: 'devil helmet', article: 'a', attributes: { weight: '2700', armor: '9', slotType: 'head' }, stackable: false, container: false, pickupable: true, ambiguousName: false },
+	{ serverId: 2645, clientId: 2645, name: 'talon', article: 'a', attributes: { weight: '80' }, stackable: false, container: false, pickupable: true, ambiguousName: false },
+	{ serverId: 1988, clientId: 1988, name: 'bag', article: 'a', attributes: { weight: '180', containerSize: '8' }, stackable: false, container: true, pickupable: true, ambiguousName: false },
 	// The §13 hazard: a name owned by more than one id, so a loot entry naming
 	// it is silently dropped by the server. The editor must warn, not guess.
-	{ serverId: 10302, clientId: 10302, name: 'wallmounted demon shield', article: 'a', attributes: {}, stackable: false, container: false, ambiguousName: true }
+	{ serverId: 10302, clientId: 10302, name: 'wallmounted demon shield', article: 'a', attributes: {}, stackable: false, container: false, pickupable: false, ambiguousName: true }
 ];

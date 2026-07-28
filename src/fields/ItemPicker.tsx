@@ -7,12 +7,12 @@ import { itemUrl, searchItems, getItem, type ItemInfo } from '../monster';
  * section can be rendered against fixtures without a backend.
  */
 export interface ItemIndex {
-	search(query: string, limit: number): Promise<ItemInfo[]>;
+	search(query: string, limit: number, corpsesOnly?: boolean): Promise<ItemInfo[]>;
 	get(serverId: number): Promise<ItemInfo | null>;
 }
 
 export const tauriItemIndex: ItemIndex = {
-	search: (query, limit) => searchItems(query, limit),
+	search: (query, limit, corpsesOnly) => searchItems(query, limit, false, corpsesOnly),
 	get: async serverId => {
 		try {
 			return await getItem(serverId);
@@ -98,6 +98,8 @@ interface Props {
 	placeholder?: string;
 	/** Restricts results to containers — used when nesting loot. */
 	containersOnly?: boolean;
+	/** Shows a "Corpses only" toggle (on by default) — used by the corpse picker. */
+	corpseFilter?: boolean;
 	/** Opens the search straight away, for pickers summoned by an "Add" button. */
 	defaultOpen?: boolean;
 }
@@ -112,10 +114,12 @@ export function ItemPicker({
 	disabled,
 	placeholder = 'Pick an item…',
 	containersOnly,
+	corpseFilter,
 	defaultOpen
 }: Props) {
 	const [open, setOpen] = useState(!!defaultOpen);
 	const [query, setQuery] = useState('');
+	const [corpsesOnly, setCorpsesOnly] = useState(true);
 	const [rows, setRows] = useState<ItemInfo[]>([]);
 	const [busy, setBusy] = useState(false);
 	const wrapRef = useRef<HTMLDivElement>(null);
@@ -143,7 +147,7 @@ export function ItemPicker({
 		setBusy(true);
 		const t = setTimeout(() => {
 			index
-				.search(query, 60)
+				.search(query, 60, !!corpseFilter && corpsesOnly)
 				.then(r => {
 					if (!live) return;
 					setRows(containersOnly ? r.filter(i => i.container) : r);
@@ -155,7 +159,7 @@ export function ItemPicker({
 			live = false;
 			clearTimeout(t);
 		};
-	}, [open, query, index, containersOnly]);
+	}, [open, query, index, containersOnly, corpseFilter, corpsesOnly]);
 
 	return (
 		<div className="ss-ed-itempick" ref={wrapRef}>
@@ -183,6 +187,16 @@ export function ItemPicker({
 						<Search size={13} />
 						<input autoFocus value={query} placeholder="Search items…" onChange={e => setQuery(e.target.value)} />
 					</div>
+					{corpseFilter && (
+						<label className="ss-ed-popover-filter">
+							<input
+								type="checkbox"
+								checked={corpsesOnly}
+								onChange={e => setCorpsesOnly(e.target.checked)}
+							/>
+							Corpses only
+						</label>
+					)}
 					<div className="ss-ed-popover-list">
 						{busy && rows.length === 0 && <div className="ss-ed-popover-empty">Searching…</div>}
 						{!busy && rows.length === 0 && <div className="ss-ed-popover-empty">No match</div>}

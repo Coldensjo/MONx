@@ -74,7 +74,11 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 				/>
 			</Field>
 
-			<Field label="Experience" lints={lintAt('experience')} hint="raw XP, before rateExp">
+			<Field
+				label="Experience"
+				lints={lintAt('experience')}
+				hint={`raw XP, before rateExp · ${Math.ceil(doc.experience / 200)} soul${Math.ceil(doc.experience / 200) === 1 ? '' : 's'}`}
+			>
 				<NumberField value={doc.experience} onChange={v => patch({ experience: v })} min={0} width={120} disabled={readOnly} />
 			</Field>
 
