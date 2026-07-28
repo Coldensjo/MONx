@@ -148,9 +148,11 @@ export function missilePattern(dx: number, dy: number): { dir: number; diry: num
 
 export type Phase = 'cooldown' | 'flight' | 'impact';
 
-/** Milliseconds a projectile spends per tile travelled. */
-const MS_PER_TILE = 55;
-const MIN_FLIGHT_MS = 100;
+// The client throws a distance effect faster than this. The stage deliberately
+// slows it down: at engine speed a three-tile shot is over in a sixth of a
+// second, which is a flicker you cannot judge a projectile choice from.
+const MS_PER_TILE = 110;
+const MIN_FLIGHT_MS = 280;
 /** Client magic effects step at roughly this rate; `impact` lasts frames × this. */
 export const EFFECT_FRAME_MS = 100;
 const MIN_IMPACT_MS = 320;

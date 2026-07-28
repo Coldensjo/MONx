@@ -31,6 +31,8 @@ const MIN_ROWS = 9;
 const MAX_ROWS = 13;
 /** Long enough to read, short enough not to overlap the next cast. */
 const FLOATER_MS = 1100;
+/** How far behind the projectile head each ghost sits, as a fraction of the flight. */
+const TRAIL_STEPS = [0.16, 0.32, 0.48];
 
 type Speed = 0.5 | 1 | 2;
 
@@ -87,6 +89,8 @@ export function SpellStage({ block, look, parent }: Props) {
 	const [frame, setFrame] = useState(0);
 
 	const { shoot, area } = effectIds(block);
+	const shootEntry = block.effects.shootEffect ? SHOOT_EFFECT_BY_NAME.get(block.effects.shootEffect) : undefined;
+	const areaEntry = block.effects.areaEffect ? MAGIC_EFFECT_BY_NAME.get(block.effects.areaEffect) : undefined;
 	const areaAnim = useThingAnim('effect', area);
 	const shootAnim = useThingAnim('missile', shoot);
 
@@ -228,11 +232,18 @@ export function SpellStage({ block, look, parent }: Props) {
 	const previewUrl = usePreviewUrl();
 	const casterUrl = lookUrl(look, { dir: facing as number, frame: 0, cell: TILE * 2 });
 
-	// The projectile sits between caster and victim, eased by the phase progress.
-	const flightPos = useMemo(() => {
-		const p = phase === 'flight' ? progress : 1;
-		return { left: (bounds.cx + target.dx * p) * TILE, top: (bounds.cy + target.dy * p) * TILE };
-	}, [phase, progress, bounds, target]);
+	/** Position along the caster→victim line at `p` of the way across. */
+	const alongFlight = useCallback(
+		(p: number) => ({ left: (bounds.cx + target.dx * p) * TILE, top: (bounds.cy + target.dy * p) * TILE }),
+		[bounds, target]
+	);
+
+	// A few fading copies behind the head. The projectile crosses a handful of
+	// tiles in a third of a second; without a trail it reads as a jump cut.
+	const trail = useMemo(() => {
+		const head = phase === 'flight' ? progress : 1;
+		return TRAIL_STEPS.map(back => head - back).filter(p => p > 0);
+	}, [phase, progress]);
 
 	const shootPattern = missilePattern(target.dx, target.dy);
 	const shootUrl =
@@ -291,6 +302,42 @@ export function SpellStage({ block, look, parent }: Props) {
 				</label>
 			</div>
 
+			{/* Which sprites this spell throws, visible between casts too — the flight
+			    lasts a third of a second and you should not have to catch it. */}
+			<div className="mx-stage-fx">
+				<span className="mx-stage-fx-slot">
+					<span className="mx-stage-fx-key">Projectile</span>
+					{shootUrl ? (
+						<>
+							<img className="mx-stage-fx-icon" src={shootUrl} alt="" draggable={false} />
+							<span>{shootEntry?.label ?? block.effects.shootEffect}</span>
+						</>
+					) : (
+						<span className="mx-stage-fx-none">
+							{block.kind === 'registered' ? 'from spells.xml' : distance > 1 ? 'none — nothing travels' : 'none'}
+						</span>
+					)}
+				</span>
+				<span className="mx-stage-fx-slot">
+					<span className="mx-stage-fx-key">Impact</span>
+					{area !== null ? (
+						<>
+							<img
+								className="mx-stage-fx-icon"
+								src={previewUrl?.('effect', area, { frame: areaFrame }) ?? undefined}
+								alt=""
+								draggable={false}
+							/>
+							<span>{areaEntry?.label ?? block.effects.areaEffect}</span>
+						</>
+					) : (
+						<span className="mx-stage-fx-none">
+							{block.kind === 'registered' ? 'from spells.xml' : 'none — the hit is invisible'}
+						</span>
+					)}
+				</span>
+			</div>
+
 			<div
 				className="mx-stage-grid"
 				ref={gridRef}
@@ -336,8 +383,23 @@ export function SpellStage({ block, look, parent }: Props) {
 					<Crosshair size={TILE - 6} />
 				</div>
 
+				{phase === 'flight' &&
+					shootUrl &&
+					!aoeShoot &&
+					trail.map((p, i) => (
+						<div
+							key={`trail${i}`}
+							className="mx-stage-cell mx-stage-missile mx-stage-trail"
+							style={{ ...alongFlight(p), width: TILE, height: TILE, opacity: 0.45 - i * 0.13 }}
+						>
+							<img className="mx-stage-effect" src={shootUrl} alt="" draggable={false} />
+						</div>
+					))}
 				{phase === 'flight' && shootUrl && !aoeShoot && (
-					<div className="mx-stage-cell mx-stage-missile" style={{ ...flightPos, width: TILE, height: TILE }}>
+					<div
+						className="mx-stage-cell mx-stage-missile"
+						style={{ ...alongFlight(progress), width: TILE, height: TILE }}
+					>
 						<img className="mx-stage-effect" src={shootUrl} alt="" draggable={false} />
 					</div>
 				)}

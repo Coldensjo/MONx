@@ -1230,3 +1230,39 @@
 	font-size: 11px;
 	color: var(--text-muted);
 }
+
+/* Effect readout above the grid: the projectile is only airborne for a third of
+   a second, so which sprite a spell throws has to be legible at rest too. */
+.mx-stage-fx {
+	display: flex;
+	gap: 14px;
+	flex-wrap: wrap;
+	font-size: 11px;
+	color: var(--text);
+}
+
+.mx-stage-fx-slot {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.mx-stage-fx-key {
+	color: var(--text-muted);
+}
+
+.mx-stage-fx-icon {
+	width: 24px;
+	height: 24px;
+	object-fit: contain;
+	image-rendering: pixelated;
+}
+
+.mx-stage-fx-none {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.mx-stage-trail {
+	z-index: 1;
+}
