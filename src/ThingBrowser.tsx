@@ -471,7 +471,8 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 			} else {
 				// Plain press: select this one and begin a paint-drag. Moving the
 				// cursor over more cells adds them; re-crossing never removes.
-				// A draggable grid skips preventDefault so the native drag can start.
+				// A draggable grid skips both: preventDefault would kill the caret/focus
+				// handoff, and paint-selection would fight the drag for the same gesture.
 				if (!draggable) e.preventDefault();
 				setSelectedKeys(new Set([key]));
 				setPainting(!draggable);

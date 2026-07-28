@@ -6,12 +6,19 @@
 
 /* ---------- Drag and drop (DESIGN §13) ---------- */
 
-/* The ghost is snapshotted by the browser at dragstart while parked offscreen,
-   so it needs no positioning of its own — only the sprite rendering rules. */
+/* The ghost is a real node that dnd.ts moves with the cursor — it owns its own
+   fixed positioning inline, so only the rendering rules live here. */
 .ss-drag-ghost {
 	image-rendering: pixelated;
 	pointer-events: none;
 	opacity: 0.85;
+}
+
+/* Set on <body> for the duration of a drag: the cursor reads as a carry, and no
+   stray text selection survives the gesture. */
+body.ss-dragging {
+	cursor: grabbing;
+	user-select: none;
 }
 
 /* Every drop target highlights with --accent-dim, the same treatment SPRx gives
