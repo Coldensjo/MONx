@@ -1404,14 +1404,16 @@
 .ss-lootsim-derived {
 	font-size: 11px;
 	color: var(--text-muted);
-	padding-bottom: 8px;
+	padding-bottom: 6px;
 	border-bottom: 1px solid var(--border);
 }
 
+/* Everything above the table is squeezed on purpose: the table is the only part
+   that grows, so a row of padding saved here is another item on screen. */
 .ss-lootsim-headline {
 	display: flex;
 	gap: 24px;
-	padding: 12px 0 4px;
+	padding: 6px 0 2px;
 }
 
 .ss-lootsim-stat {
@@ -1421,7 +1423,7 @@
 
 .ss-lootsim-stat-value {
 	font-family: 'JetBrains Mono', monospace;
-	font-size: 18px;
+	font-size: 16px;
 }
 
 .ss-lootsim-stat-label {
@@ -1429,10 +1431,14 @@
 	color: var(--text-muted);
 }
 
+/* Rides along at the right end of the tab row instead of owning a line. */
 .ss-lootsim-spread {
+	margin-left: auto;
 	font-size: 11px;
 	color: var(--text-muted);
-	padding-bottom: 6px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .ss-lootsim-table {
@@ -1449,7 +1455,7 @@
 	grid-template-columns: 32px minmax(110px, 1fr) 64px 140px 100px 150px;
 	align-items: center;
 	gap: 8px;
-	padding: 3px 8px;
+	padding: 0 8px;
 	font-size: 12px;
 }
 
@@ -1457,17 +1463,9 @@
 	background: var(--surface-2);
 }
 
-/* 32 wide, 20 tall: the sprite keeps its native pixel scale and is cropped top
-   and bottom (object-fit: cover, never scaled down), which packs the rows
-   tighter without turning the items into thumbnails. Item sprites carry
-   transparent margin, so the crop costs almost nothing. */
-.ss-lootsim-row .ss-ed-item-sprite {
-	width: 32px;
-	height: 20px;
-	object-fit: cover;
-}
 
 .ss-lootsim-head {
+	padding: 3px 8px;
 	font-size: 11px;
 	color: var(--text-muted);
 	text-transform: uppercase;
@@ -1500,20 +1498,32 @@
 	gap: 14px;
 	font-size: 11px;
 	color: var(--warn);
-	padding-bottom: 4px;
 }
 
-.ss-lootsim-caption {
+/* The method note is three lines of small print that were pushing the table up
+   the dialog. Collapsed to its summary line; the text is one click away. */
+.ss-lootsim-about {
 	font-size: 10px;
 	color: var(--text-muted);
-	padding: 4px 0;
+	padding: 4px 0 0;
+}
+
+.ss-lootsim-about > summary {
+	cursor: pointer;
+	list-style-position: inside;
+}
+
+.ss-lootsim-about > p {
+	padding-top: 4px;
+	margin: 0;
 }
 
 /* Loot simulator: totals / corpse-log tabs and the log rows. */
 .ss-lootsim-tabs {
 	display: flex;
+	align-items: center;
 	gap: 4px;
-	padding-top: 8px;
+	padding-top: 4px;
 }
 
 .ss-lootsim-tab-on {

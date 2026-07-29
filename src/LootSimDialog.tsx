@@ -319,14 +319,8 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 								<span className="ss-lootsim-stat-label">{timeMode ? 'expected gp/h' : 'expected gp per run'}</span>
 							</div>
 						</div>
-						{result.sessions > 1 && (
-							<div className="ss-lootsim-spread">
-								Across {result.sessions} {timeMode ? 'sessions' : 'runs'}: {Math.round(stats.minRate).toLocaleString()} /{' '}
-								{Math.round(stats.medianRate).toLocaleString()} / {Math.round(stats.maxRate).toLocaleString()}{' '}
-								{timeMode ? 'gp/h' : 'gp'} (min / median / max)
-							</div>
-						)}
-
+						{/* The spread rides in the tab row rather than on a line of its own —
+						    the row has the width to spare, and the table gets the height. */}
 						<div className="ss-lootsim-tabs">
 							<button
 								type="button"
@@ -343,6 +337,15 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 							>
 								Corpse log
 							</button>
+							{result.sessions > 1 && (
+								<span
+									className="ss-lootsim-spread"
+									title={`Across ${result.sessions} ${timeMode ? 'sessions' : 'runs'}, min / median / max`}
+								>
+									{Math.round(stats.minRate).toLocaleString()} / {Math.round(stats.medianRate).toLocaleString()} /{' '}
+									{Math.round(stats.maxRate).toLocaleString()} {timeMode ? 'gp/h' : 'gp'} over {result.sessions}
+								</span>
+							)}
 						</div>
 
 						{view === 'log' ? (
@@ -450,11 +453,14 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 					</>
 				)}
 
-				<div className="ss-lootsim-caption">
-					Per-session totals are averages over the runs. The model mirrors the documented loader rules; the
-					per-entry uniform roll and 1–countmax stack count are inferred from the TFS lineage, not Ironcore
-					source.
-				</div>
+				<details className="ss-lootsim-about">
+					<summary>How these numbers are produced</summary>
+					<p>
+						Per-session totals are averages over the runs. The model mirrors the documented loader rules; the
+						per-entry uniform roll and 1–countmax stack count are inferred from the TFS lineage, not Ironcore
+						source.
+					</p>
+				</details>
 
 				<div className="ss-modal-buttons">
 					<button className="ss-btn ss-btn-ghost" onClick={onClose}>
