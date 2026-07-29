@@ -52,6 +52,8 @@ interface Props {
 	 *  while the Items browser fills the centre column, so this is what makes the
 	 *  §13 "item cell → loot list" drag possible at all. */
 	onLootChange?: (loot: LootEntry[]) => void;
+	/** Shows the Loot heading's Edit button: back to the editor, on the Loot tab. */
+	onGoToLoot?: () => void;
 }
 
 function fmt(n: number): string {
@@ -106,7 +108,15 @@ function PreviewLootRow({ entry, depth, onChange }: LootRowProps) {
 	);
 }
 
-export default function PreviewPanel({ doc, items, lintCount, onOpenLints, onLookType, onLootChange }: Props) {
+export default function PreviewPanel({
+	doc,
+	items,
+	lintCount,
+	onOpenLints,
+	onLookType,
+	onLootChange,
+	onGoToLoot
+}: Props) {
 	const [dir, setDir] = useState(2);
 	const [frame, setFrame] = useState(0);
 	const [playing, setPlaying] = useState(true);
@@ -323,7 +333,19 @@ export default function PreviewPanel({ doc, items, lintCount, onOpenLints, onLoo
 
 				{onLootChange && (
 					<>
-						<div className="ss-details-section">Loot</div>
+						<div className="ss-details-section mx-details-head">
+							Loot
+							{onGoToLoot && (
+								<button
+									type="button"
+									className="ss-btn ss-btn-ghost mx-details-jump"
+									title="Edit in the Loot tab"
+									onClick={onGoToLoot}
+								>
+									Edit
+								</button>
+							)}
+						</div>
 						<div className="ss-loot-mini" {...lootDrop}>
 							{doc.loot.map((entry, i) => (
 								<PreviewLootRow

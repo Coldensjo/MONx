@@ -32,7 +32,7 @@ import {
 } from './monster';
 import Menubar, { type Menu } from './Menubar';
 import { newLootEntry } from './sections/Loot';
-import { SECTION_IDS } from './sections/section';
+import { SECTION_IDS, type SectionId } from './sections/section';
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 import { applyLintFix } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
@@ -88,6 +88,9 @@ export default function Workspace({
 	/** Editor tab preferences; the dialog writes them straight through to storage. */
 	const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
 	const [prefsOpen, setPrefsOpen] = useState(false);
+	/** A tab the editor should show, set from outside it (Loot → Edit). Cleared as
+	 *  soon as the editor honours it. */
+	const [jumpRequest, setJumpRequest] = useState<SectionId | null>(null);
 	const [selected, setSelected] = useState<string | null>(() =>
 		loadSetting('monx.lastMonster', null)
 	);
@@ -1242,6 +1245,8 @@ export default function Workspace({
 								previewUrl={previewUrl}
 								thingAnim={thingAnim}
 								prefs={prefs}
+								jumpRequest={jumpRequest}
+								onJumped={() => setJumpRequest(null)}
 							/>
 						) : (
 							<div className="mx-empty">Select a monster</div>
@@ -1486,6 +1491,15 @@ export default function Workspace({
 						onOpenLints={() => setLintsOpen(true)}
 						onLookType={type => editDoc({ ...doc, look: { ...doc.look, mode: 'type', type } })}
 						onLootChange={loot => editDoc({ ...doc, loot })}
+						// Only offered when the Loot tab exists to jump to.
+						onGoToLoot={
+							prefs.visibleSections.includes('loot')
+								? () => {
+										setView('monsters');
+										setJumpRequest('loot');
+								  }
+								: undefined
+						}
 					/>
 				) : (
 					<aside className="ss-details" />

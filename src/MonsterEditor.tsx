@@ -63,6 +63,12 @@ export interface MonsterEditorProps {
 	thingAnim?: ThingAnimLookup;
 	/** Tab visibility and the tab a monster opens on (Preferences). */
 	prefs?: Prefs;
+	/** A tab the shell wants shown — the preview panel's Loot → Edit button. */
+	jumpRequest?: SectionId | null;
+	/** Called once the request has been honoured, so the caller can clear it. A
+	 *  request left standing would re-fire on every remount and beat the default
+	 *  tab the next time a monster is opened. */
+	onJumped?: () => void;
 }
 
 export function MonsterEditor({
@@ -82,7 +88,9 @@ export function MonsterEditor({
 	onBrowseItems,
 	previewUrl,
 	thingAnim,
-	prefs = DEFAULT_PREFS
+	prefs = DEFAULT_PREFS,
+	jumpRequest = null,
+	onJumped
 }: MonsterEditorProps) {
 	const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => new Set(loadState().collapsed));
 	const [active, setActive] = useState<SectionId>(() => landingSection(prefs) ?? 'identity');
@@ -159,6 +167,18 @@ export function MonsterEditor({
 		const frame = requestAnimationFrame(() => jump(id, 'auto'));
 		return () => cancelAnimationFrame(frame);
 	}, [doc.file, prefs, jump]);
+
+	// A jump asked for from outside the editor. Declared after the landing effect
+	// so that when both fire — clicking Loot → Edit while a browser held the centre
+	// column remounts the editor — the request is the one that sticks.
+	useEffect(() => {
+		if (!jumpRequest) return;
+		const frame = requestAnimationFrame(() => {
+			if (visible.includes(jumpRequest)) jump(jumpRequest, 'auto');
+			onJumped?.();
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [jumpRequest, visible, jump, onJumped]);
 
 	const lintCounts = useMemo(() => {
 		let error = 0;

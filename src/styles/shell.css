@@ -109,6 +109,19 @@
 	max-width: calc(100vw - 64px);
 }
 
+/* A `.ss-details-section` heading that carries an action on its right. */
+.mx-details-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.mx-details-jump {
+	padding: 1px 7px;
+	font-size: 11px;
+}
+
 .mx-prefs-modal {
 	width: 460px;
 	max-width: calc(100vw - 64px);
