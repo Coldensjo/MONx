@@ -260,6 +260,23 @@
 	font-size: 12px;
 }
 
+/* Simulate… sits in the Loot header next to the drop count, where a ghost button
+   read as plain text. It carries the section's surface and an accent-tinted
+   outline so it reads as the one action in that row. */
+.ss-ed-sim {
+	margin-left: 10px;
+	background: var(--surface-2);
+	border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+	color: var(--accent);
+	font-weight: 500;
+}
+
+.ss-ed-sim:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
 .ss-ed-inline {
 	display: flex;
 	align-items: center;

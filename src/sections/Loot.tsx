@@ -307,7 +307,7 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 					{doc.loot.length === 1 ? '1 drop' : `${doc.loot.length} drops`}
 					<button
 						type="button"
-						className="ss-btn ss-btn-ghost ss-ed-mini"
+						className="ss-btn ss-ed-mini ss-ed-sim"
 						title="Simulate a hunting session over this loot — runs on the unsaved buffer"
 						onClick={() => setSimulating(true)}
 					>

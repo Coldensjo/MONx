@@ -85,5 +85,3 @@ GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
 ## Further reading
 
 - [AGENTS.md](AGENTS.md) — architecture, conventions, directory map
-- [MONSTER_EDITOR_REFERENCE.md](MONSTER_EDITOR_REFERENCE.md) — the monster XML format
-- [DESIGN.md](DESIGN.md) — product design
