@@ -496,15 +496,6 @@ export default function Workspace({
 								searchPlaceholder="Search server id or name"
 							/>
 							<div className="ss-loot-tray">
-								<button
-									className="ss-btn"
-									disabled={lootTray.length === 0}
-									onClick={() => void clearTray()}
-									title="Clear the Loot section"
-								>
-									<Trash2 size={14} />
-									Clear
-								</button>
 								<div className="ss-loot-tray-head">
 									Loot
 									{lootTray.length > 0 && <span className="ss-nav-meta">{lootTray.length}</span>}
@@ -526,14 +517,25 @@ export default function Workspace({
 										))
 									)}
 								</div>
-								<button
-									className="ss-btn ss-btn-primary"
-									disabled={!doc || lootTray.length === 0}
-									onClick={addTrayToMonster}
-								>
-									<Plus size={14} />
-									{doc ? `Add loot to ${doc.name}` : 'Add loot'}
-								</button>
+								<div className="ss-loot-tray-actions">
+									<button
+										className="ss-btn ss-btn-primary"
+										disabled={!doc || lootTray.length === 0}
+										onClick={addTrayToMonster}
+									>
+										<Plus size={14} />
+										{doc ? `Add loot to ${doc.name}` : 'Add loot'}
+									</button>
+									<button
+										className="ss-btn"
+										disabled={lootTray.length === 0}
+										onClick={() => void clearTray()}
+										title="Clear the Loot section"
+									>
+										<Trash2 size={14} />
+										Clear
+									</button>
+								</div>
 							</div>
 							{itemMenu && (
 								<div

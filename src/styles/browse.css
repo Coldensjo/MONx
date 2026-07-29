@@ -320,6 +320,18 @@ body.ss-dragging {
 
 /* The hint is a grid item in a min-content column — without the span and
    nowrap it wraps into the two icon rows. */
+/* The two actions stack on the right: Add on top, Clear beneath it. */
+.ss-loot-tray-actions {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ss-loot-tray-actions .ss-btn {
+	justify-content: center;
+}
+
 .ss-loot-tray-empty {
 	grid-row: 1 / -1;
 	white-space: nowrap;
