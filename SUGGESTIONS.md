@@ -5,9 +5,8 @@ within each group. Effort: S (hours), M (a day-ish), L (multi-day).
 
 ## Editor
 
-- **Undo / redo** (M) — the editor is whole-doc immutable updates already
-  (`editDoc` replaces `MonsterDoc`), so a history stack is nearly free: keep
-  the last N docs, Ctrl+Z/Ctrl+Shift+Z walks them. Biggest missing safety net.
+- ~~**Undo / redo**~~ — done: doc-history stack in Workspace, Ctrl+Z /
+  Ctrl+Shift+Z / Ctrl+Y plus an Edit menu; text fields keep their native undo.
 - **Quick-open** (S) — Ctrl+P fuzzy search over monster names/files, jump
   straight to a monster without touching the list.
 - **Fix-all for fixable lints** (M) — lints carry a `fixable` flag; a "fix
@@ -19,13 +18,13 @@ within each group. Effort: S (hours), M (a day-ish), L (multi-day).
 - **Copy/paste blocks between monsters** (M) — copy a spell, loot list or
   resistances block from one monster and paste into another; the doc model
   makes the payload trivial (JSON of the block).
-- **Unsaved-changes guard on close** (S) — closing the window or workspace
-  with a dirty buffer currently loses edits silently.
+- ~~**Unsaved-changes guard on close**~~ — already existed: App.tsx guards
+  both the window close and the workspace close behind a confirm.
 
 ## Browsers
 
-- **Item tooltip with attributes** (S) — `cellTitle` already exists; show
-  weight/attack/armor/worth from the attributes map instead of just the name.
+- ~~**Item tooltip with attributes**~~ — done: multi-line tooltip with
+  attack/def/armor, slot, weight, worth, charges, decay and description.
 - **Copy id / name from the context menu** (S) — right-click → "Copy 2400";
   useful when hopping to scripts or the wiki.
 - **Pinned / favourite items** (M) — a starred set persisted in
@@ -33,15 +32,14 @@ within each group. Effort: S (hours), M (a day-ish), L (multi-day).
   constantly.
 - **Effects/missiles filters** (S) — the outfit filter pattern applied there:
   Animated, Ironcore-only ids (81–104), unreachable-from-XML names (§21).
-- **"Used by" reverse lookup** (M) — right-click an item: which monsters drop
-  it, use it as corpse, or as typeex; the whole corpus is already in memory,
-  so this is a walk over loaded docs. The single most asked question when
-  editing an economy.
+- ~~**"Used by" reverse lookup**~~ — done: right-click an item → Used by…,
+  grouped by loot / corpse / typeex over the loaded corpus (`item_usage`
+  command); rows jump to the monster.
 
 ## Simulation & balance
 
-- **Loot sim: kill-by-kill corpse log** (S) — the model already produces
-  per-kill results; LOOT_SIMULATOR.md §9 defers only the UI.
+- ~~**Loot sim: kill-by-kill corpse log**~~ — done: a Corpse log tab in the
+  simulator showing the first session kill by kill, capped at 2,000 kills.
 - **Loot sim: time-to-first-drop** (M) — "median hunter sees the first crown
   in 4.2 h" across N sessions; the rare-drop question the totals view can't
   answer.

@@ -93,6 +93,7 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 	const [resolved, setResolved] = useState<Map<LootEntry, ItemInfo | null> | null>(null);
 	const [result, setResult] = useState<SimResult | null>(null);
 	const [ranSeed, setRanSeed] = useState<number | null>(null);
+	const [view, setView] = useState<'totals' | 'log'>('totals');
 
 	useEffect(() => saveSetting(SETTINGS_KEY, JSON.stringify(inputs)), [inputs]);
 
@@ -247,6 +248,47 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 							</div>
 						)}
 
+						<div className="ss-lootsim-tabs">
+							<button
+								type="button"
+								className={`ss-btn ss-btn-ghost ss-ed-mini${view === 'totals' ? ' ss-lootsim-tab-on' : ''}`}
+								onClick={() => setView('totals')}
+							>
+								Totals
+							</button>
+							<button
+								type="button"
+								className={`ss-btn ss-btn-ghost ss-ed-mini${view === 'log' ? ' ss-lootsim-tab-on' : ''}`}
+								onClick={() => setView('log')}
+								title="Kill-by-kill corpses of the first session"
+							>
+								Corpse log
+							</button>
+						</div>
+
+						{view === 'log' ? (
+							<div className="ss-lootsim-table ss-lootsim-log">
+								{result.log.map((drops, k) => (
+									<div className="ss-lootsim-log-row" key={k}>
+										<span className="ss-lootsim-log-kill mono">#{k + 1}</span>
+										{drops.length === 0 ? (
+											<span className="ss-lootsim-log-nothing">—</span>
+										) : (
+											drops.map((d, i) => (
+												<span key={i} className="ss-lootsim-log-drop" title={d.name}>
+													<ItemSprite serverId={d.serverId} size={24} />
+													{d.count > 1 && <span className="mono">×{d.count}</span>}
+												</span>
+											))
+										)}
+									</div>
+								))}
+								{result.logTruncated && (
+									<div className="ss-lootsim-empty">Log capped at the first {result.log.length.toLocaleString()} kills.</div>
+								)}
+								{result.log.length === 0 && <div className="ss-lootsim-empty">No kills in the session.</div>}
+							</div>
+						) : (
 						<div className="ss-lootsim-table">
 							<div className="ss-lootsim-row ss-lootsim-head">
 								<span />
@@ -286,6 +328,7 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 							})}
 							{result.items.length === 0 && <div className="ss-lootsim-empty">Nothing dropped.</div>}
 						</div>
+						)}
 
 						{(result.deadEntries > 0 || result.unpricedKinds > 0) && (
 							<div className="ss-lootsim-notes">

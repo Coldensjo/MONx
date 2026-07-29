@@ -483,6 +483,56 @@ fn get_item(state: State<WorkspaceState>, server_id: u32) -> Result<ItemInfo, St
         .ok_or_else(|| format!("No item with server id {server_id}"))
 }
 
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct UsageRef {
+    file: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ItemUsage {
+    loot: Vec<UsageRef>,
+    corpse: Vec<UsageRef>,
+    typeex: Vec<UsageRef>,
+}
+
+/// Reverse lookup over the loaded corpus: every monster that drops the item,
+/// uses it as its corpse, or wears it as a typeex look. Name-only loot entries
+/// count when the name resolves to exactly this id — the same resolution the
+/// loader applies (§13).
+#[tauri::command]
+fn item_usage(state: State<WorkspaceState>, server_id: u32) -> Result<ItemUsage, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+
+    fn in_loot(entries: &[monster::LootEntry], sid: u32, items: &items::ItemIndex) -> bool {
+        entries.iter().any(|e| {
+            e.id == Some(sid as i64)
+                || (e.id.is_none()
+                    && e.name
+                        .as_deref()
+                        .map_or(false, |n| items.ids_for_name(n) == [sid]))
+                || in_loot(&e.children, sid, items)
+        })
+    }
+
+    let mut usage = ItemUsage { loot: vec![], corpse: vec![], typeex: vec![] };
+    for doc in &ws.docs {
+        let r = UsageRef { file: doc.file.clone(), name: doc.name.clone() };
+        if in_loot(&doc.loot, server_id, &ws.items) {
+            usage.loot.push(r.clone());
+        }
+        if doc.look.corpse == server_id {
+            usage.corpse.push(r.clone());
+        }
+        if doc.look.typeex == Some(server_id) {
+            usage.typeex.push(r);
+        }
+    }
+    Ok(usage)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let spr_manager: SprManagerState = Arc::new(RwLock::new(SprManager::new()));
@@ -522,7 +572,8 @@ pub fn run() {
             search_items,
             get_item,
             balance_bands,
-            pin_loot_ids
+            pin_loot_ids,
+            item_usage
         ])
         .run(tauri::generate_context!())
         .expect("error while running MONx");

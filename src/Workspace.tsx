@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirm } from '@tauri-apps/plugin-dialog';
-import { Package, PersonStanding, Plus, Save, Skull, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { Package, PersonStanding, Plus, Save, Skull, Sparkles, Trash2, Users, Wand2 } from 'lucide-react';
 import {
 	getItem,
 	getMonster,
 	itemsRowUrl,
 	itemUrl,
+	itemUsage,
 	lintMonster,
 	lintWorkspace,
 	listMonsterGroups,
@@ -20,6 +21,7 @@ import {
 	thingUrlFor,
 	type SpellName,
 	type ItemInfo,
+	type ItemUsage,
 	type Lint,
 	type MonsterDoc,
 	type MonsterSummary,
@@ -137,6 +139,9 @@ export default function Workspace({
 			.then(d => {
 				if (cancelled) return;
 				setDoc(d);
+				// A fresh buffer starts a fresh history — undo must never cross files.
+				undoRef.current = [];
+				redoRef.current = [];
 				onDirtyChange(false);
 				return lintMonster(d).then(l => !cancelled && setMonsterLints(l));
 			})
@@ -193,8 +198,22 @@ export default function Workspace({
 		[showToast]
 	);
 
+	// ---- Undo / redo ----
+	// The editor already works in whole-doc immutable updates, so history is a
+	// stack of previous docs. Cleared whenever a monster is (re)loaded.
+	const docRef = useRef<MonsterDoc | null>(doc);
+	docRef.current = doc;
+	const undoRef = useRef<MonsterDoc[]>([]);
+	const redoRef = useRef<MonsterDoc[]>([]);
+	const HISTORY_CAP = 100;
+
 	const editDoc = useCallback(
 		(next: MonsterDoc) => {
+			if (docRef.current) {
+				undoRef.current.push(docRef.current);
+				if (undoRef.current.length > HISTORY_CAP) undoRef.current.shift();
+				redoRef.current = [];
+			}
 			setDoc(next);
 			onDirtyChange(true);
 			lintMonster(next)
@@ -203,6 +222,36 @@ export default function Workspace({
 		},
 		[onDirtyChange]
 	);
+
+	const applyHistory = useCallback(
+		(from: MonsterDoc[], to: MonsterDoc[]) => {
+			const target = from.pop();
+			if (!target || !docRef.current) return;
+			to.push(docRef.current);
+			setDoc(target);
+			onDirtyChange(true);
+			lintMonster(target)
+				.then(setMonsterLints)
+				.catch(() => {});
+		},
+		[onDirtyChange]
+	);
+	const undoEdit = useCallback(() => applyHistory(undoRef.current, redoRef.current), [applyHistory]);
+	const redoEdit = useCallback(() => applyHistory(redoRef.current, undoRef.current), [applyHistory]);
+
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' && e.key.toLowerCase() !== 'y') return;
+			// Text fields keep their native undo; the doc stack takes over elsewhere.
+			const tag = (document.activeElement?.tagName || '').toLowerCase();
+			if (tag === 'input' || tag === 'textarea') return;
+			e.preventDefault();
+			if (e.key.toLowerCase() === 'y' || e.shiftKey) redoEdit();
+			else undoEdit();
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, [undoEdit, redoEdit]);
 
 	// Double-clicking an outfit in the browser adopts it as the monster's look,
 	// after a confirmation — same mutation as dropping it on the Look section.
@@ -326,6 +375,13 @@ export default function Workspace({
 			]
 		},
 		{
+			label: 'Edit',
+			items: [
+				{ label: 'Undo', shortcut: 'Ctrl+Z', disabled: undoRef.current.length === 0, onSelect: undoEdit },
+				{ label: 'Redo', shortcut: 'Ctrl+Shift+Z', disabled: redoRef.current.length === 0, onSelect: redoEdit }
+			]
+		},
+		{
 			label: 'Tools',
 			items: [
 				{
@@ -363,6 +419,28 @@ export default function Workspace({
 	const itemLabel = useCallback((i: ItemInfo) => i.name || `#${i.serverId}`, []);
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
+	// Multi-line tooltip from the raw items.xml attributes — weight is in
+	// hundredths of an oz, as the client displays it.
+	const itemCellTitle = useCallback((i: ItemInfo) => {
+		const a = i.attributes;
+		const lines = [`${i.name || `#${i.serverId}`}  (#${i.serverId})`];
+		const combat: string[] = [];
+		if (a.attack) combat.push(`atk ${a.attack}`);
+		if (a.defense) combat.push(`def ${a.defense}${a.extradef ? ` ${Number(a.extradef) >= 0 ? '+' : ''}${a.extradef}` : ''}`);
+		if (a.armor) combat.push(`arm ${a.armor}`);
+		if (a.weaponType) combat.push(a.weaponType);
+		if (a.slotType) combat.push(a.slotType);
+		if (combat.length > 0) lines.push(combat.join(' · '));
+		const misc: string[] = [];
+		if (a.weight) misc.push(`${(Number(a.weight) / 100).toLocaleString()} oz`);
+		if (a.worth) misc.push(`worth ${Number(a.worth).toLocaleString()} gp`);
+		if (a.charges) misc.push(`${a.charges} charges`);
+		if (a.containerSize) misc.push(`${a.containerSize} slots`);
+		if (a.duration) misc.push(`decays in ${a.duration}s`);
+		if (misc.length > 0) lines.push(misc.join(' · '));
+		if (a.description) lines.push(a.description);
+		return lines.join('\n');
+	}, []);
 	const itemCellFrames = useCallback((i: ItemInfo) => itemFrames.get(i.clientId) ?? 1, [itemFrames]);
 	const itemCellUrl = useCallback(
 		(i: ItemInfo, frame: number) =>
@@ -517,6 +595,22 @@ export default function Workspace({
 		setItemMenu({ x: e.clientX, y: e.clientY, item, items: selected });
 	}, []);
 
+	/** Reverse-lookup dialog: `usage` is null while the backend walk runs. */
+	const [usageDialog, setUsageDialog] = useState<{ item: ItemInfo; usage: ItemUsage | null } | null>(null);
+
+	const openUsage = useCallback(
+		async (item: ItemInfo) => {
+			setUsageDialog({ item, usage: null });
+			try {
+				setUsageDialog({ item, usage: await itemUsage(item.serverId) });
+			} catch (e) {
+				showToast('error', String(e));
+				setUsageDialog(null);
+			}
+		},
+		[showToast]
+	);
+
 	const addToTray = useCallback(
 		(picked: ItemInfo[]) => {
 			setLootTray(prev => {
@@ -669,6 +763,7 @@ export default function Workspace({
 								cellLabel={itemLabel}
 								searchText={itemSearchText}
 								searchId={itemSearchId}
+								cellTitle={itemCellTitle}
 								cellFrames={itemCellFrames}
 								cellUrl={itemCellUrl}
 								filters={itemFilters}
@@ -744,6 +839,16 @@ export default function Workspace({
 									>
 										<Package size={14} />
 										Add {itemMenu.items.length === 1 ? 'item' : `${itemMenu.items.length} items`} to Loot
+									</button>
+									<button
+										className="ss-menu-item"
+										onClick={() => {
+											setItemMenu(null);
+											void openUsage(itemMenu.item);
+										}}
+									>
+										<Users size={14} />
+										Used by…
 									</button>
 									{doc && (
 										<>
@@ -882,6 +987,61 @@ export default function Workspace({
 					{saving ? 'Saving…' : dirty ? 'Save •' : 'Save'}
 				</button>
 			</div>
+
+			{usageDialog && (
+				<div className="ss-backdrop" onMouseDown={() => setUsageDialog(null)}>
+					<div className="ss-modal ss-usage-modal" onMouseDown={e => e.stopPropagation()}>
+						<div className="ss-modal-title">
+							<img src={itemUrl(usageDialog.item.serverId, 32)} width={32} height={32} alt="" />
+							Used by — {usageDialog.item.name || `#${usageDialog.item.serverId}`}
+						</div>
+						{!usageDialog.usage ? (
+							<div className="ss-modal-desc">Scanning the corpus…</div>
+						) : usageDialog.usage.loot.length + usageDialog.usage.corpse.length + usageDialog.usage.typeex.length === 0 ? (
+							<div className="ss-modal-desc">No monster references this item.</div>
+						) : (
+							(
+								[
+									['Dropped as loot', usageDialog.usage.loot],
+									['Corpse of', usageDialog.usage.corpse],
+									['Worn as typeex', usageDialog.usage.typeex]
+								] as const
+							).map(
+								([title, refs]) =>
+									refs.length > 0 && (
+										<div key={title} className="ss-usage-group">
+											<div className="ss-usage-title">
+												{title} · {refs.length}
+											</div>
+											<div className="ss-usage-list">
+												{refs.map(r => (
+													<button
+														key={r.file}
+														className="ss-usage-row"
+														title={r.file}
+														onClick={() => {
+															setUsageDialog(null);
+															setSelected(r.file);
+															setView('monsters');
+														}}
+													>
+														{r.name}
+														<span className="ss-usage-file mono">{r.file}</span>
+													</button>
+												))}
+											</div>
+										</div>
+									)
+							)
+						)}
+						<div className="ss-modal-buttons">
+							<button className="ss-btn ss-btn-ghost" onClick={() => setUsageDialog(null)}>
+								Close
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 
 			{tool && (
 				<PinLootDialog

@@ -265,6 +265,20 @@ export interface PinReport {
 	files: number;
 }
 
+// ---------- Item usage ----------
+
+export interface UsageRef {
+	file: string;
+	name: string;
+}
+
+/** Reverse lookup: every monster that references the item, by role. */
+export interface ItemUsage {
+	loot: UsageRef[];
+	corpse: UsageRef[];
+	typeex: UsageRef[];
+}
+
 // ---------- Spells ----------
 
 export interface SpellName {
@@ -396,6 +410,10 @@ export const tauriItemIndex: ItemIndex = {
 		}
 	}
 };
+
+export function itemUsage(serverId: number): Promise<ItemUsage> {
+	return invoke<ItemUsage>('item_usage', { serverId });
+}
 
 export function balanceBands(): Promise<BalanceBand[]> {
 	return invoke<BalanceBand[]>('balance_bands', {});

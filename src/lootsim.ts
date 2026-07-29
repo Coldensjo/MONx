@@ -60,6 +60,12 @@ export interface ItemStat {
 	priced: boolean;
 }
 
+export interface KillDrop {
+	serverId: number;
+	name: string;
+	count: number;
+}
+
 export interface SimResult {
 	killsPerSession: number;
 	sessions: number;
@@ -70,7 +76,14 @@ export interface SimResult {
 	deadEntries: number;
 	/** Distinct dropped item kinds with no usable `worth`. */
 	unpricedKinds: number;
+	/** Corpse log of the FIRST session only, one element per kill (empty kill =
+	 *  empty array), capped at LOG_CAP kills to bound memory. */
+	log: KillDrop[][];
+	logTruncated: boolean;
 }
+
+/** Corpse-log cap: past this the log stops recording (totals keep counting). */
+export const LOG_CAP = 2000;
 
 /** True when the loader would reject the entry before it could ever roll. */
 export function entryIsDead(entry: LootEntry, resolve: Resolve): boolean {
@@ -129,7 +142,11 @@ export function simulate(loot: LootEntry[], resolve: Resolve, params: SimParams)
 	const acc = new Map<number, Acc>();
 	const perSessionGp: number[] = [];
 
+	const log: KillDrop[][] = [];
+	let killLog: KillDrop[] | null = null;
+
 	const record = (info: ItemInfo, count: number, sessionGp: { gp: number }) => {
+		killLog?.push({ serverId: info.serverId, name: info.name || `#${info.serverId}`, count });
 		let a = acc.get(info.serverId);
 		if (!a) {
 			const worth = Number(info.attributes.worth);
@@ -160,9 +177,16 @@ export function simulate(loot: LootEntry[], resolve: Resolve, params: SimParams)
 
 	for (let s = 0; s < sessions; s++) {
 		const sessionGp = { gp: 0 };
-		for (let k = 0; k < killsPerSession; k++) rollEntries(loot, sessionGp);
+		for (let k = 0; k < killsPerSession; k++) {
+			// Only the first session is logged — it is "the hunt"; the rest exist
+			// for the spread.
+			killLog = s === 0 && k < LOG_CAP ? [] : null;
+			rollEntries(loot, sessionGp);
+			if (killLog) log.push(killLog);
+		}
 		perSessionGp.push(sessionGp.gp);
 	}
+	killLog = null;
 
 	const configured = configuredRates(loot, resolve, params.lootRate);
 	const items: ItemStat[] = [...acc.values()]
@@ -183,6 +207,8 @@ export function simulate(loot: LootEntry[], resolve: Resolve, params: SimParams)
 		perSessionGp,
 		items,
 		deadEntries: countDeadEntries(loot, resolve),
-		unpricedKinds: items.filter(i => !i.priced).length
+		unpricedKinds: items.filter(i => !i.priced).length,
+		log,
+		logTruncated: killsPerSession > LOG_CAP
 	};
 }

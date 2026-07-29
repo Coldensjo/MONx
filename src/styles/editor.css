@@ -1471,3 +1471,45 @@
 	color: var(--text-muted);
 	padding: 4px 0;
 }
+
+/* Loot simulator: totals / corpse-log tabs and the log rows. */
+.ss-lootsim-tabs {
+	display: flex;
+	gap: 4px;
+	padding-top: 8px;
+}
+
+.ss-lootsim-tab-on {
+	color: var(--accent);
+	background: var(--accent-dim);
+}
+
+.ss-lootsim-log-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 8px;
+	min-height: 28px;
+	font-size: 12px;
+}
+
+.ss-lootsim-log-row:nth-child(even) {
+	background: var(--surface-2);
+}
+
+.ss-lootsim-log-kill {
+	flex: none;
+	width: 52px;
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
+.ss-lootsim-log-nothing {
+	color: var(--text-muted);
+}
+
+.ss-lootsim-log-drop {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
