@@ -139,12 +139,22 @@ export default function Workspace({
 	} | null>(null);
 	const label = workspaceLabel(info.paths.monsters);
 
-	// Fall back to the first monster when the remembered one is gone.
+	// The remembered monster opens once, on the first list the workspace hands
+	// over; after that an empty selection is a state of its own. Closing the last
+	// tab has to leave the editor blank — re-opening the first monster from here
+	// was what made that tab impossible to close.
+	const openedFirstRef = useRef(false);
 	useEffect(() => {
 		if (monsters.length === 0) return;
-		if (!selected || !monsters.some(m => m.file === selected)) {
-			setSelected(monsters[0].file);
+		const exists = selected !== null && monsters.some(m => m.file === selected);
+		if (openedFirstRef.current) {
+			// A selection that vanished (renamed or deleted elsewhere) clears rather
+			// than jumping to an unrelated monster.
+			if (selected !== null && !exists) setSelected(null);
+			return;
 		}
+		openedFirstRef.current = true;
+		if (!exists) setSelected(monsters[0].file);
 	}, [monsters, selected]);
 
 	// ---- Editor tabs ----
@@ -193,7 +203,17 @@ export default function Workspace({
 	}, [monsters]);
 
 	useEffect(() => {
-		if (!selected) return;
+		if (!selected) {
+			// Nothing open: the editor shows its empty state, and the preview panel
+			// with it. The remembered file is left alone so a restart still lands
+			// where the work was.
+			setDoc(null);
+			setMonsterLints([]);
+			onOpenFile(null);
+			undoRef.current = [];
+			redoRef.current = [];
+			return;
+		}
 		saveSetting('monx.lastMonster', selected);
 		onOpenFile(selected);
 		// A fresh buffer starts a fresh history — undo must never cross files.
@@ -266,8 +286,8 @@ export default function Workspace({
 			setTabs(prev => {
 				const next = prev.filter(f => !closing.has(f));
 				if (selected && closing.has(selected)) {
-					// The nearest survivor takes over; with no tabs left the list's
-					// own fallback reopens the first monster.
+					// The nearest survivor takes over; closing the last tab leaves
+					// nothing open, which is a legitimate place to be.
 					const idx = prev.indexOf(selected);
 					let fallback: string | null = null;
 					for (let d = 1; d < prev.length && fallback === null; d++) {
