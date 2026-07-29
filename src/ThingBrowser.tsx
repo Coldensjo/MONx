@@ -135,9 +135,9 @@ interface RowProps<T> {
 	selectedKeys: Set<CellKey>;
 	primaryKey: CellKey | null;
 	draggable: boolean;
-	/** Multi-select grids: only an already-selected cell starts a dnd carry, so a
-	 *  plain drag from anywhere else stays a paint-selection. */
-	dragFromSelection: boolean;
+	/** Multi-select grids: a modifier held over a cell is a selection gesture, so
+	 *  the press must not also start a dnd carry. */
+	modifierSelects: boolean;
 	props: ThingBrowserProps<T>;
 	onCellMouseDown: (e: React.MouseEvent, key: CellKey) => void;
 	onCellContextMenu: (e: React.MouseEvent, key: CellKey) => void;
@@ -158,7 +158,7 @@ function GridRowInner<T>({
 	selectedKeys,
 	primaryKey,
 	draggable,
-	dragFromSelection,
+	modifierSelects,
 	props,
 	onCellMouseDown,
 	onCellContextMenu,
@@ -194,7 +194,7 @@ function GridRowInner<T>({
 						selected={selectedKeys.has(key)}
 						primary={primaryKey === key}
 						draggable={draggable}
-						dragFromSelection={dragFromSelection}
+						modifierSelects={modifierSelects}
 						dragPayload={props.dragPayload}
 						dragGhostUrl={props.dragGhostUrl}
 						onMouseDown={onCellMouseDown}
@@ -227,7 +227,7 @@ interface BrowserCellProps<T> {
 	selected: boolean;
 	primary: boolean;
 	draggable: boolean;
-	dragFromSelection: boolean;
+	modifierSelects: boolean;
 	dragPayload?: (item: T) => DragPayload | null;
 	dragGhostUrl?: (item: T) => string;
 	onMouseDown: (e: React.MouseEvent, key: CellKey) => void;
@@ -253,7 +253,7 @@ function BrowserCellInner<T>({
 	selected,
 	primary,
 	draggable,
-	dragFromSelection,
+	modifierSelects,
 	dragPayload,
 	dragGhostUrl,
 	onMouseDown,
@@ -264,16 +264,16 @@ function BrowserCellInner<T>({
 		() => (dragPayload ? dragPayload(item) : null),
 		{ ghostUrl: dragGhostUrl ? dragGhostUrl(item) : undefined, ghostSize: zoom }
 	);
-	// In a multi-select grid a plain drag paints the selection, so the carry only
-	// arms from a cell that was already selected before this press (pointerdown
-	// fires before the mousedown that reselects) and only without modifiers —
-	// ctrl toggles, shift ranges, alt marquees.
+	// A plain press on any cell arms the carry — dragging an item out to the loot
+	// list is the gesture this grid exists for, and it must work on the first
+	// press, selected or not. Modifiers are selection gestures instead: ctrl
+	// toggles, shift ranges, alt marquees.
 	const carryDown = useCallback(
 		(e: React.PointerEvent) => {
-			if (dragFromSelection && (!selected || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey)) return;
+			if (modifierSelects && (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey)) return;
 			drag.onPointerDown(e);
 		},
-		[dragFromSelection, selected, drag]
+		[modifierSelects, drag]
 	);
 	const dragProps = draggable && dragPayload ? { onPointerDown: carryDown } : null;
 	return (
@@ -446,20 +446,9 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		if (item !== undefined) onSelectRef.current?.(item);
 	}, []);
 
-	/** The key of the cell under a point (in ss-grid-inner coordinates), or null. */
-	const cellIdAt = useCallback((x: number, y: number): CellKey | null => {
-		const { cols: gc, cellW: gw, cellH: gh, count } = geomRef.current;
-		const col = Math.floor((x - GRID_PAD) / gw);
-		const row = Math.floor((y - GRID_PAD) / gh);
-		if (col < 0 || col >= gc || row < 0) return null;
-		const idx = row * gc + col;
-		if (idx < 0 || idx >= count) return null;
-		return orderedKeysRef.current[idx];
-	}, []);
-
-	// ---- Plain click-drag "paint" selection (additive, never deselects) ----
-	const [painting, setPainting] = useState(false);
-
+	// Selection is click, ctrl+click, shift+click and alt+marquee. Dragging across
+	// cells deliberately does not select: the same gesture carries an item out to
+	// the loot list, and one press cannot mean both.
 	const handleCellMouseDown = useCallback(
 		(e: React.MouseEvent, key: CellKey) => {
 			if (e.button !== 0) return;
@@ -491,7 +480,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 				return; // keep the anchor so the range can be re-dragged
 			}
 			if (additive) {
-				// Ctrl+click/drag: toggle the cell and enable painting to add more via drag
+				// Ctrl+click toggles this cell in and out of the selection.
 				e.preventDefault();
 				setSelectedKeys(prev => {
 					const next = new Set(prev);
@@ -499,19 +488,12 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 					else next.add(key);
 					return next;
 				});
-				setPainting(true);
 			} else {
-				// Plain press: select this one and begin a paint-drag. Moving the
-				// cursor over more cells adds them; re-crossing never removes.
-				// In a draggable grid the same gesture also means "carry this cell
-				// out", so the press is split by prior selection: an unselected cell
-				// paints, an already-selected one starts the dnd carry instead (the
-				// cell gates its own pointerdown the same way) — preventDefault would
-				// kill the caret/focus handoff the carry needs.
-				const carries = draggable && selectedKeysRef.current.has(key);
-				if (!carries) e.preventDefault();
+				// Plain press: select this one. In a draggable grid the press is also
+				// where a carry arms (the cell's own pointerdown), and preventDefault
+				// would kill the caret/focus handoff that needs.
+				if (!draggable) e.preventDefault();
 				setSelectedKeys(new Set([key]));
-				setPainting(!carries);
 			}
 			setAnchorKey(key);
 			setPrimaryKey(key);
@@ -616,45 +598,15 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 				setMarquee({ x0: x, y0: y, x1: x, y1: y });
 				setDragging(true);
 			} else {
-				// A plain press on empty grid space clears the selection and starts a
-				// paint-drag from nothing (dragging into cells then adds them). No
-				// carry can start here — there is no cell under the press — so this
-				// is safe even in a draggable grid.
+				// A plain press on empty grid space clears the selection.
 				const target = e.target as HTMLElement;
 				if (target === el || target.classList.contains('ss-grid-inner')) {
 					setSelectedKeys(new Set());
-					setPainting(true);
 				}
 			}
 		},
 		[]
 	);
-
-	useEffect(() => {
-		if (!painting) return;
-		const el = scrollRef.current;
-		if (!el) return;
-		const onMove = (ev: MouseEvent) => {
-			const rect = el.getBoundingClientRect();
-			const x = ev.clientX - rect.left + el.scrollLeft;
-			const y = ev.clientY - rect.top + el.scrollTop;
-			const key = cellIdAt(x, y);
-			if (key === null) return;
-			setSelectedKeys(prev => {
-				if (prev.has(key)) return prev;
-				const next = new Set(prev);
-				next.add(key);
-				return next;
-			});
-		};
-		const onUp = () => setPainting(false);
-		window.addEventListener('mousemove', onMove);
-		window.addEventListener('mouseup', onUp);
-		return () => {
-			window.removeEventListener('mousemove', onMove);
-			window.removeEventListener('mouseup', onUp);
-		};
-	}, [painting, cellIdAt]);
 
 	useEffect(() => {
 		if (!dragging) return;
@@ -843,7 +795,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 			</div>
 
 			<div
-				className={`ss-grid-wrap${dragging ? ' ss-grid-wrap-dragging' : ''}${painting ? ' ss-grid-wrap-painting' : ''}`}
+				className={`ss-grid-wrap${dragging ? ' ss-grid-wrap-dragging' : ''}`}
 				ref={scrollRef}
 				onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
 				onMouseDown={handleGridMouseDown}
@@ -863,7 +815,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 							selectedKeys={selectedKeys}
 							primaryKey={primaryKey}
 							draggable={draggable}
-							dragFromSelection={multi && draggable}
+							modifierSelects={multi && draggable}
 							props={props}
 							onCellMouseDown={handleCellMouseDown}
 							onCellContextMenu={handleCellContextMenu}
