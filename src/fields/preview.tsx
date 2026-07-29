@@ -34,6 +34,10 @@ export interface ThingAnim {
 	frames: number;
 	patternX: number;
 	patternY: number;
+	/** The dat's animateAlways flag. On an outfit it means frame 0 is part of the
+	 *  animation rather than a standing pose — a fire elemental burns while it
+	 *  stands still, so skipping frame 0 leaves it frozen. */
+	animateAlways: boolean;
 }
 
 export type ThingAnimLookup = (kind: 'effect' | 'missile' | 'outfit' | 'item', id: number) => Promise<ThingAnim | null>;

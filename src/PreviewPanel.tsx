@@ -25,6 +25,7 @@ import {
 	type BalanceVerdict
 } from './derive';
 import { useDropTarget } from './dnd';
+import { useThingAnim } from './fields/preview';
 
 // The right-hand column: the monster's look rendered live, the numbers the XML
 // never states, and an advisory balance hint (DESIGN §14).
@@ -38,7 +39,9 @@ const DIRECTIONS = [
 ];
 
 const PREVIEW_CELL = 96;
-const FRAME_COUNT = 3;
+/** Frames to assume while the dat lookup is still in flight — the old fixed
+ *  count, which is what most outfits have. */
+const FALLBACK_FRAMES = 3;
 
 interface Props {
 	doc: MonsterDoc;
@@ -138,18 +141,28 @@ export default function PreviewPanel({
 		};
 	}, []);
 
+	// The outfit's own frame count, so a Beholder's nine frames all play instead
+	// of the three every outfit used to be assumed to have.
+	const outfitAnim = useThingAnim('outfit', typeex ? null : doc.look.type);
+	const frames = Math.max(1, outfitAnim?.frames ?? FALLBACK_FRAMES);
+	// Frame 0 is the standing pose and the walk cycle is 1..n-1 — except under
+	// animateAlways, where the whole strip is the animation (a fire elemental
+	// burns standing still, and skipping frame 0 is what left it frozen).
+	const firstFrame = outfitAnim?.animateAlways || frames < 2 ? 0 : 1;
+
 	// `typeex` renders an item, which has nothing to animate.
 	useEffect(() => {
-		if (!playing || typeex) {
-			setFrame(0);
+		if (!playing || typeex || frames <= firstFrame + 1) {
+			setFrame(firstFrame);
 			return;
 		}
-		// Frame 0 is the standing pose; the walk cycle is frames 1..n-1, same as
-		// SPRx's outfit animation.
-		setFrame(1);
-		const t = setInterval(() => setFrame(f => (f + 1 < FRAME_COUNT ? f + 1 : 1)), ANIM_INTERVAL_MS);
+		setFrame(firstFrame);
+		const t = setInterval(
+			() => setFrame(f => (f + 1 < frames ? f + 1 : firstFrame)),
+			ANIM_INTERVAL_MS
+		);
 		return () => clearInterval(t);
-	}, [playing, typeex]);
+	}, [playing, typeex, frames, firstFrame]);
 
 	const drop = useDropTarget(['outfit'], p => {
 		if (p.kind === 'outfit') onLookType?.(p.type);
@@ -165,10 +178,10 @@ export default function PreviewPanel({
 	// animation never issues a request — the same trick ThingsView uses.
 	const frameUrls = useMemo(
 		() =>
-			Array.from({ length: typeex ? 1 : FRAME_COUNT }, (_, f) =>
+			Array.from({ length: typeex ? 1 : frames }, (_, f) =>
 				lookUrl(doc.look, { dir, frame: f, cell: PREVIEW_CELL })
 			),
-		[doc.look, dir, typeex]
+		[doc.look, dir, typeex, frames]
 	);
 
 	const maxMelee = monsterMaxMelee(doc);

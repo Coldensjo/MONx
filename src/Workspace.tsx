@@ -66,6 +66,12 @@ type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
 /** The three nav entries backed by a dat category, and that category's own name. */
 type ThingView = 'outfits' | 'effects' | 'missiles';
 
+/** True when a thing's first frame is a standing pose to be left out of the
+ *  loop: outfits only, and never under animateAlways. */
+function skipsStandingFrame(t: ThingSummary): boolean {
+	return t.frames > 1 && !t.animateAlways;
+}
+
 const LINT_SEVERITY_LABEL: Record<LintSeverity, string> = {
 	error: 'errors',
 	warning: 'warnings',
@@ -369,7 +375,12 @@ export default function Workspace({
 			if (kind === 'item') return null;
 			try {
 				const t = await getThing(info.datPath, kind, id);
-				return { frames: t.frames, patternX: t.patternX, patternY: t.patternY };
+				return {
+					frames: t.frames,
+					patternX: t.patternX,
+					patternY: t.patternY,
+					animateAlways: t.animateAlways
+				};
 			} catch {
 				// An unknown id is a lint elsewhere; here it just means "don't animate".
 				return null;
@@ -1542,11 +1553,13 @@ export default function Workspace({
 							cellKey={t => t.id}
 							cellLabel={t => t.name ?? String(t.id)}
 							// Outfits: frame 0 is the standing pose, so loop the walking
-							// frames (1..n-1), exactly as SPRx does.
-							cellFrames={t => (view === 'outfits' && t.frames > 1 ? t.frames - 1 : t.frames)}
+							// frames (1..n-1), exactly as SPRx does — unless the dat marks the
+							// outfit animateAlways, where frame 0 belongs to the animation and
+							// dropping it is what leaves a fire elemental standing unlit.
+							cellFrames={t => (view === 'outfits' && skipsStandingFrame(t) ? t.frames - 1 : t.frames)}
 							cellUrl={(t, frame) =>
 								thingUrlFor(info.sprPath, info.datPath, THING_CAT[view as ThingView], t.id, info.transparent, {
-									frame: view === 'outfits' && t.frames > 1 ? frame + 1 : frame
+									frame: view === 'outfits' && skipsStandingFrame(t) ? frame + 1 : frame
 								})
 							}
 							searchId={t => t.id}
