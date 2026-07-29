@@ -223,17 +223,30 @@ export default function Workspace({
 			// A clean preview tab gives way to the new one; anything pinned or
 			// dirty stays and the new tab appends.
 			const preview = previewRef.current;
-			if (
+			const replaces =
 				preview !== null &&
 				preview !== selected &&
 				tabsRef.current.includes(preview) &&
-				!dirtyFilesRef.current.has(preview)
-			) {
-				buffersRef.current.delete(preview);
-				setTabs(prev => prev.map(f => (f === preview ? selected : f)));
-			} else {
-				setTabs(prev => [...prev, selected]);
-			}
+				!dirtyFilesRef.current.has(preview);
+			if (replaces) buffersRef.current.delete(preview);
+			const next = replaces
+				? tabsRef.current.map(f => (f === preview ? selected : f))
+				: [...tabsRef.current, selected];
+			// The ref is written through rather than left to the next render: this
+			// effect can run twice for one selection (StrictMode double-invokes it,
+			// and so does a dev reload), and a stale tabsRef made the second run
+			// append the same file again — the duplicate tabs.
+			tabsRef.current = next;
+			previewRef.current = selected;
+			// Still an updater, so a close that landed in the same batch is not
+			// clobbered, and still idempotent, so a repeated run is a no-op.
+			setTabs(prev =>
+				prev.includes(selected)
+					? prev
+					: replaces && prev.includes(preview)
+						? prev.map(f => (f === preview ? selected : f))
+						: [...prev, selected]
+			);
 			setPreviewTab(selected);
 		}
 		// A corpus tool rewrote files on disk: every buffer is stale. Tools are
