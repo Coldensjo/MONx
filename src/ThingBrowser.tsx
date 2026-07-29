@@ -11,7 +11,12 @@ import { useDragSource, type DragPayload } from './dnd';
 
 export const ZOOM_LEVELS = [32, 48, 64, 96, 128];
 export const GRID_PAD = 8;
+/** Outfit and effect cadence — roughly a walk cycle. */
 export const ANIM_INTERVAL_MS = 220;
+/** Items hold each phase far longer than a creature does: the client steps an
+ *  item's animation on its own slow tick, so a torch or a magic wall at the
+ *  outfit cadence reads as twice the speed it has in game. */
+export const ITEM_ANIM_INTERVAL_MS = 500;
 
 export type CellKey = string | number;
 
@@ -680,9 +685,12 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 			setGridFrame(0);
 			return;
 		}
-		const t = setInterval(() => setGridFrame(f => f + 1), ANIM_INTERVAL_MS);
+		const t = setInterval(
+			() => setGridFrame(f => f + 1),
+			view === 'items' ? ITEM_ANIM_INTERVAL_MS : ANIM_INTERVAL_MS
+		);
 		return () => clearInterval(t);
-	}, [gridAnimates]);
+	}, [gridAnimates, view]);
 
 	return (
 		<>
