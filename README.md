@@ -1,6 +1,6 @@
 # MONx
 
-A monster XML editor for the Ironcore Tibia server. Open a workspace (the server's `monster/` and `items/` folders plus a Tibia client folder), pick a monster, edit, save. Outfits, corpses and loot render as real sprites because `Tibia.dat`/`Tibia.spr` are loaded alongside the XML.
+A monster editor for OpenTibia. Open a workspace (the server's `monster/` and `items/` folders plus a Tibia client folder), pick a monster, edit, save. Outfits, corpses and loot render as real sprites because `Tibia.dat`/`Tibia.spr` are loaded alongside the XML.
 
 Built with Tauri 2 (Rust backend) and React 18 + TypeScript + Vite (frontend).
 
