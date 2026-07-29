@@ -716,3 +716,24 @@ body.ss-dragging {
 .mx-filter-exclude {
 	color: var(--text-muted);
 }
+
+/* The active-filter count used to sit inline, so switching a filter on widened
+   the button and pushed the rest of the toolbar sideways. Pinned to the
+   button's own corner instead: the count appears without moving anything. */
+.ss-filter > .ss-icon-btn,
+.ss-filter > .ss-btn {
+	position: relative;
+}
+
+.ss-filter .ss-filter-count {
+	position: absolute;
+	top: 1px;
+	right: 1px;
+	min-width: 13px;
+	height: 13px;
+	padding: 0 3px;
+	border-radius: 7px;
+	font-size: 9px;
+	line-height: 1;
+	pointer-events: none;
+}
