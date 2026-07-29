@@ -99,8 +99,9 @@ export default function Workspace({
 	/** The Loot staging tray under the Items browser — collected via right-click,
 	 *  appended to the open monster in one go. Session-scoped, deduped by server id. */
 	const [lootTray, setLootTray] = useState<ItemInfo[]>([]);
-	/** Filter keys the Items browser opens with — set by "Select corpse", cleared by plain nav. */
-	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>([]);
+	/** Filter keys the Items browser opens with. Pickupable is the standing default
+	 *  (the view exists to feed loot); Select corpse / Select item override it. */
+	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>(['pickupable']);
 	/** `item` is the cell under the cursor (for single-item actions like the corpse);
 	 *  `items` is the whole effective selection. */
 	const [itemMenu, setItemMenu] = useState<{ x: number; y: number; item: ItemInfo; items: ItemInfo[] } | null>(
@@ -520,8 +521,8 @@ export default function Workspace({
 								key={n.key}
 								className={`ss-nav-item ${view === n.key ? 'ss-nav-item-active' : ''}`}
 								onClick={() => {
-									// Plain navigation never inherits the Select-corpse preset.
-									setItemsInitialFilters([]);
+									// Plain navigation never inherits a picker preset.
+									setItemsInitialFilters(['pickupable']);
 									setView(n.key);
 								}}
 							>
