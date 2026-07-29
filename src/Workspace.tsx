@@ -57,7 +57,7 @@ import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
-import type { PreviewUrl, ThingAnimLookup } from './fields/preview';
+import { ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */
@@ -1210,8 +1210,11 @@ export default function Workspace({
 		[visibleMonsterLints, visibleWorkspaceLints]
 	);
 
+	// The provider wraps the whole shell, not just the editor: the preview panel
+	// is a sibling of MonsterEditor, and without the lookup in scope it fell back
+	// to assuming three outfit frames.
 	return (
-		<>
+		<ThingAnimProvider value={thingAnim}>
 			<Menubar menus={menus} />
 
 			<div className="ss-body">
@@ -1760,6 +1763,6 @@ export default function Workspace({
 				onToggleSeverity={toggleLintSeverity}
 				onIgnoreCode={ignoreLintCode}
 			/>
-		</>
+		</ThingAnimProvider>
 	);
 }
