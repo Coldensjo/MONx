@@ -9,7 +9,7 @@ import { useDragSource, type DragPayload } from './dnd';
 // atlas URL comes from*, so the Items panel, the outfit picker and the corpse
 // picker can share it (DESIGN §3.2).
 
-export const ZOOM_LEVELS = [48, 64, 96, 128];
+export const ZOOM_LEVELS = [32, 48, 64, 96, 128];
 export const GRID_PAD = 8;
 export const ANIM_INTERVAL_MS = 220;
 
@@ -333,7 +333,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 	} = props;
 
 	const [search, setSearch] = useState('');
-	const [zoomIdx, setZoomIdx] = useState(() => loadZoomIdx(view, 1, ZOOM_LEVELS.length - 1));
+	const [zoomIdx, setZoomIdx] = useState(() => loadZoomIdx(view, 2, ZOOM_LEVELS.length - 1));
 	const [animateEnabled, setAnimateEnabled] = useState(true);
 	const [gridFrame, setGridFrame] = useState(0);
 	const [primaryKey, setPrimaryKey] = useState<CellKey | null>(null);
