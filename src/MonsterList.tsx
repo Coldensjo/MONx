@@ -36,6 +36,8 @@ interface Props {
 	groups?: string[];
 	/** Opens the monsters folder with the file highlighted. Omitted until the backend has it. */
 	onReveal?: (file: string) => void;
+	/** Double-click: jump to the editor for the row's monster. */
+	onOpen?: (file: string) => void;
 }
 
 interface MenuState {
@@ -70,7 +72,8 @@ const MonsterRow = memo(function MonsterRow({
 	atlasIndex,
 	atlasLength,
 	onSelect,
-	onContextMenu
+	onContextMenu,
+	onOpen
 }: {
 	monster: MonsterSummary;
 	index: number;
@@ -81,6 +84,7 @@ const MonsterRow = memo(function MonsterRow({
 	atlasLength: number;
 	onSelect: (file: string) => void;
 	onContextMenu: (e: React.MouseEvent, file: string) => void;
+	onOpen?: (file: string) => void;
 }) {
 	const drag = useDragSource(() => ({ kind: 'monster', file: monster.file, name: monster.name }), {
 		ghostSize: SPRITE
@@ -92,6 +96,7 @@ const MonsterRow = memo(function MonsterRow({
 			style={{ top, height: ROW_H }}
 			title={`${monster.name} — ${monster.file}`}
 			onMouseDown={() => onSelect(monster.file)}
+			onDoubleClick={() => onOpen?.(monster.file)}
 			onContextMenu={e => onContextMenu(e, monster.file)}
 			data-index={index}
 			{...drag}
@@ -137,6 +142,7 @@ export default function MonsterList({
 	selectedFile,
 	onSelect,
 	onMutated,
+	onOpen,
 	showToast,
 	groups = [],
 	onReveal
@@ -422,6 +428,7 @@ export default function MonsterList({
 				atlasLength={chunk.files.length}
 				onSelect={select}
 				onContextMenu={handleContextMenu}
+				onOpen={onOpen}
 			/>
 		);
 	}

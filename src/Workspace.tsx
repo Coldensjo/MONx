@@ -536,6 +536,10 @@ export default function Workspace({
 						monsters={monsters}
 						selectedFile={selected}
 						onSelect={setSelected}
+						onOpen={file => {
+							setSelected(file);
+							setView('monsters');
+						}}
 						onMutated={refreshMonsters}
 						showToast={showToast}
 						groups={groups}
