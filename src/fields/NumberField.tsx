@@ -15,6 +15,9 @@ interface Props {
 	/** Marked next to the input when the value differs from the corpus norm. */
 	corpusDefault?: number | null;
 	title?: string;
+	/** Every keystroke as typed, including text that does not commit ("0.", ""),
+	    and null on blur. For readouts that must track the field live. */
+	onDraft?: (raw: string | null) => void;
 }
 
 /**
@@ -34,7 +37,8 @@ export function NumberField({
 	placeholder,
 	width,
 	corpusDefault,
-	title
+	title,
+	onDraft
 }: Props) {
 	const [text, setText] = useState(String(value));
 	const [editing, setEditing] = useState(false);
@@ -45,6 +49,7 @@ export function NumberField({
 
 	const commit = (raw: string) => {
 		setText(raw);
+		onDraft?.(raw);
 		if (raw === '' || raw === '-') return;
 		const n = Number(raw);
 		if (!Number.isFinite(n)) return;
@@ -71,6 +76,7 @@ export function NumberField({
 				onBlur={() => {
 					setEditing(false);
 					setText(String(value));
+					onDraft?.(null);
 				}}
 				onChange={e => commit(e.target.value)}
 			/>

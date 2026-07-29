@@ -61,6 +61,19 @@ export function oddsText(chance: number): string {
 	return `1 in ${Math.round(ratio).toLocaleString()}`;
 }
 
+/**
+ * A percent as typed → chance out of 100,000, so the odds readout can follow the
+ * field before the value commits. Null while the text is not yet a number ("",
+ * "0.", "-"), where the caller keeps showing the committed odds rather than
+ * flashing "never".
+ */
+function draftChance(raw: string): number | null {
+	if (raw.trim() === '') return null;
+	const n = Number(raw);
+	if (!Number.isFinite(n)) return null;
+	return Math.max(0, Math.min(MAX_CHANCE, Math.round(n * 1000)));
+}
+
 interface RowProps {
 	entry: LootEntry;
 	path: string;
@@ -93,6 +106,9 @@ const LootRow = memo(function LootRow({
 	onToggleCheck
 }: RowProps) {
 	const [expanded, setExpanded] = useState(false);
+	/** Percent being typed into the chance field; null when it is not focused. */
+	const [chanceDraft, setChanceDraft] = useState<number | null>(null);
+	const shownChance = chanceDraft ?? entry.chance;
 	const info = useItemInfo(index, entry.id, entry.name);
 	const serverId = entry.id ?? info?.serverId ?? null;
 	const container = info?.container ?? entry.children.length > 0;
@@ -162,17 +178,20 @@ const LootRow = memo(function LootRow({
 					{entry.comment && <span className="ss-ed-loot-comment">{entry.comment}</span>}
 				</span>
 
-				<span className="ss-ed-loot-chance" title={`chance="${entry.chance}" of ${MAX_CHANCE}`}>
-					<span className="ss-ed-odds">{oddsText(entry.chance)}</span>
+				<span className="ss-ed-loot-chance" title={`chance="${shownChance}" of ${MAX_CHANCE}`}>
+					{/* Reads the draft, not the committed value, so "1 in X" tracks the
+					    keystrokes — including text the field never commits ("0.", ""). */}
+					<span className="ss-ed-odds">{oddsText(shownChance)}</span>
 					<NumberField
 						value={Number((entry.chance / 1000).toFixed(3))}
 						onChange={v => onChange({ ...entry, chance: Math.min(MAX_CHANCE, Math.round(v * 1000)) })}
+						onDraft={raw => setChanceDraft(raw === null ? null : draftChance(raw))}
 						min={0}
 						max={100}
 						step={0.1}
 						width={78}
 						disabled={readOnly}
-						title={percentText(entry.chance)}
+						title={percentText(shownChance)}
 					/>
 					{chanceLints.length > 0 && <FieldLint lints={chanceLints} />}
 				</span>
