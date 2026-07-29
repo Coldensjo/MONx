@@ -48,8 +48,6 @@ export interface MonsterEditorProps {
 	scripts?: string[];
 	/** Registered monster names, for summon validation. */
 	monsterNames?: string[];
-	/** Event names from creaturescripts.xml, when reachable. */
-	knownEvents?: string[];
 	nextRaceid?: number | null;
 	onSave?: () => void;
 	onBrowseOutfits?: () => void;
@@ -80,7 +78,6 @@ export function MonsterEditor({
 	items = tauriItemIndex,
 	scripts = [],
 	monsterNames = [],
-	knownEvents,
 	nextRaceid = null,
 	onSave,
 	onBrowseOutfits,
@@ -256,12 +253,7 @@ export function MonsterEditor({
 						{shown('summons') && <Summons {...common} collapsed={collapsed.has('summons')} onToggle={toggle} />}
 						{shown('voices') && <Voices {...common} collapsed={collapsed.has('voices')} onToggle={toggle} />}
 						{shown('events') && (
-							<PacifistEvents
-								{...common}
-								knownEvents={knownEvents}
-								collapsed={collapsed.has('events')}
-								onToggle={toggle}
-							/>
+							<PacifistEvents {...common} collapsed={collapsed.has('events')} onToggle={toggle} />
 						)}
 					</div>
 				</div>

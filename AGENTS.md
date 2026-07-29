@@ -155,7 +155,7 @@ assets/                fixture workspace: monsters/, items/, client/
 The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the product in `DESIGN.md`; both were derived from the server's own source and have since been removed from the repo. The `§n` markers throughout the code cite them. What they said now lives in the code, and that is where to look — or to add to:
 
 - `catalog.rs` / `catalog.ts` — the enum tables (flags, damage and condition types, races, skulls, `CONST_ME_*`, `CONST_ANI_*`, built-in spells), each citing its section.
-- `lint.rs` — every engine rule with an observable consequence, as stable machine codes (88 of them). If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text.
+- `lint.rs` — every engine rule with an observable consequence, as stable machine codes (87 of them). If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text.
 - `monster.rs` — the reader and writer comments, which record why the model is shaped the way it is (why `pacifist`/`leash` are fields and not lines, why `<flag>` keeps only its first attribute, and so on).
 - `git log` — the two files are in history if you need the prose: `git show f050169^:MONSTER_EDITOR_REFERENCE.md`.
 

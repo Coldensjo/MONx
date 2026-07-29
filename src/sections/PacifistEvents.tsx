@@ -7,8 +7,6 @@ import { Section, SubGroup, type SectionId, type SectionProps } from './section'
 interface Props extends SectionProps {
 	collapsed: boolean;
 	onToggle: (id: SectionId) => void;
-	/** Event names registered in creaturescripts.xml, when that folder is reachable. */
-	knownEvents?: string[];
 }
 
 /**
@@ -17,7 +15,7 @@ interface Props extends SectionProps {
  * default (see prefs.ts). Both still write into `<voices>` / `<script>` where
  * the format puts them; only the UI is split.
  */
-export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle, knownEvents }: Props) {
+export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
 	const voices = doc.voices;
 	// The two pacifist strings do nothing on a monster that isn't one (§5.1).
 	const pacifist = doc.flags.pacifist === true;
@@ -58,7 +56,7 @@ export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onTogg
 
 			<SubGroup
 				title="Creature events"
-				note="Registered from creaturescripts — onKill, onDeath, onPrepareDeath and friends. Not the same thing as the monster script in Identity."
+				note="Registered from creaturescripts — onKill, onDeath, onPrepareDeath and friends. Not the same thing as the monster script in Identity. Names are not checked: what registers them is Lua, which MONx cannot see."
 			>
 				<SortableList
 					items={doc.events}
@@ -67,20 +65,15 @@ export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onTogg
 					keyOf={(e, i) => `${e}-${i}`}
 					disabled={readOnly}
 					empty="No events registered."
-					renderRow={(event, i) => {
-						const unknown = knownEvents && knownEvents.length > 0 && !knownEvents.includes(event);
-						return (
-							<div className={unknown ? 'ss-ed-invalid' : undefined} title={unknown ? 'Not found in creaturescripts.xml' : undefined}>
-								<TextField
-									value={event}
-									onChange={v => patch({ events: doc.events.map((e, j) => (j === i ? v : e)) })}
-									placeholder="EventName"
-									monospace
-									disabled={readOnly}
-								/>
-							</div>
-						);
-					}}
+					renderRow={(event, i) => (
+						<TextField
+							value={event}
+							onChange={v => patch({ events: doc.events.map((e, j) => (j === i ? v : e)) })}
+							placeholder="EventName"
+							monospace
+							disabled={readOnly}
+						/>
+					)}
 				/>
 				<button
 					type="button"

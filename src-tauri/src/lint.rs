@@ -807,19 +807,11 @@ pub fn lint_workspace(
         r.file = None;
     }
 
-    let events = registered_events(dir);
-    if let Some(events) = events {
-        for doc in docs {
-            for (i, event) in doc.events.iter().enumerate() {
-                if !events.iter().any(|e| e.eq_ignore_ascii_case(event)) {
-                    r.file = Some(doc.file.clone());
-                    r.add(WARNING, "event.unregistered", Some(&format!("events[{i}]")), false,
-                        format!("<event name=\"{event}\"> is not registered in creaturescripts.xml"));
-                }
-            }
-        }
-        r.file = None;
-    }
+    // There is deliberately no "event is not registered" lint. A monster's
+    // <event name="…"> is resolved by the server against whatever registered it,
+    // and on Ironcore that is Lua — creaturescripts.xml is neither the only nor a
+    // reliable record of it. MONx cannot see the registration, so it cannot call
+    // the name wrong, and a warning it cannot substantiate is worse than silence.
 
     // §8.1: a registered spell name that collides with a built-in changes the
     // meaning of every monster that uses the built-in, corpus-wide.
@@ -830,23 +822,6 @@ pub fn lint_workspace(
     }
 
     r.lints
-}
-
-/// Event names registered in `data/creaturescripts/creaturescripts.xml`.
-/// Returns None when the folder isn't part of the workspace, so the check is
-/// skipped rather than reported as a corpus-wide failure.
-fn registered_events(monsters_dir: &Path) -> Option<Vec<String>> {
-    let path = monsters_dir
-        .parent()?
-        .join("creaturescripts")
-        .join("creaturescripts.xml");
-    let text = std::fs::read_to_string(path).ok()?;
-    Some(
-        text.split("name=\"")
-            .skip(1)
-            .filter_map(|c| c.split('"').next().map(str::to_string))
-            .collect(),
-    )
 }
 
 // =====================================================================
