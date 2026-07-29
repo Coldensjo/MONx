@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Filter, Plus, Search, X } from 'lucide-react';
+import { Check, Filter, Plus, Search, X } from 'lucide-react';
 import {
 	createMonster,
 	deleteMonster,
@@ -52,6 +52,11 @@ interface ListFilter {
 	section: string;
 	test: (m: MonsterSummary) => boolean;
 }
+
+/** Filters cycle off → include (✓) → exclude (✗) → off. Excluding is the whole
+ *  point of the third state: "every monster that is not a boss" is not
+ *  expressible by picking from the other filters. */
+type FilterMode = 'include' | 'exclude';
 
 /** Search matches name, file, species and raceid (DESIGN §11.2). */
 function matches(m: MonsterSummary, needle: string): boolean {
@@ -148,7 +153,7 @@ export default function MonsterList({
 	onReveal
 }: Props) {
 	const [search, setSearch] = useState('');
-	const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+	const [activeFilters, setActiveFilters] = useState<Map<string, FilterMode>>(new Map());
 	const [showFilters, setShowFilters] = useState(false);
 	const [filterSearch, setFilterSearch] = useState('');
 	const [menu, setMenu] = useState<MenuState | null>(null);
@@ -218,19 +223,31 @@ export default function MonsterList({
 		];
 	}, [monsters]);
 
-	// Filters within one section are OR (pick any race), across sections AND.
+	// Included filters within one section are OR (pick any race), across sections
+	// AND. Exclusions are always AND, whatever section they came from: an X means
+	// "none of these", so ORing two of them would cancel both out.
 	const shown = useMemo(() => {
 		const needle = search.trim().toLowerCase();
 		let list = needle ? monsters.filter(m => matches(m, needle)) : monsters;
 		if (activeFilters.size > 0) {
-			const active = filters.filter(f => activeFilters.has(f.key));
 			const bySection = new Map<string, ListFilter[]>();
-			for (const f of active) {
+			const excluded: ListFilter[] = [];
+			for (const f of filters) {
+				const mode = activeFilters.get(f.key);
+				if (!mode) continue;
+				if (mode === 'exclude') {
+					excluded.push(f);
+					continue;
+				}
 				const group = bySection.get(f.section);
 				if (group) group.push(f);
 				else bySection.set(f.section, [f]);
 			}
-			list = list.filter(m => [...bySection.values()].every(group => group.some(f => f.test(m))));
+			list = list.filter(
+				m =>
+					[...bySection.values()].every(group => group.some(f => f.test(m))) &&
+					excluded.every(f => !f.test(m))
+			);
 		}
 		return list;
 	}, [monsters, search, activeFilters, filters]);
@@ -401,11 +418,13 @@ export default function MonsterList({
 		}
 	}, [selected, showToast, onMutated]);
 
-	const toggleFilter = useCallback((key: string) => {
+	const cycleFilter = useCallback((key: string) => {
 		setActiveFilters(prev => {
-			const next = new Set(prev);
-			if (next.has(key)) next.delete(key);
-			else next.add(key);
+			const next = new Map(prev);
+			const mode = next.get(key);
+			if (!mode) next.set(key, 'include');
+			else if (mode === 'include') next.set(key, 'exclude');
+			else next.delete(key);
 			return next;
 		});
 	}, []);
@@ -464,7 +483,7 @@ export default function MonsterList({
 							<div className="ss-filter-head">
 								<span>Filters</span>
 								{activeFilters.size > 0 && (
-									<button className="ss-filter-reset" onClick={() => setActiveFilters(new Set())}>
+									<button className="ss-filter-reset" onClick={() => setActiveFilters(new Map())}>
 										Clear all
 									</button>
 								)}
@@ -482,16 +501,33 @@ export default function MonsterList({
 								<div key={section}>
 									<div className="ss-filter-section">{section}</div>
 									<div className="ss-filter-list">
-										{list.map(f => (
-											<label key={f.key} className="ss-filter-item">
-												<input
-													type="checkbox"
-													checked={activeFilters.has(f.key)}
-													onChange={() => toggleFilter(f.key)}
-												/>
-												{f.label}
-											</label>
-										))}
+										{list.map(f => {
+											const mode = activeFilters.get(f.key);
+											return (
+												<button
+													key={f.key}
+													type="button"
+													className={`ss-filter-item mx-filter-tri${mode ? ` mx-filter-${mode}` : ''}`}
+													onClick={() => cycleFilter(f.key)}
+													title={
+														mode === 'include'
+															? `Only ${f.label} — click to exclude instead`
+															: mode === 'exclude'
+																? `Excluding ${f.label} — click to clear`
+																: `Only ${f.label}; click twice to exclude it`
+													}
+												>
+													<span className="mx-filter-box">
+														{mode === 'include' ? (
+															<Check size={11} />
+														) : mode === 'exclude' ? (
+															<X size={11} />
+														) : null}
+													</span>
+													{f.label}
+												</button>
+											);
+										})}
 									</div>
 								</div>
 							))}

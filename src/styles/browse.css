@@ -675,3 +675,44 @@ body.ss-dragging {
 	color: var(--text-muted);
 	font-size: 10px;
 }
+
+/* Tri-state filter row (monster list): a button rather than a checkbox, because
+   a checkbox cannot show the third state — off, ✓ include, ✗ exclude. */
+.mx-filter-tri {
+	width: 100%;
+	background: none;
+	border: 0;
+	color: var(--text);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+}
+
+.mx-filter-box {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 14px;
+	height: 14px;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	background: var(--surface-2);
+}
+
+.mx-filter-include .mx-filter-box {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--accent-text);
+}
+
+/* Excluded reads as a negation, not as a second kind of "on". */
+.mx-filter-exclude .mx-filter-box {
+	border-color: var(--destructive);
+	background: var(--destructive);
+	color: #fff;
+}
+
+.mx-filter-exclude {
+	color: var(--text-muted);
+}
