@@ -185,7 +185,9 @@ function GridRowInner<T>({
 						label={cellLabel(item)}
 						title={cellTitle ? cellTitle(item) : cellLabel(item)}
 						atlasUrl={atlasUrl}
-						animated={rowAnimates && frames > 1}
+						// The whole row leaves the atlas when any cell animates, so every
+						// cell must render per-cell — a static one is simply frame 0.
+						animated={rowAnimates}
 						frames={frames}
 						gridFrame={gridFrame}
 						cellUrl={cellUrl}
