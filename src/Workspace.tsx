@@ -216,22 +216,13 @@ export default function Workspace({
 		[doc, editDoc, showToast]
 	);
 
-	// The item browser gets every pickupable item — the grid virtualizes rows,
-	// so the full list costs no more than a page of it. Pickupable because the
-	// browser exists to feed loot, and walls or ground tiles can never be
-	// carried — plus the corpses (not pickupable), so the "Show corpses" filter
-	// and the Look section's Select corpse button have something to show.
+	// The item browser gets the whole database — the grid virtualizes rows, so
+	// the full list costs no more than a page of it. It has to be everything:
+	// loot wants pickupables, but the corpse and typeex pickers live here too,
+	// and corpses, statues or fires are none of them carryable. The Pickupable
+	// filter narrows back down for loot browsing.
 	useEffect(() => {
-		Promise.all([
-			searchItems('', Number.MAX_SAFE_INTEGER, true),
-			searchItems('', Number.MAX_SAFE_INTEGER, false, true)
-		])
-			.then(([pickupable, corpses]) => {
-				const merged = new Map(pickupable.map(i => [i.serverId, i]));
-				for (const c of corpses) merged.set(c.serverId, c);
-				setItemList([...merged.values()].sort((a, b) => a.serverId - b.serverId));
-			})
-			.catch(() => setItemList([]));
+		searchItems('', Number.MAX_SAFE_INTEGER).then(setItemList).catch(() => setItemList([]));
 	}, []);
 
 	// The outfit / effect / missile lists come straight from the dat, through the
@@ -366,7 +357,10 @@ export default function Workspace({
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
 	// `corpseType` is what the backend's own corpses_only filter keys on.
 	const itemFilters = useMemo(
-		() => [{ key: 'corpses', label: 'Show corpses', test: (i: ItemInfo) => 'corpseType' in i.attributes }],
+		() => [
+			{ key: 'pickupable', label: 'Pickupable', test: (i: ItemInfo) => i.pickupable },
+			{ key: 'corpses', label: 'Show corpses', test: (i: ItemInfo) => 'corpseType' in i.attributes }
+		],
 		[]
 	);
 
