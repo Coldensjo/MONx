@@ -19,17 +19,33 @@ interface Props {
 	onClose: () => void;
 }
 
+/** `time` hunts for a stretch of clock and derives the kill count from cadence;
+ *  `kills` skips the clock entirely — the player instantly kills N monsters. */
+type Mode = 'time' | 'kills';
+
 interface Inputs {
+	mode: Mode;
 	sessionMinutes: number;
 	killSeconds: number;
 	gapSeconds: number;
+	/** Kills per run in `kills` mode; ignored in `time` mode. */
+	kills: number;
 	lootRate: number;
 	sessions: number;
 	/** 0 means "roll a fresh seed each run". */
 	seed: number;
 }
 
-const DEFAULTS: Inputs = { sessionMinutes: 60, killSeconds: 10, gapSeconds: 20, lootRate: 1, sessions: 25, seed: 0 };
+const DEFAULTS: Inputs = {
+	mode: 'time',
+	sessionMinutes: 60,
+	killSeconds: 10,
+	gapSeconds: 20,
+	kills: 1000,
+	lootRate: 1,
+	sessions: 25,
+	seed: 0
+};
 const SETTINGS_KEY = 'monx.lootsim.params';
 
 function loadInputs(): Inputs {
@@ -39,9 +55,11 @@ function loadInputs(): Inputs {
 		const p = JSON.parse(raw);
 		const num = (v: unknown, fb: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fb);
 		return {
+			mode: p.mode === 'kills' ? 'kills' : 'time',
 			sessionMinutes: num(p.sessionMinutes, DEFAULTS.sessionMinutes),
 			killSeconds: num(p.killSeconds, DEFAULTS.killSeconds),
 			gapSeconds: num(p.gapSeconds, DEFAULTS.gapSeconds),
+			kills: num(p.kills, DEFAULTS.kills),
 			lootRate: num(p.lootRate, DEFAULTS.lootRate),
 			sessions: num(p.sessions, DEFAULTS.sessions),
 			seed: num(p.seed, DEFAULTS.seed)
@@ -128,9 +146,14 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 
 	const set = (patch: Partial<Inputs>) => setInputs(prev => ({ ...prev, ...patch }));
 
+	const timeMode = inputs.mode === 'time';
 	const cadence = Math.max(1, inputs.killSeconds + inputs.gapSeconds);
-	const killsPerSession = Math.floor(Math.max(0, inputs.sessionMinutes * 60) / cadence);
-	const hours = Math.max(inputs.sessionMinutes, 1) / 60;
+	const killsPerSession = timeMode
+		? Math.floor(Math.max(0, inputs.sessionMinutes * 60) / cadence)
+		: Math.max(0, Math.floor(inputs.kills));
+	// Kill mode has no clock at all, so nothing is expressed per hour. `hours` of
+	// 0 is the flag for that: every rate below falls back to "per run".
+	const hours = timeMode ? Math.max(inputs.sessionMinutes, 1) / 60 : 0;
 
 	// Analytic baseline (derive.ts) over the same resolved items, for the
 	// "should have been" line beside the simulated gp/h.
@@ -146,28 +169,28 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 		const resolve: Resolve = entry => resolved.get(entry) ?? null;
 		const seed = inputs.seed !== 0 ? inputs.seed : Math.floor(Math.random() * 2 ** 31);
 		const params: SimParams = {
-			sessionSeconds: inputs.sessionMinutes * 60,
-			killSeconds: inputs.killSeconds,
-			gapSeconds: inputs.gapSeconds,
+			killsPerSession,
 			lootRate: Math.max(0, inputs.lootRate),
 			sessions: inputs.sessions,
 			seed
 		};
 		setRanSeed(seed);
 		setResult(simulate(loot, resolve, params));
-	}, [resolved, inputs, loot]);
+	}, [resolved, inputs, killsPerSession, loot]);
 
 	const stats = useMemo(() => {
 		if (!result) return null;
 		const totalKills = result.killsPerSession * result.sessions;
 		const totalGp = result.perSessionGp.reduce((a, b) => a + b, 0);
 		const meanGp = totalGp / result.sessions;
-		const rates = [...result.perSessionGp].sort((a, b) => a - b).map(v => v / hours);
+		// hours === 0 is kill mode: the spread stays in gp per run.
+		const scale = hours > 0 ? 1 / hours : 1;
+		const rates = [...result.perSessionGp].sort((a, b) => a - b).map(v => v * scale);
 		return {
 			totalKills,
 			totalGp,
 			meanGp,
-			gpPerHour: meanGp / hours,
+			gpPerHour: meanGp * scale,
 			gpPerKill: result.killsPerSession > 0 ? meanGp / result.killsPerSession : 0,
 			minRate: rates[0] ?? 0,
 			medianRate: median(rates),
@@ -175,46 +198,84 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 		};
 	}, [result, hours]);
 
-	const expectedPerHour = (expected.expected * killsPerSession) / hours;
+	const expectedPerHour = hours > 0 ? (expected.expected * killsPerSession) / hours : expected.expected * killsPerSession;
 
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal ss-lootsim-modal" onMouseDown={e => e.stopPropagation()}>
 				<div className="ss-modal-title">Loot simulator — {monsterName}</div>
 
+				<div className="ss-lootsim-modes">
+					<button
+						type="button"
+						className={`ss-btn ss-btn-ghost ss-ed-mini${timeMode ? ' ss-lootsim-tab-on' : ''}`}
+						onClick={() => set({ mode: 'time' })}
+						title="Hunt for a stretch of time; kills follow from the cadence"
+					>
+						By time
+					</button>
+					<button
+						type="button"
+						className={`ss-btn ss-btn-ghost ss-ed-mini${!timeMode ? ' ss-lootsim-tab-on' : ''}`}
+						onClick={() => set({ mode: 'kills' })}
+						title="Kill a fixed number of monsters instantly — no clock, no cadence"
+					>
+						By kills
+					</button>
+				</div>
+
 				<div className="ss-lootsim-inputs">
-					<label className="ss-lootsim-input">
-						<span>Session</span>
-						<NumberField value={inputs.sessionMinutes} onChange={v => set({ sessionMinutes: v })} min={1} width={70} title="Session length in minutes" />
-						<span className="ss-lootsim-unit">min</span>
-						{[15, 60, 180].map(m => (
-							<button
-								key={m}
-								type="button"
-								className={`ss-btn ss-btn-ghost ss-ed-mini${inputs.sessionMinutes === m ? ' ss-lootsim-preset-on' : ''}`}
-								onClick={() => set({ sessionMinutes: m })}
-							>
-								{m < 60 ? `${m}m` : `${m / 60}h`}
-							</button>
-						))}
-					</label>
-					<label className="ss-lootsim-input">
-						<span>Per kill</span>
-						<NumberField value={inputs.killSeconds} onChange={v => set({ killSeconds: v })} min={0} width={58} title="Fight duration in seconds" />
-						<span className="ss-lootsim-unit">s</span>
-					</label>
-					<label className="ss-lootsim-input">
-						<span>Between kills</span>
-						<NumberField value={inputs.gapSeconds} onChange={v => set({ gapSeconds: v })} min={0} width={58} title="Walking, respawn, targeting" />
-						<span className="ss-lootsim-unit">s</span>
-					</label>
+					{timeMode ? (
+						<>
+							<label className="ss-lootsim-input">
+								<span>Session</span>
+								<NumberField value={inputs.sessionMinutes} onChange={v => set({ sessionMinutes: v })} min={1} width={70} title="Session length in minutes" />
+								<span className="ss-lootsim-unit">min</span>
+								{[15, 60, 180].map(m => (
+									<button
+										key={m}
+										type="button"
+										className={`ss-btn ss-btn-ghost ss-ed-mini${inputs.sessionMinutes === m ? ' ss-lootsim-preset-on' : ''}`}
+										onClick={() => set({ sessionMinutes: m })}
+									>
+										{m < 60 ? `${m}m` : `${m / 60}h`}
+									</button>
+								))}
+							</label>
+							<label className="ss-lootsim-input">
+								<span>Per kill</span>
+								<NumberField value={inputs.killSeconds} onChange={v => set({ killSeconds: v })} min={0} width={58} title="Fight duration in seconds" />
+								<span className="ss-lootsim-unit">s</span>
+							</label>
+							<label className="ss-lootsim-input">
+								<span>Between kills</span>
+								<NumberField value={inputs.gapSeconds} onChange={v => set({ gapSeconds: v })} min={0} width={58} title="Walking, respawn, targeting" />
+								<span className="ss-lootsim-unit">s</span>
+							</label>
+						</>
+					) : (
+						<label className="ss-lootsim-input">
+							<span>Kills</span>
+							<NumberField value={inputs.kills} onChange={v => set({ kills: v })} min={0} max={100000} width={90} title="Monsters killed per run, instantly" />
+							{[100, 1000, 10000].map(k => (
+								<button
+									key={k}
+									type="button"
+									className={`ss-btn ss-btn-ghost ss-ed-mini${inputs.kills === k ? ' ss-lootsim-preset-on' : ''}`}
+									onClick={() => set({ kills: k })}
+								>
+									{k >= 1000 ? `${k / 1000}k` : k}
+								</button>
+							))}
+						</label>
+					)}
 					<label className="ss-lootsim-input">
 						<span>Loot rate</span>
 						<NumberField value={inputs.lootRate} onChange={v => set({ lootRate: v })} min={0} step={0.5} width={58} title="Server loot-rate multiplier; chances clamp at 100%" />
 						<span className="ss-lootsim-unit">×</span>
 					</label>
 					<label className="ss-lootsim-input">
-						<span>Sessions</span>
+						<span>{timeMode ? 'Sessions' : 'Runs'}</span>
 						<NumberField value={inputs.sessions} onChange={v => set({ sessions: v })} min={1} max={1000} width={58} title="1 is a single concrete hunt; more shows the spread" />
 					</label>
 					<label className="ss-lootsim-input">
@@ -224,7 +285,15 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 				</div>
 
 				<div className="ss-lootsim-derived">
-					{killsPerSession.toLocaleString()} kills per session at one kill every {cadence}s
+					{timeMode ? (
+						<>
+							{killsPerSession.toLocaleString()} kills per session at one kill every {cadence}s
+						</>
+					) : (
+						<>
+							{killsPerSession.toLocaleString()} kills per run, killed instantly — no clock, so totals are per run
+						</>
+					)}
 					{ranSeed !== null && inputs.seed === 0 && <> · seed {ranSeed}</>}
 				</div>
 
@@ -233,11 +302,13 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 						<div className="ss-lootsim-headline">
 							<div className="ss-lootsim-stat">
 								<span className="ss-lootsim-stat-value">{Math.round(stats.gpPerHour).toLocaleString()}</span>
-								<span className="ss-lootsim-stat-label">gp/h</span>
+								<span className="ss-lootsim-stat-label">{timeMode ? 'gp/h' : 'gp per run'}</span>
 							</div>
 							<div className="ss-lootsim-stat">
-								<span className="ss-lootsim-stat-value">{gp(stats.meanGp)}</span>
-								<span className="ss-lootsim-stat-label">per session</span>
+								<span className="ss-lootsim-stat-value">
+									{timeMode ? gp(stats.meanGp) : result.killsPerSession.toLocaleString()}
+								</span>
+								<span className="ss-lootsim-stat-label">{timeMode ? 'per session' : 'kills per run'}</span>
 							</div>
 							<div className="ss-lootsim-stat">
 								<span className="ss-lootsim-stat-value">{stats.gpPerKill.toFixed(1)}</span>
@@ -245,14 +316,14 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 							</div>
 							<div className="ss-lootsim-stat">
 								<span className="ss-lootsim-stat-value">{Math.round(expectedPerHour).toLocaleString()}</span>
-								<span className="ss-lootsim-stat-label">expected gp/h</span>
+								<span className="ss-lootsim-stat-label">{timeMode ? 'expected gp/h' : 'expected gp per run'}</span>
 							</div>
 						</div>
 						{result.sessions > 1 && (
 							<div className="ss-lootsim-spread">
-								Across {result.sessions} sessions: {Math.round(stats.minRate).toLocaleString()} /{' '}
-								{Math.round(stats.medianRate).toLocaleString()} / {Math.round(stats.maxRate).toLocaleString()} gp/h
-								(min / median / max)
+								Across {result.sessions} {timeMode ? 'sessions' : 'runs'}: {Math.round(stats.minRate).toLocaleString()} /{' '}
+								{Math.round(stats.medianRate).toLocaleString()} / {Math.round(stats.maxRate).toLocaleString()}{' '}
+								{timeMode ? 'gp/h' : 'gp'} (min / median / max)
 							</div>
 						)}
 
@@ -330,13 +401,16 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 													: 'Never dropped'
 											}
 										>
-											{firstMedian !== null ? (
+											{firstMedian === null ? (
+												'—'
+											) : timeMode ? (
 												<>
 													{duration(firstMedian * cadence)}
 													<span className="ss-lootsim-vs"> k{Math.round(firstMedian)}</span>
 												</>
 											) : (
-												'—'
+												// No clock in kill mode — the kill index is the whole answer.
+												<>kill {Math.round(firstMedian).toLocaleString()}</>
 											)}
 										</span>
 										<span className="mono">

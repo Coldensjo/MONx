@@ -1368,6 +1368,14 @@
 	flex-direction: column;
 }
 
+/* By time / By kills. Reuses the result tabs' selected look — same "pick one"
+   gesture, one row above. */
+.ss-lootsim-modes {
+	display: flex;
+	gap: 4px;
+	padding-top: 4px;
+}
+
 .ss-lootsim-inputs {
 	display: flex;
 	flex-wrap: wrap;

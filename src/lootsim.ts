@@ -33,9 +33,11 @@ export function makeRng(seed: number): () => number {
 }
 
 export interface SimParams {
-	sessionSeconds: number;
-	killSeconds: number;
-	gapSeconds: number;
+	/** Kills to roll per session. The dialog derives this from the session
+	 *  length and cadence in time mode, or takes it verbatim in kill mode —
+	 *  the model itself never needs to know which, because nothing here is
+	 *  measured in seconds. */
+	killsPerSession: number;
 	/** Server loot-rate multiplier applied to every chance, clamped at 100%. */
 	lootRate: number;
 	/** Independent sessions to aggregate; 1 is a single concrete hunt. */
@@ -128,8 +130,7 @@ function configuredRates(loot: LootEntry[], resolve: Resolve, lootRate: number):
 }
 
 export function simulate(loot: LootEntry[], resolve: Resolve, params: SimParams): SimResult {
-	const cadence = Math.max(1, params.killSeconds + params.gapSeconds);
-	const killsPerSession = Math.floor(Math.max(0, params.sessionSeconds) / cadence);
+	const killsPerSession = Math.max(0, Math.floor(params.killsPerSession));
 	const sessions = Math.max(1, Math.floor(params.sessions));
 	const rng = makeRng(params.seed);
 
