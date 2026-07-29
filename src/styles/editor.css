@@ -1341,3 +1341,133 @@
 	color: var(--text-muted);
 	font-style: italic;
 }
+
+/* ---------- Loot simulator (LOOT_SIMULATOR.md) ---------- */
+
+.ss-lootsim-modal {
+	width: min(720px, calc(100vw - 80px));
+	max-height: calc(100vh - 120px);
+	display: flex;
+	flex-direction: column;
+}
+
+.ss-lootsim-inputs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 18px;
+	padding: 4px 0 8px;
+}
+
+.ss-lootsim-input {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.ss-lootsim-unit {
+	font-size: 11px;
+}
+
+.ss-lootsim-preset-on {
+	color: var(--accent);
+}
+
+.ss-lootsim-derived {
+	font-size: 11px;
+	color: var(--text-muted);
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--border);
+}
+
+.ss-lootsim-headline {
+	display: flex;
+	gap: 24px;
+	padding: 12px 0 4px;
+}
+
+.ss-lootsim-stat {
+	display: flex;
+	flex-direction: column;
+}
+
+.ss-lootsim-stat-value {
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 18px;
+}
+
+.ss-lootsim-stat-label {
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.ss-lootsim-spread {
+	font-size: 11px;
+	color: var(--text-muted);
+	padding-bottom: 6px;
+}
+
+.ss-lootsim-table {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	margin: 6px 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.ss-lootsim-row {
+	display: grid;
+	grid-template-columns: 32px minmax(120px, 1fr) 70px 150px 160px;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 8px;
+	font-size: 12px;
+}
+
+.ss-lootsim-row:nth-child(even) {
+	background: var(--surface-2);
+}
+
+.ss-lootsim-head {
+	font-size: 11px;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	position: sticky;
+	top: 0;
+	background: var(--surface);
+}
+
+.ss-lootsim-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ss-lootsim-vs {
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
+.ss-lootsim-empty {
+	padding: 16px;
+	text-align: center;
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.ss-lootsim-notes {
+	display: flex;
+	gap: 14px;
+	font-size: 11px;
+	color: var(--warn);
+	padding-bottom: 4px;
+}
+
+.ss-lootsim-caption {
+	font-size: 10px;
+	color: var(--text-muted);
+	padding: 4px 0;
+}

@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
-import { ChevronDown, ChevronRight, Package, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Dices, Package, Plus, Trash2 } from 'lucide-react';
+import LootSimDialog from '../LootSimDialog';
 import type { ItemIndex, LootEntry } from '../monster';
 import { Field } from '../fields/Field';
 import { FieldLint, type LintAt } from '../fields/Field';
@@ -241,6 +242,7 @@ const LootRow = memo(function LootRow({
 
 export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle }: Props) {
 	const [adding, setAdding] = useState(false);
+	const [simulating, setSimulating] = useState(false);
 
 	const setLoot = (next: LootEntry[]) => patch({ loot: next });
 
@@ -253,7 +255,24 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 			id="loot"
 			collapsed={collapsed}
 			onToggle={() => onToggle('loot')}
-			summary={doc.loot.length === 1 ? '1 drop' : `${doc.loot.length} drops`}
+			summary={
+				<>
+					{doc.loot.length === 1 ? '1 drop' : `${doc.loot.length} drops`}
+					<button
+						type="button"
+						className="ss-btn ss-btn-ghost ss-ed-mini"
+						title="Simulate a hunting session over this loot — runs on the unsaved buffer"
+						onClick={() => setSimulating(true)}
+					>
+						<Dices size={13} />
+						Simulate…
+					</button>
+					{/* Lives in the header slot so it opens even while the section is collapsed. */}
+					{simulating && (
+						<LootSimDialog loot={doc.loot} monsterName={doc.name} items={items} onClose={() => setSimulating(false)} />
+					)}
+				</>
+			}
 		>
 			<div className="ss-ed-loot" {...listDrop}>
 				{doc.loot.length === 0 && <div className="ss-ed-empty">No loot. Drop items here from the Items browser.</div>}
