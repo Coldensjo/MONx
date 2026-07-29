@@ -99,6 +99,8 @@ export default function Workspace({
 	/** The Loot staging tray under the Items browser — collected via right-click,
 	 *  appended to the open monster in one go. Session-scoped, deduped by server id. */
 	const [lootTray, setLootTray] = useState<ItemInfo[]>([]);
+	/** Frame counts per client id from the .dat, for animating item cells. */
+	const [itemFrames, setItemFrames] = useState<Map<number, number>>(new Map());
 	/** Filter keys the Items browser opens with. Pickupable is the standing default
 	 *  (the view exists to feed loot); Select corpse / Select item override it. */
 	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>(['pickupable']);
@@ -234,9 +236,14 @@ export default function Workspace({
 		Promise.all([
 			getThings(info.datPath, 'outfit').catch(() => []),
 			getThings(info.datPath, 'effect').catch(() => []),
-			getThings(info.datPath, 'missile').catch(() => [])
-		]).then(([outfit, effect, missile]) => {
-			if (!cancelled) setThings({ outfit, effect, missile });
+			getThings(info.datPath, 'missile').catch(() => []),
+			getThings(info.datPath, 'item').catch(() => [])
+		]).then(([outfit, effect, missile, item]) => {
+			if (cancelled) return;
+			setThings({ outfit, effect, missile });
+			// Frame counts by client id, so the Items grid can animate and filter
+			// on animation — ItemInfo itself knows nothing about the .dat side.
+			setItemFrames(new Map(item.map(t => [t.id, t.frames])));
 		});
 		return () => {
 			cancelled = true;
@@ -356,6 +363,12 @@ export default function Workspace({
 	const itemLabel = useCallback((i: ItemInfo) => i.name || `#${i.serverId}`, []);
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
+	const itemCellFrames = useCallback((i: ItemInfo) => itemFrames.get(i.clientId) ?? 1, [itemFrames]);
+	const itemCellUrl = useCallback(
+		(i: ItemInfo, frame: number) =>
+			thingUrlFor(info.sprPath, info.datPath, 'item', i.clientId, info.transparent, { frame }),
+		[info.sprPath, info.datPath, info.transparent]
+	);
 	// Predicates over the raw items.xml attributes (`corpseType` is what the
 	// backend's own corpses_only filter keys on). Filters AND together, as in
 	// SPRx — vocabulary from the corpus: weaponType sword/club/axe/distance/
@@ -414,9 +427,10 @@ export default function Workspace({
 			{ key: 'field', label: 'Field (fire/energy/…)', section: props, test: attr('field') },
 			{ key: 'worth', label: 'Has worth', section: props, test: attr('worth') },
 			{ key: 'described', label: 'Has description', section: props, test: attr('description') },
-			{ key: 'ambiguous', label: 'Ambiguous name', section: props, test: (i: ItemInfo) => i.ambiguousName }
+			{ key: 'ambiguous', label: 'Ambiguous name', section: props, test: (i: ItemInfo) => i.ambiguousName },
+			{ key: 'animated', label: 'Animated', section: props, test: (i: ItemInfo) => (itemFrames.get(i.clientId) ?? 1) > 1 }
 		];
-	}, []);
+	}, [itemFrames]);
 
 	const thingContextMenu = useCallback((t: ThingSummary, e: React.MouseEvent, kind: 'effect' | 'missile') => {
 		const table = kind === 'effect' ? MAGIC_EFFECTS : SHOOT_EFFECTS;
@@ -655,6 +669,8 @@ export default function Workspace({
 								cellLabel={itemLabel}
 								searchText={itemSearchText}
 								searchId={itemSearchId}
+								cellFrames={itemCellFrames}
+								cellUrl={itemCellUrl}
 								filters={itemFilters}
 								initialFilters={itemsInitialFilters}
 								searchMode="filter"
