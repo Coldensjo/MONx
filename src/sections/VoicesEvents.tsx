@@ -22,6 +22,11 @@ export function VoicesEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle
 	// The two pacifist strings do nothing on a monster that isn't one (§5.1).
 	const pacifist = doc.flags.pacifist === true;
 
+	const intervalSeconds = voices.interval / 1000;
+	const secondsText = `${Number.isInteger(intervalSeconds) ? intervalSeconds : intervalSeconds.toFixed(2)} s`;
+	// A `chance`% roll every `interval` ms → the cadence a hunter actually hears.
+	const perMinute = voices.interval > 0 ? (60000 / voices.interval) * (voices.chance / 100) : 0;
+
 	return (
 		<Section
 			id="voices"
@@ -38,6 +43,7 @@ export function VoicesEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle
 						width={110}
 						disabled={readOnly}
 					/>
+					<span className="ss-ed-field-note">= {secondsText}</span>
 				</Field>
 				<Field
 					label="Chance"
@@ -55,6 +61,13 @@ export function VoicesEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle
 					/>
 				</Field>
 			</div>
+
+			{!silent && voices.interval > 0 && (
+				<div className="ss-ed-field-note">
+					≈ {perMinute >= 10 ? Math.round(perMinute) : perMinute.toFixed(1)} voices per minute — a {voices.chance}
+					% roll every {secondsText}.
+				</div>
+			)}
 
 			<SortableList
 				items={voices.lines}
