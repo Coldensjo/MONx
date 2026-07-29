@@ -145,6 +145,20 @@ export default function Workspace({
 	const buffersRef = useRef(new Map<string, TabBuffer>());
 	const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set());
 	const reloadKeyRef = useRef(reloadKey);
+	// Single-clicking the list opens a *preview* tab: the next selection replaces
+	// it instead of piling up tabs. Double-clicking (list or tab) or editing the
+	// monster pins it. Refs mirror state for the load effect.
+	const [previewTab, setPreviewTab] = useState<string | null>(null);
+	const tabsRef = useRef(tabs);
+	tabsRef.current = tabs;
+	const previewRef = useRef(previewTab);
+	previewRef.current = previewTab;
+	const dirtyFilesRef = useRef(dirtyFiles);
+	dirtyFilesRef.current = dirtyFiles;
+
+	const pinTab = useCallback((file: string) => {
+		setPreviewTab(prev => (prev === file ? null : prev));
+	}, []);
 
 	const activeDirty = selected !== null && dirtyFiles.has(selected);
 
@@ -172,7 +186,23 @@ export default function Workspace({
 		// A fresh buffer starts a fresh history — undo must never cross files.
 		undoRef.current = [];
 		redoRef.current = [];
-		setTabs(prev => (prev.includes(selected) ? prev : [...prev, selected]));
+		if (!tabsRef.current.includes(selected)) {
+			// A clean preview tab gives way to the new one; anything pinned or
+			// dirty stays and the new tab appends.
+			const preview = previewRef.current;
+			if (
+				preview !== null &&
+				preview !== selected &&
+				tabsRef.current.includes(preview) &&
+				!dirtyFilesRef.current.has(preview)
+			) {
+				buffersRef.current.delete(preview);
+				setTabs(prev => prev.map(f => (f === preview ? selected : f)));
+			} else {
+				setTabs(prev => [...prev, selected]);
+			}
+			setPreviewTab(selected);
+		}
 		// A corpus tool rewrote files on disk: every buffer is stale. Tools are
 		// blocked while anything is dirty, so nothing is lost by dropping them.
 		if (reloadKeyRef.current !== reloadKey) {
@@ -218,6 +248,7 @@ export default function Workspace({
 			}
 			const closing = new Set(files);
 			for (const f of files) buffersRef.current.delete(f);
+			setPreviewTab(prev => (prev !== null && closing.has(prev) ? null : prev));
 			setDirtyFiles(prev => new Set([...prev].filter(f => !closing.has(f))));
 			setTabs(prev => {
 				const next = prev.filter(f => !closing.has(f));
@@ -380,6 +411,8 @@ export default function Workspace({
 	const commitDoc = useCallback((next: MonsterDoc) => {
 		buffersRef.current.set(next.file, { doc: next, lints: buffersRef.current.get(next.file)?.lints ?? [] });
 		setDirtyFiles(prev => (prev.has(next.file) ? prev : new Set(prev).add(next.file)));
+		// An edited monster is no longer a throwaway preview.
+		pinTab(next.file);
 		setDoc(next);
 		lintMonster(next)
 			.then(l => {
@@ -388,7 +421,7 @@ export default function Workspace({
 				if (buf && buf.doc === next) buf.lints = l;
 			})
 			.catch(() => {});
-	}, []);
+	}, [pinTab]);
 
 	const editDoc = useCallback(
 		(next: MonsterDoc) => {
@@ -946,6 +979,8 @@ export default function Workspace({
 						onOpen={file => {
 							setSelected(file);
 							setView('monsters');
+							// Double-click pins: this tab survives further selections.
+							pinTab(file);
 						}}
 						onMutated={refreshMonsters}
 						showToast={showToast}
@@ -962,8 +997,11 @@ export default function Workspace({
 								return (
 									<div
 										key={f}
-										className={`ss-ed-tabitem${f === selected ? ' ss-ed-tabitem-active' : ''}`}
-										title={f}
+										className={`ss-ed-tabitem${f === selected ? ' ss-ed-tabitem-active' : ''}${
+											f === previewTab ? ' ss-ed-tabitem-preview' : ''
+										}`}
+										title={f === previewTab ? `${f} — preview; double-click to keep open` : f}
+										onDoubleClick={() => pinTab(f)}
 										onMouseDown={e => {
 											// Activating a tab from a browser view also returns to the editor.
 											if (e.button === 0) {

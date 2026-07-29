@@ -1553,6 +1553,12 @@
 	color: var(--text);
 }
 
+/* A preview tab (single-click open) — replaced by the next selection unless
+   pinned by double-click or an edit. Italic, as editors conventionally do. */
+.ss-ed-tabitem-preview .ss-ed-tabname {
+	font-style: italic;
+}
+
 .ss-ed-tabdirty {
 	color: var(--accent);
 	font-weight: 700;
