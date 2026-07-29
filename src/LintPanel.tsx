@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, ChevronDown, Ghost, ShieldAlert, X } from 'lucide-react';
+import { AlertTriangle, Ban, Check, ChevronDown, Ghost, ShieldAlert, X } from 'lucide-react';
 import type { Lint, LintSeverity } from './monster';
-import { loadSetting, saveSetting } from './settings';
 
 // The lint drawer (DESIGN §15). It expands from the status bar and is the reason
 // MONx exists: the `silent` class of mistake produces no server output at all
@@ -24,27 +23,6 @@ const SEVERITY_ICON: Record<LintSeverity, typeof AlertTriangle> = {
 	silent: Ghost
 };
 
-const FILTER_KEY = 'monx.lintFilter';
-
-// settings.ts handles the storage; the shape validation stays here because a
-// stale or hand-edited key must never leave the drawer filtering on nothing.
-function loadFilter(): Set<LintSeverity> {
-	const raw = loadSetting(FILTER_KEY, null);
-	if (!raw) return new Set(SEVERITIES);
-	try {
-		const parsed = JSON.parse(raw) as unknown;
-		if (!Array.isArray(parsed)) return new Set(SEVERITIES);
-		const valid = parsed.filter((s): s is LintSeverity => SEVERITIES.includes(s as LintSeverity));
-		return valid.length > 0 ? new Set(valid) : new Set(SEVERITIES);
-	} catch {
-		return new Set(SEVERITIES);
-	}
-}
-
-function saveFilter(set: Set<LintSeverity>): void {
-	saveSetting(FILTER_KEY, JSON.stringify([...set]));
-}
-
 export type LintTab = 'monster' | 'workspace';
 
 interface Props {
@@ -64,6 +42,12 @@ interface Props {
 	onFixAll?: () => void;
 	/** The same, for every file in the workspace tab — writes those files directly. */
 	onFixAllWorkspace?: () => void;
+	/** Severities to show. Owned by the shell so the Linter menu and these chips
+	 *  are the same setting seen twice. */
+	severities: LintSeverity[];
+	onToggleSeverity: (s: LintSeverity) => void;
+	/** Ignores a lint code across the workspace (right-click a row). */
+	onIgnoreCode?: (code: string) => void;
 }
 
 /** Counts by severity, for the status-bar summary. */
@@ -82,13 +66,24 @@ export default function LintPanel({
 	onJump,
 	onFix,
 	onFixAll,
-	onFixAllWorkspace
+	onFixAllWorkspace,
+	severities: shownSeverities,
+	onToggleSeverity,
+	onIgnoreCode
 }: Props) {
 	const [tab, setTab] = useState<LintTab>('monster');
-	const [severities, setSeverities] = useState<Set<LintSeverity>>(loadFilter);
 	const [fixing, setFixing] = useState<string | null>(null);
+	/** Right-clicked row: the code is what an ignore applies to. */
+	const [rowMenu, setRowMenu] = useState<{ x: number; y: number; code: string } | null>(null);
+	const severities = useMemo(() => new Set(shownSeverities), [shownSeverities]);
 
-	useEffect(() => saveFilter(severities), [severities]);
+	// Any press elsewhere dismisses the row menu, as the other context menus do.
+	useEffect(() => {
+		if (!rowMenu) return;
+		const away = () => setRowMenu(null);
+		window.addEventListener('mousedown', away);
+		return () => window.removeEventListener('mousedown', away);
+	}, [rowMenu]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -108,16 +103,6 @@ export default function LintPanel({
 		() => SEVERITIES.filter(s => severities.has(s)).map(s => ({ severity: s, lints: source.filter(l => l.severity === s) })),
 		[source, severities]
 	);
-
-	const toggleSeverity = useCallback((s: LintSeverity) => {
-		setSeverities(prev => {
-			const next = new Set(prev);
-			if (next.has(s)) next.delete(s);
-			else next.add(s);
-			// Never leave every filter off — an empty drawer reads as "no problems".
-			return next.size === 0 ? new Set(SEVERITIES) : next;
-		});
-	}, []);
 
 	const runFix = useCallback(
 		(lint: Lint) => {
@@ -160,7 +145,7 @@ export default function LintPanel({
 							<button
 								key={s}
 								className={`ss-lint-chip ss-lint-${s}${severities.has(s) ? ' ss-lint-chip-on' : ''}`}
-								onClick={() => toggleSeverity(s)}
+								onClick={() => onToggleSeverity(s)}
 								title={`Show ${SEVERITY_LABEL[s].toLowerCase()}`}
 							>
 								<Icon size={12} />
@@ -213,7 +198,15 @@ export default function LintPanel({
 								const Icon = SEVERITY_ICON[lint.severity];
 								const key = `${lint.code}:${lint.file ?? ''}:${lint.path ?? ''}:${i}`;
 								return (
-									<div key={key} className={`ss-lint-row ss-lint-${lint.severity}`}>
+									<div
+										key={key}
+										className={`ss-lint-row ss-lint-${lint.severity}`}
+										onContextMenu={e => {
+											if (!onIgnoreCode) return;
+											e.preventDefault();
+											setRowMenu({ x: e.clientX, y: e.clientY, code: lint.code });
+										}}
+									>
 										<Icon size={13} className="ss-lint-row-icon" />
 										<button
 											className="ss-lint-row-main"
@@ -247,6 +240,34 @@ export default function LintPanel({
 					)
 				)}
 			</div>
+
+			{rowMenu && onIgnoreCode && (
+				<div
+					className="ss-context-menu"
+					style={{ left: rowMenu.x, top: rowMenu.y }}
+					onMouseDown={e => e.stopPropagation()}
+				>
+					<button
+						className="ss-menu-item"
+						onClick={() => {
+							setRowMenu(null);
+							onIgnoreCode(rowMenu.code);
+						}}
+					>
+						<Ban size={14} />
+						Ignore {rowMenu.code} everywhere
+					</button>
+					<button
+						className="ss-menu-item"
+						onClick={() => {
+							setRowMenu(null);
+							void navigator.clipboard.writeText(rowMenu.code);
+						}}
+					>
+						Copy code
+					</button>
+				</div>
+			)}
 		</div>
 	);
 }

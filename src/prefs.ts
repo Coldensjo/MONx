@@ -4,8 +4,10 @@
 
 import { loadSetting, saveSetting } from './settings';
 import { SECTION_IDS, type SectionId } from './sections/section';
+import type { Lint, LintSeverity } from './monster';
 
 const PREFS_KEY = 'monx.prefs';
+const LINT_PREFS_KEY = 'monx.lint';
 
 export interface Prefs {
 	/** The tab a monster opens on. Scrolled to without animation — this is where
@@ -63,4 +65,52 @@ export function landingSection(prefs: Prefs): SectionId | null {
 	const visible = visibleSectionIds(prefs);
 	if (visible.length === 0) return null;
 	return visible.includes(prefs.defaultSection) ? prefs.defaultSection : visible[0];
+}
+
+// ---------- Linter ----------
+
+export const LINT_SEVERITIES: readonly LintSeverity[] = ['error', 'warning', 'silent'];
+
+export interface LintPrefs {
+	/** Severities the drawer shows. The Linter menu and the drawer's own chips are
+	 *  two views of this one list. */
+	severities: LintSeverity[];
+	/** Lint codes ignored everywhere: the drawer, the status bar and the editor's
+	 *  own field markers. Codes, never messages — the message text is not stable. */
+	muted: string[];
+}
+
+export const DEFAULT_LINT_PREFS: LintPrefs = {
+	severities: [...LINT_SEVERITIES],
+	muted: []
+};
+
+export function loadLintPrefs(): LintPrefs {
+	try {
+		const raw = loadSetting(LINT_PREFS_KEY, null);
+		if (!raw) return DEFAULT_LINT_PREFS;
+		const parsed = JSON.parse(raw) as Partial<LintPrefs>;
+		const severities = (parsed.severities ?? []).filter((s): s is LintSeverity =>
+			(LINT_SEVERITIES as readonly string[]).includes(s)
+		);
+		const muted = (parsed.muted ?? []).filter((c): c is string => typeof c === 'string' && c.length > 0);
+		return {
+			// Every severity off would read as "no problems found", which is a lie.
+			severities: severities.length > 0 ? severities : DEFAULT_LINT_PREFS.severities,
+			muted: [...new Set(muted)].sort()
+		};
+	} catch {
+		return DEFAULT_LINT_PREFS;
+	}
+}
+
+export function saveLintPrefs(prefs: LintPrefs): void {
+	saveSetting(LINT_PREFS_KEY, JSON.stringify(prefs));
+}
+
+/** False for a lint whose code the user has chosen to ignore. Severity is a
+ *  display filter and is applied by the drawer, not here — the status bar still
+ *  counts what it is not showing. */
+export function lintShown(prefs: LintPrefs, lint: Lint): boolean {
+	return !prefs.muted.includes(lint.code);
 }

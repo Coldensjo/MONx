@@ -26,6 +26,7 @@ import {
 	type ItemInfo,
 	type ItemUsage,
 	type Lint,
+	type LintSeverity,
 	type MonsterDoc,
 	type MonsterSummary,
 	type WorkspaceInfo
@@ -37,7 +38,16 @@ import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 import { applyLintFix } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
 import PreferencesDialog from './PreferencesDialog';
-import { loadPrefs, savePrefs, type Prefs } from './prefs';
+import {
+	LINT_SEVERITIES,
+	lintShown,
+	loadLintPrefs,
+	loadPrefs,
+	saveLintPrefs,
+	savePrefs,
+	type LintPrefs,
+	type Prefs
+} from './prefs';
 import ScaleLootDialog from './ScaleLootDialog';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
@@ -55,6 +65,12 @@ type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
 
 /** The three nav entries backed by a dat category, and that category's own name. */
 type ThingView = 'outfits' | 'effects' | 'missiles';
+
+const LINT_SEVERITY_LABEL: Record<LintSeverity, string> = {
+	error: 'errors',
+	warning: 'warnings',
+	silent: 'silent findings'
+};
 
 const THING_CAT: Record<ThingView, 'outfit' | 'effect' | 'missile'> = {
 	outfits: 'outfit',
@@ -91,6 +107,8 @@ export default function Workspace({
 	/** A tab the editor should show, set from outside it (Loot → Edit). Cleared as
 	 *  soon as the editor honours it. */
 	const [jumpRequest, setJumpRequest] = useState<SectionId | null>(null);
+	/** Which severities the drawer shows, and which lint codes are ignored. */
+	const [lintPrefs, setLintPrefs] = useState<LintPrefs>(loadLintPrefs);
 	const [selected, setSelected] = useState<string | null>(() =>
 		loadSetting('monx.lastMonster', null)
 	);
@@ -546,6 +564,41 @@ export default function Workspace({
 		[doc, dirtyFiles, editDoc, fixInFile, nextRaceid, onMonstersChanged, showToast]
 	);
 
+	// An ignored code is gone from everything downstream — the drawer, the status
+	// bar, the editor's field markers and the Fix-all passes. Ignoring is a
+	// statement about the rule, not about one finding, so a rule that is off does
+	// not get quietly fixed either.
+	const visibleMonsterLints = useMemo(() => monsterLints.filter(l => lintShown(lintPrefs, l)), [monsterLints, lintPrefs]);
+	const visibleWorkspaceLints = useMemo(
+		() => workspaceLints.filter(l => lintShown(lintPrefs, l)),
+		[workspaceLints, lintPrefs]
+	);
+
+	const updateLintPrefs = useCallback((next: LintPrefs) => {
+		setLintPrefs(next);
+		saveLintPrefs(next);
+	}, []);
+
+	const toggleLintSeverity = useCallback(
+		(s: LintSeverity) => {
+			const on = lintPrefs.severities.includes(s);
+			const next = on ? lintPrefs.severities.filter(x => x !== s) : [...lintPrefs.severities, s];
+			// Never leave every severity off — an empty drawer reads as "no problems".
+			if (next.length === 0) return;
+			updateLintPrefs({ ...lintPrefs, severities: next });
+		},
+		[lintPrefs, updateLintPrefs]
+	);
+
+	const ignoreLintCode = useCallback(
+		(code: string) => {
+			if (lintPrefs.muted.includes(code)) return;
+			updateLintPrefs({ ...lintPrefs, muted: [...lintPrefs.muted, code].sort() });
+			showToast('ok', `Ignoring ${code} — restore it from the Linter menu`);
+		},
+		[lintPrefs, updateLintPrefs, showToast]
+	);
+
 	/** Fix all, for the Workspace tab: every fixable lint, grouped by its file. */
 	const fixAllWorkspaceLints = useCallback(async () => {
 		if (dirtyFiles.size > 0) {
@@ -553,7 +606,7 @@ export default function Workspace({
 			return;
 		}
 		const byFile = new Map<string, Lint[]>();
-		for (const l of workspaceLints) {
+		for (const l of visibleWorkspaceLints) {
 			if (!l.fixable || !l.file) continue;
 			const list = byFile.get(l.file);
 			if (list) list.push(l);
@@ -586,14 +639,14 @@ export default function Workspace({
 			'ok',
 			`Fixed ${applied.size} ${applied.size === 1 ? 'lint' : 'lints'} across ${files.length} ${files.length === 1 ? 'file' : 'files'}`
 		);
-	}, [dirtyFiles, fixInFile, onMonstersChanged, showToast, workspaceLints]);
+	}, [dirtyFiles, fixInFile, onMonstersChanged, showToast, visibleWorkspaceLints]);
 
 	const fixAllLints = useCallback(() => {
 		if (!doc) return;
 		let d = doc;
 		let fixed = 0;
 		let manual = 0;
-		for (const l of monsterLints.filter(l => l.fixable)) {
+		for (const l of visibleMonsterLints.filter(l => l.fixable)) {
 			const next = applyLintFix(d, l, { nextRaceid });
 			if (next) {
 				d = next;
@@ -602,7 +655,7 @@ export default function Workspace({
 		}
 		if (fixed > 0) editDoc(d);
 		showToast('ok', `Fixed ${fixed} ${fixed === 1 ? 'lint' : 'lints'}${manual > 0 ? ` — ${manual} need a manual fix` : ''}`);
-	}, [doc, monsterLints, editDoc, nextRaceid, showToast]);
+	}, [doc, visibleMonsterLints, editDoc, nextRaceid, showToast]);
 
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
@@ -795,6 +848,38 @@ export default function Workspace({
 					label: 'Export patch notes…',
 					onSelect: () => void exportPatchNotes()
 				}
+			]
+		},
+		{
+			// Severities first (what the drawer shows at all), then the ignore list,
+			// which is where a right-clicked lint ends up and the only place it can be
+			// taken back.
+			label: 'Linter',
+			items: [
+				...LINT_SEVERITIES.map(s => ({
+					label: `${lintPrefs.severities.includes(s) ? '✓' : '　'} Show ${LINT_SEVERITY_LABEL[s]}`,
+					onSelect: () => toggleLintSeverity(s)
+				})),
+				...(lintPrefs.muted.length === 0
+					? [{ label: 'Nothing ignored', separated: true, disabled: true, onSelect: () => undefined }]
+					: [
+							{
+								label: `Ignored (${lintPrefs.muted.length}) — pick one to restore`,
+								separated: true,
+								disabled: true,
+								onSelect: () => undefined
+							},
+							...lintPrefs.muted.map(code => ({
+								label: `✕ ${code}`,
+								onSelect: () =>
+									updateLintPrefs({ ...lintPrefs, muted: lintPrefs.muted.filter(c => c !== code) })
+							})),
+							{
+								label: 'Stop ignoring everything',
+								separated: true,
+								onSelect: () => updateLintPrefs({ ...lintPrefs, muted: [] })
+							}
+						])
 			]
 		},
 		{
@@ -1110,8 +1195,8 @@ export default function Workspace({
 	}, [itemMenu, thingMenu, tabMenu]);
 
 	const allLints = useMemo(
-		() => [...monsterLints, ...workspaceLints],
-		[monsterLints, workspaceLints]
+		() => [...visibleMonsterLints, ...visibleWorkspaceLints],
+		[visibleMonsterLints, visibleWorkspaceLints]
 	);
 
 	return (
@@ -1266,7 +1351,7 @@ export default function Workspace({
 								key={doc.file}
 								doc={doc}
 								onChange={editDoc}
-								lints={monsterLints}
+								lints={visibleMonsterLints}
 								spells={spells}
 								readOnly={false}
 								scripts={scripts}
@@ -1520,7 +1605,7 @@ export default function Workspace({
 					<PreviewPanel
 						doc={doc}
 						items={items}
-						lintCount={monsterLints.length}
+						lintCount={visibleMonsterLints.length}
 						onOpenLints={() => setLintsOpen(true)}
 						onLookType={type => editDoc({ ...doc, look: { ...doc.look, mode: 'type', type } })}
 						onLootChange={loot => editDoc({ ...doc, loot })}
@@ -1648,8 +1733,8 @@ export default function Workspace({
 			<LintPanel
 				open={lintsOpen}
 				onClose={() => setLintsOpen(false)}
-				monsterLints={monsterLints}
-				workspaceLints={workspaceLints}
+				monsterLints={visibleMonsterLints}
+				workspaceLints={visibleWorkspaceLints}
 				onFix={lint => void fixLint(lint)}
 				onFixAll={fixAllLints}
 				onFixAllWorkspace={() => void fixAllWorkspaceLints()}
@@ -1658,6 +1743,9 @@ export default function Workspace({
 					if (lint.file && lint.file !== selected) setSelected(lint.file);
 					setView('monsters');
 				}}
+				severities={lintPrefs.severities}
+				onToggleSeverity={toggleLintSeverity}
+				onIgnoreCode={ignoreLintCode}
 			/>
 		</>
 	);
