@@ -88,6 +88,14 @@ function gp(n: number): string {
 	return `${Math.round(n).toLocaleString()} gp`;
 }
 
+function duration(seconds: number): string {
+	if (seconds < 60) return `${Math.round(seconds)}s`;
+	if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+	const h = Math.floor(seconds / 3600);
+	const m = Math.round((seconds % 3600) / 60);
+	return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 export default function LootSimDialog({ loot, monsterName, items, onClose }: Props) {
 	const [inputs, setInputs] = useState<Inputs>(loadInputs);
 	const [resolved, setResolved] = useState<Map<LootEntry, ItemInfo | null> | null>(null);
@@ -295,10 +303,13 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 								<span>Item</span>
 								<span>Total</span>
 								<span>Drops</span>
+								<span>1st drop</span>
 								<span>Value</span>
 							</div>
 							{result.items.map(item => {
 								const observed = stats.totalKills > 0 ? item.drops / stats.totalKills : 0;
+								const firsts = [...item.firstDropKills].sort((a, b) => a - b);
+								const firstMedian = firsts.length > 0 ? median(firsts) : null;
 								return (
 									<div className="ss-lootsim-row" key={item.serverId}>
 										<ItemSprite serverId={item.serverId} size={32} />
@@ -310,6 +321,23 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 										>
 											{percentText(observed * 100000)}
 											<span className="ss-lootsim-vs"> vs {percentText(Math.min(item.configured, 1) * 100000)}</span>
+										</span>
+										<span
+											className="mono"
+											title={
+												firstMedian !== null
+													? `Median first drop: kill ${Math.round(firstMedian)}; dropped in ${item.firstDropKills.length} of ${result.sessions} sessions`
+													: 'Never dropped'
+											}
+										>
+											{firstMedian !== null ? (
+												<>
+													{duration(firstMedian * cadence)}
+													<span className="ss-lootsim-vs"> k{Math.round(firstMedian)}</span>
+												</>
+											) : (
+												'—'
+											)}
 										</span>
 										<span className="mono">
 											{item.priced ? (

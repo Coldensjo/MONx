@@ -265,6 +265,23 @@ export interface PinReport {
 	files: number;
 }
 
+// ---------- Corpus scaling ----------
+
+export interface ScaledEntry {
+	file: string;
+	monster: string;
+	label: string;
+	from: number;
+	to: number;
+}
+
+export interface ScaleReport {
+	applied: boolean;
+	entries: number;
+	files: number;
+	sample: ScaledEntry[];
+}
+
 // ---------- Item usage ----------
 
 export interface UsageRef {
@@ -413,6 +430,20 @@ export const tauriItemIndex: ItemIndex = {
 
 export function itemUsage(serverId: number): Promise<ItemUsage> {
 	return invoke<ItemUsage>('item_usage', { serverId });
+}
+
+/** Corpus-wide loot chance scaling; `apply: false` is the preview. */
+export function scaleLootChances(percent: number, apply: boolean): Promise<ScaleReport> {
+	return invoke<ScaleReport>('scale_loot_chances', { percent, apply });
+}
+
+/** Every lint in the workspace — workspace-scope plus each monster's own. */
+export function allLints(): Promise<Lint[]> {
+	return invoke<Lint[]>('all_lints', {});
+}
+
+export function writeTextFile(path: string, content: string): Promise<void> {
+	return invoke<void>('write_text_file', { path, content });
 }
 
 export function balanceBands(): Promise<BalanceBand[]> {

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { confirm } from '@tauri-apps/plugin-dialog';
-import { Package, PersonStanding, Plus, Save, Skull, Sparkles, Trash2, Users, Wand2 } from 'lucide-react';
+import { confirm, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { Package, PersonStanding, Plus, Save, Skull, Sparkles, Trash2, Users, Wand2, X } from 'lucide-react';
 import {
 	getItem,
+	allLints as fetchAllLints,
 	getMonster,
 	itemsRowUrl,
 	itemUrl,
 	itemUsage,
+	writeTextFile,
 	lintMonster,
 	lintWorkspace,
 	listMonsterGroups,
@@ -30,7 +32,9 @@ import {
 import Menubar, { type Menu } from './Menubar';
 import { newLootEntry } from './sections/Loot';
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
+import { applyLintFix } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
+import ScaleLootDialog from './ScaleLootDialog';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
@@ -130,26 +134,101 @@ export default function Workspace({
 		}
 	}, [monsters, selected]);
 
+	// ---- Editor tabs ----
+	// Every monster ever activated this session keeps its buffer in memory, so
+	// switching tabs never discards edits and never re-reads a dirty file.
+	interface TabBuffer {
+		doc: MonsterDoc;
+		lints: Lint[];
+	}
+	const [tabs, setTabs] = useState<string[]>([]);
+	const buffersRef = useRef(new Map<string, TabBuffer>());
+	const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set());
+	const reloadKeyRef = useRef(reloadKey);
+
+	const activeDirty = selected !== null && dirtyFiles.has(selected);
+
+	// App-level dirty covers every tab — the close guards protect all of them.
+	useEffect(() => {
+		onDirtyChange(dirtyFiles.size > 0);
+	}, [dirtyFiles, onDirtyChange]);
+
+	// Renames and deletes invalidate buffers for files that no longer exist.
+	useEffect(() => {
+		if (monsters.length === 0) return;
+		const files = new Set(monsters.map(m => m.file));
+		setTabs(prev => (prev.every(f => files.has(f)) ? prev : prev.filter(f => files.has(f))));
+		for (const k of [...buffersRef.current.keys()]) if (!files.has(k)) buffersRef.current.delete(k);
+		setDirtyFiles(prev => {
+			const next = new Set([...prev].filter(f => files.has(f)));
+			return next.size === prev.size ? prev : next;
+		});
+	}, [monsters]);
+
 	useEffect(() => {
 		if (!selected) return;
 		saveSetting('monx.lastMonster', selected);
 		onOpenFile(selected);
+		// A fresh buffer starts a fresh history — undo must never cross files.
+		undoRef.current = [];
+		redoRef.current = [];
+		setTabs(prev => (prev.includes(selected) ? prev : [...prev, selected]));
+		// A corpus tool rewrote files on disk: every buffer is stale. Tools are
+		// blocked while anything is dirty, so nothing is lost by dropping them.
+		if (reloadKeyRef.current !== reloadKey) {
+			reloadKeyRef.current = reloadKey;
+			buffersRef.current.clear();
+		}
+		const buffered = buffersRef.current.get(selected);
+		if (buffered) {
+			setDoc(buffered.doc);
+			setMonsterLints(buffered.lints);
+			return;
+		}
 		let cancelled = false;
 		getMonster(selected)
 			.then(d => {
 				if (cancelled) return;
+				buffersRef.current.set(selected, { doc: d, lints: [] });
 				setDoc(d);
-				// A fresh buffer starts a fresh history — undo must never cross files.
-				undoRef.current = [];
-				redoRef.current = [];
-				onDirtyChange(false);
-				return lintMonster(d).then(l => !cancelled && setMonsterLints(l));
+				setMonsterLints([]);
+				return lintMonster(d).then(l => {
+					if (cancelled) return;
+					setMonsterLints(l);
+					const buf = buffersRef.current.get(selected);
+					if (buf && buf.doc === d) buf.lints = l;
+				});
 			})
 			.catch(e => showToast('error', String(e)));
 		return () => {
 			cancelled = true;
 		};
-	}, [selected, reloadKey, onOpenFile, onDirtyChange, showToast]);
+	}, [selected, reloadKey, onOpenFile, showToast]);
+
+	const closeTab = useCallback(
+		async (file: string) => {
+			if (dirtyFiles.has(file) && !(await confirm(`${file} has unsaved changes. Close the tab and discard them?`))) {
+				return;
+			}
+			buffersRef.current.delete(file);
+			setDirtyFiles(prev => {
+				const next = new Set(prev);
+				next.delete(file);
+				return next;
+			});
+			setTabs(prev => {
+				const idx = prev.indexOf(file);
+				const next = prev.filter(f => f !== file);
+				if (file === selected) {
+					// The neighbour takes over; with no tabs left the list's own
+					// fallback reopens the first monster.
+					setSelected(next[Math.min(idx, next.length - 1)] ?? null);
+				}
+				return next;
+			});
+		},
+		[dirtyFiles, selected]
+	);
 
 	useEffect(() => {
 		listMonsterGroups().then(setGroups).catch(() => setGroups([]));
@@ -191,6 +270,81 @@ export default function Workspace({
 
 	const monsterNames = useMemo(() => monsters.map(m => m.name), [monsters]);
 
+	// Baseline for patch notes: the corpus as it stood when the workspace opened.
+	const baselineRef = useRef<Map<string, MonsterSummary> | null>(null);
+	useEffect(() => {
+		if (!baselineRef.current && monsters.length > 0) {
+			baselineRef.current = new Map(monsters.map(m => [m.file, m]));
+		}
+	}, [monsters]);
+
+	const [scaling, setScaling] = useState(false);
+
+	const exportLints = useCallback(async () => {
+		try {
+			const lints = await fetchAllLints();
+			const path = await saveDialog({ defaultPath: 'monx-lint-report.txt' });
+			if (!path) return;
+			const sorted = [...lints].sort((a, b) => (a.file ?? '').localeCompare(b.file ?? '') || a.code.localeCompare(b.code));
+			const lines = sorted.map(
+				l => `${l.severity.toUpperCase().padEnd(8)}${l.code.padEnd(36)}${(l.file ?? '(workspace)').padEnd(28)}${l.message}`
+			);
+			await writeTextFile(
+				path,
+				`MONx lint report — ${label}\n${lines.length} findings\n\n${lines.join('\n')}\n`
+			);
+			showToast('ok', `Exported ${lines.length} lints`);
+		} catch (e) {
+			showToast('error', String(e));
+		}
+	}, [label, showToast]);
+
+	// Patch notes: the current summaries diffed against the workspace-open
+	// baseline — "Updated the health of Demon from 8200 to 9000".
+	const exportPatchNotes = useCallback(async () => {
+		const baseline = baselineRef.current;
+		if (!baseline) return;
+		try {
+			const notes: string[] = [];
+			const seen = new Set<string>();
+			const fields: { key: 'health' | 'experience' | 'speed'; label: string }[] = [
+				{ key: 'health', label: 'health' },
+				{ key: 'experience', label: 'experience' },
+				{ key: 'speed', label: 'speed' }
+			];
+			for (const m of monsters) {
+				seen.add(m.file);
+				const was = baseline.get(m.file);
+				if (!was) {
+					notes.push(`- Added new monster ${m.name}.`);
+					continue;
+				}
+				if (was.name !== m.name) notes.push(`- Renamed ${was.name} to ${m.name}.`);
+				for (const f of fields) {
+					if (was[f.key] !== m[f.key]) {
+						notes.push(
+							`- Updated the ${f.label} of ${m.name} from ${was[f.key].toLocaleString()} to ${m[f.key].toLocaleString()}.`
+						);
+					}
+				}
+				if (was.raceid !== m.raceid) notes.push(`- Updated the raceid of ${m.name} from ${was.raceid ?? 'none'} to ${m.raceid ?? 'none'}.`);
+			}
+			for (const [file, was] of baseline) {
+				if (!seen.has(file)) notes.push(`- Removed ${was.name}.`);
+			}
+			if (notes.length === 0) {
+				showToast('ok', 'No changes since the workspace was opened');
+				return;
+			}
+			const path = await saveDialog({ defaultPath: 'monx-patch-notes.md' });
+			if (!path) return;
+			await writeTextFile(path, `# Patch notes — ${label}\n\n${notes.join('\n')}\n`);
+			showToast('ok', `Exported ${notes.length} ${notes.length === 1 ? 'change' : 'changes'}`);
+		} catch (e) {
+			showToast('error', String(e));
+		}
+	}, [monsters, label, showToast]);
+
 	const reveal = useCallback(
 		(file: string) => {
 			revealMonster(file).catch(e => showToast('error', String(e)));
@@ -207,6 +361,20 @@ export default function Workspace({
 	const redoRef = useRef<MonsterDoc[]>([]);
 	const HISTORY_CAP = 100;
 
+	/** Puts `next` in the active buffer, marks it dirty and re-lints it. */
+	const commitDoc = useCallback((next: MonsterDoc) => {
+		buffersRef.current.set(next.file, { doc: next, lints: buffersRef.current.get(next.file)?.lints ?? [] });
+		setDirtyFiles(prev => (prev.has(next.file) ? prev : new Set(prev).add(next.file)));
+		setDoc(next);
+		lintMonster(next)
+			.then(l => {
+				setMonsterLints(l);
+				const buf = buffersRef.current.get(next.file);
+				if (buf && buf.doc === next) buf.lints = l;
+			})
+			.catch(() => {});
+	}, []);
+
 	const editDoc = useCallback(
 		(next: MonsterDoc) => {
 			if (docRef.current) {
@@ -214,13 +382,9 @@ export default function Workspace({
 				if (undoRef.current.length > HISTORY_CAP) undoRef.current.shift();
 				redoRef.current = [];
 			}
-			setDoc(next);
-			onDirtyChange(true);
-			lintMonster(next)
-				.then(setMonsterLints)
-				.catch(() => {});
+			commitDoc(next);
 		},
-		[onDirtyChange]
+		[commitDoc]
 	);
 
 	const applyHistory = useCallback(
@@ -228,16 +392,38 @@ export default function Workspace({
 			const target = from.pop();
 			if (!target || !docRef.current) return;
 			to.push(docRef.current);
-			setDoc(target);
-			onDirtyChange(true);
-			lintMonster(target)
-				.then(setMonsterLints)
-				.catch(() => {});
+			commitDoc(target);
 		},
-		[onDirtyChange]
+		[commitDoc]
 	);
 	const undoEdit = useCallback(() => applyHistory(undoRef.current, redoRef.current), [applyHistory]);
 	const redoEdit = useCallback(() => applyHistory(redoRef.current, undoRef.current), [applyHistory]);
+
+	const fixLint = useCallback(
+		(lint: Lint) => {
+			if (!doc) return;
+			const next = applyLintFix(doc, lint, { nextRaceid });
+			if (next) editDoc(next);
+			else showToast('error', `${lint.code} needs a manual fix`);
+		},
+		[doc, editDoc, nextRaceid, showToast]
+	);
+
+	const fixAllLints = useCallback(() => {
+		if (!doc) return;
+		let d = doc;
+		let fixed = 0;
+		let manual = 0;
+		for (const l of monsterLints.filter(l => l.fixable)) {
+			const next = applyLintFix(d, l, { nextRaceid });
+			if (next) {
+				d = next;
+				fixed++;
+			} else manual++;
+		}
+		if (fixed > 0) editDoc(d);
+		showToast('ok', `Fixed ${fixed} ${fixed === 1 ? 'lint' : 'lints'}${manual > 0 ? ` — ${manual} need a manual fix` : ''}`);
+	}, [doc, monsterLints, editDoc, nextRaceid, showToast]);
 
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
@@ -331,7 +517,12 @@ export default function Workspace({
 		try {
 			const lints = await saveMonster(doc);
 			setMonsterLints(lints);
-			onDirtyChange(false);
+			buffersRef.current.set(doc.file, { doc, lints });
+			setDirtyFiles(prev => {
+				const next = new Set(prev);
+				next.delete(doc.file);
+				return next;
+			});
 			showToast('ok', `Saved ${doc.file}`);
 			setWorkspaceLints(await lintWorkspace());
 		} catch (e) {
@@ -339,7 +530,7 @@ export default function Workspace({
 		} finally {
 			setSaving(false);
 		}
-	}, [doc, onDirtyChange, showToast]);
+	}, [doc, showToast]);
 
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
@@ -393,6 +584,20 @@ export default function Workspace({
 					label: `Pin all loot ids…${toolsBlocked}`,
 					disabled: dirty,
 					onSelect: () => setTool('all')
+				},
+				{
+					label: `Scale all loot chances…${toolsBlocked}`,
+					disabled: dirty,
+					onSelect: () => setScaling(true)
+				},
+				{
+					label: 'Export lint report…',
+					separated: true,
+					onSelect: () => void exportLints()
+				},
+				{
+					label: 'Export patch notes…',
+					onSelect: () => void exportPatchNotes()
 				}
 			]
 		}
@@ -733,6 +938,34 @@ export default function Workspace({
 				</aside>
 
 				<main className="ss-main">
+					{view === 'monsters' && tabs.length > 0 && (
+						<div className="ss-ed-tabs">
+							{tabs.map(f => {
+								const m = monsters.find(mm => mm.file === f);
+								return (
+									<div
+										key={f}
+										className={`ss-ed-tabitem${f === selected ? ' ss-ed-tabitem-active' : ''}`}
+										title={f}
+										onMouseDown={e => {
+											if (e.button === 0) setSelected(f);
+										}}
+									>
+										<span className="ss-ed-tabname">{m?.name ?? f}</span>
+										{dirtyFiles.has(f) && <span className="ss-ed-tabdirty">•</span>}
+										<button
+											className="ss-ed-tabclose"
+											aria-label={`Close ${f}`}
+											onMouseDown={e => e.stopPropagation()}
+											onClick={() => void closeTab(f)}
+										>
+											<X size={11} />
+										</button>
+									</div>
+								);
+							})}
+						</div>
+					)}
 					{view === 'monsters' ? (
 						doc ? (
 							<MonsterEditor
@@ -849,6 +1082,27 @@ export default function Workspace({
 									>
 										<Users size={14} />
 										Used by…
+									</button>
+									<button
+										className="ss-menu-item"
+										onClick={() => {
+											setItemMenu(null);
+											void navigator.clipboard.writeText(String(itemMenu.item.serverId));
+											showToast('ok', `Copied ${itemMenu.item.serverId}`);
+										}}
+									>
+										Copy id {itemMenu.item.serverId}
+									</button>
+									<button
+										className="ss-menu-item"
+										disabled={!itemMenu.item.name}
+										onClick={() => {
+											setItemMenu(null);
+											void navigator.clipboard.writeText(itemMenu.item.name);
+											showToast('ok', `Copied "${itemMenu.item.name}"`);
+										}}
+									>
+										Copy name
 									</button>
 									{doc && (
 										<>
@@ -984,7 +1238,7 @@ export default function Workspace({
 				<span className="mx-status-file mono">{doc?.file ?? ''}</span>
 				<button className="ss-btn ss-btn-primary" disabled={!doc || saving} onClick={() => void save()}>
 					<Save size={14} />
-					{saving ? 'Saving…' : dirty ? 'Save •' : 'Save'}
+					{saving ? 'Saving…' : activeDirty ? 'Save •' : 'Save'}
 				</button>
 			</div>
 
@@ -1043,6 +1297,24 @@ export default function Workspace({
 				</div>
 			)}
 
+			{scaling && (
+				<ScaleLootDialog
+					onClose={() => setScaling(false)}
+					onError={m => showToast('error', m)}
+					onApplied={report => {
+						onMonstersChanged(null);
+						lintWorkspace().then(setWorkspaceLints).catch(() => {});
+						setReloadKey(k => k + 1);
+						showToast(
+							'ok',
+							`Scaled ${report.entries.toLocaleString()} loot ${report.entries === 1 ? 'chance' : 'chances'} across ${
+								report.files
+							} ${report.files === 1 ? 'file' : 'files'}`
+						);
+					}}
+				/>
+			)}
+
 			{tool && (
 				<PinLootDialog
 					scope={tool}
@@ -1068,6 +1340,8 @@ export default function Workspace({
 				onClose={() => setLintsOpen(false)}
 				monsterLints={monsterLints}
 				workspaceLints={workspaceLints}
+				onFix={fixLint}
+				onFixAll={fixAllLints}
 				file={doc?.file ?? null}
 				onJump={lint => {
 					if (lint.file && lint.file !== selected) setSelected(lint.file);

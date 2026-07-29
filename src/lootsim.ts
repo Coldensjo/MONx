@@ -58,6 +58,8 @@ export interface ItemStat {
 	/** gp across every session; 0 when unpriced. */
 	gp: number;
 	priced: boolean;
+	/** 1-based kill index of the first drop, one element per session that saw one. */
+	firstDropKills: number[];
 }
 
 export interface KillDrop {
@@ -138,20 +140,28 @@ export function simulate(loot: LootEntry[], resolve: Resolve, params: SimParams)
 		gp: number;
 		worth: number;
 		priced: boolean;
+		firstDropKills: number[];
 	}
 	const acc = new Map<number, Acc>();
 	const perSessionGp: number[] = [];
 
 	const log: KillDrop[][] = [];
 	let killLog: KillDrop[] | null = null;
+	/** 1-based index of the kill being rolled, for time-to-first-drop. */
+	let currentKill = 0;
+	let firstThisSession = new Set<number>();
 
 	const record = (info: ItemInfo, count: number, sessionGp: { gp: number }) => {
 		killLog?.push({ serverId: info.serverId, name: info.name || `#${info.serverId}`, count });
 		let a = acc.get(info.serverId);
 		if (!a) {
 			const worth = Number(info.attributes.worth);
-			a = { info, total: 0, drops: 0, gp: 0, worth, priced: Number.isFinite(worth) };
+			a = { info, total: 0, drops: 0, gp: 0, worth, priced: Number.isFinite(worth), firstDropKills: [] };
 			acc.set(info.serverId, a);
+		}
+		if (!firstThisSession.has(info.serverId)) {
+			firstThisSession.add(info.serverId);
+			a.firstDropKills.push(currentKill);
 		}
 		a.total += count;
 		a.drops++;
@@ -177,7 +187,9 @@ export function simulate(loot: LootEntry[], resolve: Resolve, params: SimParams)
 
 	for (let s = 0; s < sessions; s++) {
 		const sessionGp = { gp: 0 };
+		firstThisSession = new Set();
 		for (let k = 0; k < killsPerSession; k++) {
+			currentKill = k + 1;
 			// Only the first session is logged — it is "the hunt"; the rest exist
 			// for the spread.
 			killLog = s === 0 && k < LOG_CAP ? [] : null;
@@ -197,7 +209,8 @@ export function simulate(loot: LootEntry[], resolve: Resolve, params: SimParams)
 			drops: a.drops,
 			configured: configured.get(a.info.serverId) ?? 0,
 			gp: a.gp,
-			priced: a.priced
+			priced: a.priced,
+			firstDropKills: a.firstDropKills
 		}))
 		.sort((x, y) => y.gp - x.gp || y.total - x.total);
 

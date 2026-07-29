@@ -73,6 +73,9 @@ interface RowProps {
 	/** Position in the list this row belongs to; null for nested children, which do not reorder. */
 	rowIndex: number | null;
 	onReorder: (from: number, to: number) => void;
+	/** Top-level rows only: membership in the multi-selection. */
+	checked?: boolean;
+	onToggleCheck?: (index: number) => void;
 }
 
 const LootRow = memo(function LootRow({
@@ -85,7 +88,9 @@ const LootRow = memo(function LootRow({
 	onChange,
 	onRemove,
 	rowIndex,
-	onReorder
+	onReorder,
+	checked,
+	onToggleCheck
 }: RowProps) {
 	const [expanded, setExpanded] = useState(false);
 	const info = useItemInfo(index, entry.id, entry.name);
@@ -114,6 +119,17 @@ const LootRow = memo(function LootRow({
 				{...drag}
 				{...drop}
 			>
+				{rowIndex !== null && onToggleCheck && (
+					// A nested control, so pressing it never starts the reorder drag.
+					<input
+						type="checkbox"
+						className="ss-ed-loot-check"
+						checked={checked ?? false}
+						disabled={readOnly}
+						onChange={() => onToggleCheck(rowIndex)}
+						title="Select for delete / scale"
+					/>
+				)}
 				<button
 					type="button"
 					className="ss-ed-loot-expand"
@@ -243,8 +259,39 @@ const LootRow = memo(function LootRow({
 export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle }: Props) {
 	const [adding, setAdding] = useState(false);
 	const [simulating, setSimulating] = useState(false);
+	/** Top-level row indices in the multi-selection. */
+	const [checked, setChecked] = useState<Set<number>>(new Set());
+	const [scalePct, setScalePct] = useState(100);
 
-	const setLoot = (next: LootEntry[]) => patch({ loot: next });
+	const setLoot = (next: LootEntry[]) => {
+		patch({ loot: next });
+		// Indices shift on any structural change; a stale selection would point
+		// at the wrong rows.
+		if (next.length !== doc.loot.length) setChecked(new Set());
+	};
+
+	const toggleCheck = (i: number) =>
+		setChecked(prev => {
+			const next = new Set(prev);
+			if (next.has(i)) next.delete(i);
+			else next.add(i);
+			return next;
+		});
+
+	const deleteChecked = () => {
+		patch({ loot: doc.loot.filter((_, i) => !checked.has(i)) });
+		setChecked(new Set());
+	};
+
+	const scaleChecked = () => {
+		patch({
+			loot: doc.loot.map((e, i) =>
+				checked.has(i)
+					? { ...e, chance: Math.max(0, Math.min(MAX_CHANCE, Math.round((e.chance * scalePct) / 100))) }
+					: e
+			)
+		});
+	};
 
 	const listDrop = useDropTarget(['item'], p => {
 		if (p.kind === 'item' && !readOnly) setLoot([...doc.loot, newLootEntry(p)]);
@@ -289,9 +336,37 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 						onRemove={() => setLoot(doc.loot.filter((_, j) => j !== i))}
 						rowIndex={i}
 						onReorder={(from, to) => setLoot(reorder(doc.loot, from, to))}
+						checked={checked.has(i)}
+						onToggleCheck={toggleCheck}
 					/>
 				))}
 			</div>
+
+			{checked.size > 0 && (
+				<div className="ss-ed-loot-bulk">
+					<span>{checked.size} selected</span>
+					<button type="button" className="ss-btn ss-ed-mini" disabled={readOnly} onClick={deleteChecked}>
+						<Trash2 size={13} />
+						Delete
+					</button>
+					<span className="ss-ed-loot-bulk-scale">
+						Scale chances to
+						<NumberField value={scalePct} onChange={setScalePct} min={0} max={10000} width={64} disabled={readOnly} />
+						%
+						<button
+							type="button"
+							className="ss-btn ss-ed-mini"
+							disabled={readOnly || scalePct === 100}
+							onClick={scaleChecked}
+						>
+							Apply
+						</button>
+					</span>
+					<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => setChecked(new Set())}>
+						Clear selection
+					</button>
+				</div>
+			)}
 
 			<div className="ss-ed-loot-actions">
 				{adding ? (

@@ -60,6 +60,8 @@ interface Props {
 	onJump: (lint: Lint) => void;
 	/** Applies the one unambiguous fix for a `fixable` lint. */
 	onFix?: (lint: Lint) => void;
+	/** Applies every automatic fix for the open monster in one press. */
+	onFixAll?: () => void;
 }
 
 /** Counts by severity, for the status-bar summary. */
@@ -69,7 +71,16 @@ export function countLints(lints: Lint[]): Record<LintSeverity, number> {
 	return counts;
 }
 
-export default function LintPanel({ open, onClose, monsterLints, workspaceLints, file, onJump, onFix }: Props) {
+export default function LintPanel({
+	open,
+	onClose,
+	monsterLints,
+	workspaceLints,
+	file,
+	onJump,
+	onFix,
+	onFixAll
+}: Props) {
 	const [tab, setTab] = useState<LintTab>('monster');
 	const [severities, setSeverities] = useState<Set<LintSeverity>>(loadFilter);
 	const [fixing, setFixing] = useState<string | null>(null);
@@ -156,6 +167,16 @@ export default function LintPanel({ open, onClose, monsterLints, workspaceLints,
 						);
 					})}
 				</div>
+
+				{onFixAll && tab === 'monster' && monsterLints.some(l => l.fixable) && (
+					<button
+						className="ss-lint-fix"
+						onClick={onFixAll}
+						title="Apply every automatic fix for this monster"
+					>
+						Fix all ({monsterLints.filter(l => l.fixable).length})
+					</button>
+				)}
 
 				<button className="ss-icon-btn" onClick={onClose} aria-label="Close lints">
 					<ChevronDown size={14} />

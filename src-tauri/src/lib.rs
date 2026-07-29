@@ -485,6 +485,99 @@ fn get_item(state: State<WorkspaceState>, server_id: u32) -> Result<ItemInfo, St
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct ScaledEntry {
+    file: String,
+    monster: String,
+    /// The item as the row reads: comment, name or bare id.
+    label: String,
+    from: i64,
+    to: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScaleReport {
+    applied: bool,
+    entries: u32,
+    files: u32,
+    /// First rows of the change, for the preview list.
+    sample: Vec<ScaledEntry>,
+}
+
+/// Corpus-wide loot chance scaling, preview-then-apply like `pin_loot_ids`:
+/// every entry's chance becomes `round(chance × percent / 100)`, clamped to
+/// 0..=100000. Entries whose value would not change are left untouched, so the
+/// diff stays minimal for the splicing writer.
+#[tauri::command]
+fn scale_loot_chances(
+    state: State<WorkspaceState>,
+    percent: f64,
+    apply: bool,
+) -> Result<ScaleReport, String> {
+    if !percent.is_finite() || !(0.0..=100_000.0).contains(&percent) {
+        return Err(format!("percent {percent} out of range"));
+    }
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+
+    fn scale(
+        entries: &mut [monster::LootEntry],
+        percent: f64,
+        file: &str,
+        name: &str,
+        changed: &mut u32,
+        sample: &mut Vec<ScaledEntry>,
+    ) {
+        for e in entries.iter_mut() {
+            let to = ((e.chance as f64 * percent / 100.0).round() as i64).clamp(0, 100_000);
+            if to != e.chance {
+                if sample.len() < 12 {
+                    let label = e
+                        .comment
+                        .clone()
+                        .or_else(|| e.name.clone())
+                        .or_else(|| e.id.map(|id| format!("id {id}")))
+                        .unwrap_or_default();
+                    sample.push(ScaledEntry {
+                        file: file.to_string(),
+                        monster: name.to_string(),
+                        label,
+                        from: e.chance,
+                        to,
+                    });
+                }
+                e.chance = to;
+                *changed += 1;
+            }
+            scale(&mut e.children, percent, file, name, changed, sample);
+        }
+    }
+
+    let mut entries = 0u32;
+    let mut sample = Vec::new();
+    let mut to_save = Vec::new();
+    for doc in &ws.docs {
+        let mut d = doc.clone();
+        let mut changed = 0u32;
+        scale(&mut d.loot, percent, &d.file, &d.name, &mut changed, &mut sample);
+        if changed > 0 {
+            entries += changed;
+            to_save.push(d);
+        }
+    }
+    let files = to_save.len() as u32;
+
+    if apply {
+        for d in &to_save {
+            monster::save(&ws.monsters_dir(), &ws.registry, d)?;
+        }
+        refresh(&mut ws);
+    }
+
+    Ok(ScaleReport { applied: apply, entries, files, sample })
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct UsageRef {
     file: String,
     name: String,
@@ -533,6 +626,31 @@ fn item_usage(state: State<WorkspaceState>, server_id: u32) -> Result<ItemUsage,
     Ok(usage)
 }
 
+/// Every lint in the workspace: the workspace-scope ones plus each monster's
+/// own, for the exported report — the UI only ever holds the active monster's.
+#[tauri::command]
+fn all_lints(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    let mut all = lint::lint_workspace(
+        &ws.docs,
+        &ws.registry,
+        &ws.spells,
+        &ws.items,
+        &ws.monsters_dir(),
+    );
+    for doc in &ws.docs {
+        all.extend(lint::lint_monster(doc, &ws.spells, &ws.items));
+    }
+    Ok(all)
+}
+
+/// Writes an exported report where the user pointed the save dialog. Plain
+/// text out only — this is not a general file API.
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| format!("write {path}: {e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let spr_manager: SprManagerState = Arc::new(RwLock::new(SprManager::new()));
@@ -573,7 +691,10 @@ pub fn run() {
             get_item,
             balance_bands,
             pin_loot_ids,
-            item_usage
+            item_usage,
+            scale_loot_chances,
+            all_lints,
+            write_text_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running MONx");

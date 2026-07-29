@@ -1419,7 +1419,7 @@
 
 .ss-lootsim-row {
 	display: grid;
-	grid-template-columns: 32px minmax(120px, 1fr) 70px 150px 160px;
+	grid-template-columns: 32px minmax(110px, 1fr) 64px 140px 100px 150px;
 	align-items: center;
 	gap: 8px;
 	padding: 3px 8px;
@@ -1512,4 +1512,92 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 2px;
+}
+
+/* ---------- Editor tabs ---------- */
+
+.ss-ed-tabs {
+	display: flex;
+	align-items: stretch;
+	gap: 2px;
+	padding: 4px 8px 0;
+	border-bottom: 1px solid var(--border);
+	background: var(--surface);
+	overflow-x: auto;
+	scrollbar-width: none;
+	flex: none;
+}
+
+.ss-ed-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.ss-ed-tabitem {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px 4px 10px;
+	border: 1px solid var(--border);
+	border-bottom: none;
+	border-radius: var(--radius) var(--radius) 0 0;
+	background: var(--surface-2);
+	color: var(--text-muted);
+	font-size: 12px;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+}
+
+.ss-ed-tabitem-active {
+	background: var(--bg);
+	color: var(--text);
+}
+
+.ss-ed-tabdirty {
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.ss-ed-tabclose {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	padding: 0;
+}
+
+.ss-ed-tabclose:hover {
+	background: var(--border);
+	color: var(--text);
+}
+
+/* ---------- Loot multi-select ---------- */
+
+.ss-ed-loot-check {
+	flex: none;
+	margin: 0;
+	accent-color: var(--accent);
+}
+
+.ss-ed-loot-bulk {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px;
+	border: 1px solid var(--accent);
+	background: var(--accent-dim);
+	border-radius: var(--radius);
+	font-size: 12px;
+}
+
+.ss-ed-loot-bulk-scale {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 }

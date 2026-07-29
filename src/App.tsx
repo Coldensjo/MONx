@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { AlertCircle, CheckCircle2, Minus, Square, X } from 'lucide-react';
@@ -13,7 +13,7 @@ import {
 	type WorkspacePaths
 } from './monster';
 import { openDat, openSpr } from './spr';
-import { loadWorkspaces, saveWorkspace, type RecentWorkspace } from './settings';
+import { loadSetting, loadWorkspaces, saveSetting, saveWorkspace, type RecentWorkspace } from './settings';
 import Landing from './Landing';
 import Workspace from './Workspace';
 import UiInspector from './UiInspector';
@@ -124,6 +124,60 @@ export default function App() {
 		window.addEventListener('keydown', handler);
 		return () => window.removeEventListener('keydown', handler);
 	}, [info, close]);
+
+	// Remember the window's size and position across launches — restored once at
+	// startup, saved (debounced) on every resize/move. tauri.conf.json's size
+	// stays the first-run default.
+	useEffect(() => {
+		const win = getCurrentWindow();
+		let timer: number | undefined;
+		let restoring = true;
+		(async () => {
+			try {
+				const raw = loadSetting('monx.window', null);
+				if (raw) {
+					const s = JSON.parse(raw);
+					if (s.maximized) {
+						await win.maximize();
+					} else if (s.w >= 500 && s.h >= 400) {
+						await win.setSize(new PhysicalSize(s.w, s.h));
+						if (Number.isFinite(s.x) && Number.isFinite(s.y)) {
+							await win.setPosition(new PhysicalPosition(s.x, s.y));
+						}
+					}
+				}
+			} catch {
+				// A bad or stale value just means the default size.
+			} finally {
+				restoring = false;
+			}
+		})();
+		const save = async () => {
+			if (restoring) return;
+			try {
+				if (await win.isMaximized()) {
+					saveSetting('monx.window', JSON.stringify({ maximized: true }));
+					return;
+				}
+				const size = await win.innerSize();
+				const pos = await win.outerPosition();
+				saveSetting('monx.window', JSON.stringify({ w: size.width, h: size.height, x: pos.x, y: pos.y }));
+			} catch {
+				// Non-critical.
+			}
+		};
+		const debounced = () => {
+			clearTimeout(timer);
+			timer = window.setTimeout(() => void save(), 400);
+		};
+		const unResized = win.onResized(debounced);
+		const unMoved = win.onMoved(debounced);
+		return () => {
+			clearTimeout(timer);
+			unResized.then(f => f()).catch(() => {});
+			unMoved.then(f => f()).catch(() => {});
+		};
+	}, []);
 
 	// Never let the window close on unsaved work.
 	useEffect(() => {
