@@ -486,9 +486,12 @@ export default function Workspace({
 										</span>
 									) : (
 										lootTray.map(i => (
-											<span key={i.serverId} className="ss-loot-tray-chip" title={`#${i.serverId}`}>
-												<img src={itemUrl(i.serverId, 24)} width={24} height={24} alt="" />
-												{i.name || `#${i.serverId}`}
+											<span
+												key={i.serverId}
+												className="ss-loot-tray-chip"
+												title={i.name ? `${i.name} (#${i.serverId})` : `#${i.serverId}`}
+											>
+												<img src={itemUrl(i.serverId, 32)} width={32} height={32} alt="" />
 											</span>
 										))
 									)}

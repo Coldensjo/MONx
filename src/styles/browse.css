@@ -289,26 +289,27 @@ body.ss-dragging {
 	letter-spacing: 0.06em;
 }
 
+/* Two fixed rows filling column-first, overflowing to the right — icons only,
+   the name lives in the chip's tooltip. */
 .ss-loot-tray-items {
 	flex: 1;
 	min-width: 0;
-	display: flex;
+	display: grid;
+	grid-template-rows: repeat(2, 36px);
+	grid-auto-flow: column;
+	grid-auto-columns: min-content;
 	align-items: center;
-	gap: 4px;
+	gap: 2px;
 	overflow-x: auto;
+	overflow-y: hidden;
 }
 
 .ss-loot-tray-chip {
-	flex: none;
 	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	padding: 2px 6px 2px 2px;
+	padding: 1px;
 	background: var(--surface-2);
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
-	font-size: 11px;
-	white-space: nowrap;
 }
 
 .ss-loot-tray-chip img {
