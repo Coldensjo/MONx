@@ -447,15 +447,100 @@ export default function Workspace({
 	const undoEdit = useCallback(() => applyHistory(undoRef.current, redoRef.current), [applyHistory]);
 	const redoEdit = useCallback(() => applyHistory(redoRef.current, undoRef.current), [applyHistory]);
 
-	const fixLint = useCallback(
-		(lint: Lint) => {
-			if (!doc) return;
-			const next = applyLintFix(doc, lint, { nextRaceid });
-			if (next) editDoc(next);
-			else showToast('error', `${lint.code} needs a manual fix`);
+	/** Loads `file`, applies every fix it can, saves it. Returns the ones that stuck. */
+	const fixInFile = useCallback(
+		async (file: string, lints: Lint[]): Promise<Lint[]> => {
+			let d = await getMonster(file);
+			const applied: Lint[] = [];
+			for (const l of lints) {
+				const next = applyLintFix(d, l, { nextRaceid });
+				if (next) {
+					d = next;
+					applied.push(l);
+				}
+			}
+			if (applied.length > 0) await saveMonster(d);
+			return applied;
 		},
-		[doc, editDoc, nextRaceid, showToast]
+		[nextRaceid]
 	);
+
+	// The Workspace tab lists lints from every file, so a Fix there must not land
+	// on whatever the editor happens to have open. Lints for the open monster go
+	// through the buffer (undoable, saved on Ctrl+S); the rest are loaded, fixed
+	// and written straight out, which is why a dirty buffer blocks them.
+	const fixLint = useCallback(
+		async (lint: Lint) => {
+			const target = lint.file ?? doc?.file ?? null;
+			if (doc && (target === null || target === doc.file)) {
+				const next = applyLintFix(doc, lint, { nextRaceid });
+				if (next) editDoc(next);
+				else showToast('error', `${lint.code} needs a manual fix`);
+				return;
+			}
+			if (!target) return;
+			if (dirtyFiles.has(target)) {
+				showToast('error', `${target} has unsaved changes — save it first`);
+				return;
+			}
+			try {
+				if ((await fixInFile(target, [lint])).length === 0) {
+					showToast('error', `${lint.code} needs a manual fix`);
+					return;
+				}
+				// Source lints are only computed when the workspace opens, so there
+				// is nothing to re-fetch — drop the row that was just repaired.
+				setWorkspaceLints(prev => prev.filter(l => l !== lint));
+				onMonstersChanged(null);
+				showToast('ok', `Fixed ${lint.code} in ${target}`);
+			} catch (e) {
+				showToast('error', String(e));
+			}
+		},
+		[doc, dirtyFiles, editDoc, fixInFile, nextRaceid, onMonstersChanged, showToast]
+	);
+
+	/** Fix all, for the Workspace tab: every fixable lint, grouped by its file. */
+	const fixAllWorkspaceLints = useCallback(async () => {
+		if (dirtyFiles.size > 0) {
+			showToast('error', 'Save your open changes first — these fixes write files directly');
+			return;
+		}
+		const byFile = new Map<string, Lint[]>();
+		for (const l of workspaceLints) {
+			if (!l.fixable || !l.file) continue;
+			const list = byFile.get(l.file);
+			if (list) list.push(l);
+			else byFile.set(l.file, [l]);
+		}
+		const applied = new Set<Lint>();
+		const files: string[] = [];
+		try {
+			for (const [file, lints] of byFile) {
+				const done = await fixInFile(file, lints);
+				if (done.length > 0) {
+					done.forEach(l => applied.add(l));
+					files.push(file);
+				}
+			}
+		} catch (e) {
+			showToast('error', String(e));
+			return;
+		}
+		if (applied.size === 0) {
+			showToast('ok', 'Nothing here has an automatic fix');
+			return;
+		}
+		// Source lints are only computed at open, so the panel is corrected in
+		// place rather than re-fetched.
+		setWorkspaceLints(prev => prev.filter(l => !applied.has(l)));
+		onMonstersChanged(null);
+		setReloadKey(k => k + 1);
+		showToast(
+			'ok',
+			`Fixed ${applied.size} ${applied.size === 1 ? 'lint' : 'lints'} across ${files.length} ${files.length === 1 ? 'file' : 'files'}`
+		);
+	}, [dirtyFiles, fixInFile, onMonstersChanged, showToast, workspaceLints]);
 
 	const fixAllLints = useCallback(() => {
 		if (!doc) return;
@@ -1466,8 +1551,9 @@ export default function Workspace({
 				onClose={() => setLintsOpen(false)}
 				monsterLints={monsterLints}
 				workspaceLints={workspaceLints}
-				onFix={fixLint}
+				onFix={lint => void fixLint(lint)}
 				onFixAll={fixAllLints}
+				onFixAllWorkspace={() => void fixAllWorkspaceLints()}
 				file={doc?.file ?? null}
 				onJump={lint => {
 					if (lint.file && lint.file !== selected) setSelected(lint.file);

@@ -31,6 +31,13 @@ function fixLoot(doc: MonsterDoc, path: string, f: (e: LootEntry) => LootEntry):
 	return { ...doc, loot: updateLootAt(doc.loot, idx, f) };
 }
 
+function spellAt(doc: MonsterDoc, path: string): SpellBlock | null {
+	const list = path.startsWith('attacks') ? 'attacks' : path.startsWith('defenses') ? 'defenses' : null;
+	const [i] = indices(path);
+	if (!list || i === undefined) return null;
+	return doc[list][i] ?? null;
+}
+
 function fixSpell(doc: MonsterDoc, path: string, f: (b: SpellBlock) => SpellBlock): MonsterDoc | null {
 	const list = path.startsWith('attacks') ? 'attacks' : path.startsWith('defenses') ? 'defenses' : null;
 	const [i] = indices(path);
@@ -159,6 +166,25 @@ export function applyLintFix(doc: MonsterDoc, lint: Lint, ctx: FixContext): Mons
 			}));
 		case 'spell.geometry-on-registered':
 			return fixSpell(doc, path, b => ({ ...b, area: null }));
+		case 'spell.multiple-geometry': {
+			// The engine keeps only the last geometry attribute (§8.3), and `shape`
+			// already records which one that is. Zeroing the losers makes the model
+			// say what the engine does; the writer then emits the shape's attribute
+			// alone, so the dead ones leave the file.
+			const area = spellAt(doc, path)?.area;
+			if (!area) return null;
+			const beam = area.shape === 'beam';
+			return fixSpell(doc, path, b => ({
+				...b,
+				area: {
+					...area,
+					length: beam ? area.length : 0,
+					spread: beam ? area.spread : 0,
+					radius: area.shape === 'radius' ? area.radius : 0,
+					ring: area.shape === 'ring' ? area.ring : 0
+				}
+			}));
+		}
 
 		case 'effect.wrong-case': {
 			if (path.startsWith('summons.entries')) {

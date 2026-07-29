@@ -62,6 +62,8 @@ interface Props {
 	onFix?: (lint: Lint) => void;
 	/** Applies every automatic fix for the open monster in one press. */
 	onFixAll?: () => void;
+	/** The same, for every file in the workspace tab — writes those files directly. */
+	onFixAllWorkspace?: () => void;
 }
 
 /** Counts by severity, for the status-bar summary. */
@@ -79,7 +81,8 @@ export default function LintPanel({
 	file,
 	onJump,
 	onFix,
-	onFixAll
+	onFixAll,
+	onFixAllWorkspace
 }: Props) {
 	const [tab, setTab] = useState<LintTab>('monster');
 	const [severities, setSeverities] = useState<Set<LintSeverity>>(loadFilter);
@@ -175,6 +178,15 @@ export default function LintPanel({
 						title="Apply every automatic fix for this monster"
 					>
 						Fix all ({monsterLints.filter(l => l.fixable).length})
+					</button>
+				)}
+				{onFixAllWorkspace && tab === 'workspace' && workspaceLints.some(l => l.fixable && l.file) && (
+					<button
+						className="ss-lint-fix"
+						onClick={onFixAllWorkspace}
+						title="Apply every automatic fix across the corpus — writes those files directly"
+					>
+						Fix all ({workspaceLints.filter(l => l.fixable && l.file).length})
 					</button>
 				)}
 
