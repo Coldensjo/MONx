@@ -14,8 +14,9 @@
 			{
 				"label": "main",
 				"title": "MONx",
-				"width": 1200,
-				"height": 780,
+				"width": 1600,
+				"height": 950,
+				"center": true,
 				"minWidth": 900,
 				"minHeight": 600,
 				"resizable": true,
