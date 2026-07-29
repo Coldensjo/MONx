@@ -493,6 +493,7 @@ export default function Workspace({
 									container: i.container
 								})}
 								onContextMenu={itemContextMenu}
+								onPick={i => addToTray([i])}
 								searchPlaceholder="Search server id or name"
 							/>
 							<div className="ss-loot-tray">
