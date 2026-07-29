@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { COMMON_IMMUNITY_PRESET, CONDITION_IMMUNITIES, DAMAGE_TYPES, type DamageType } from '../catalog';
 import { elementPercent, isImmune, type DamageType as CombatType } from '../derive';
 import { FieldLint } from '../fields/Field';
@@ -23,9 +24,24 @@ function elementKey(elements: Record<string, number>, d: DamageType): string {
 }
 
 export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	// Mode is otherwise derived from the value, so a slider dragged through 0
+	// would flip the row to Normal and unmount the slider mid-gesture. Types
+	// the user has put (or edited) in percent mode stay there until they pick
+	// another mode, even at 0.
+	const [pinnedPercent, setPinnedPercent] = useState<Set<string>>(new Set());
+	const pinPercent = (d: DamageType, on: boolean) =>
+		setPinnedPercent(prev => {
+			if (prev.has(d.key) === on) return prev;
+			const next = new Set(prev);
+			if (on) next.add(d.key);
+			else next.delete(d.key);
+			return next;
+		});
+
 	const setMode = (d: DamageType, mode: Mode) => {
 		const immunities = { ...doc.immunities };
 		const elements = { ...doc.elements };
+		pinPercent(d, mode === 'percent');
 		if (mode === 'immune') {
 			// Immunity and an element percent on the same type make the engine
 			// warn, and the immunity wins anyway — so they are exclusive here.
@@ -40,6 +56,7 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 	};
 
 	const setPercent = (d: DamageType, v: number) => {
+		pinPercent(d, true);
 		patch({ elements: { ...doc.elements, [elementKey(doc.elements, d)]: v } });
 	};
 
@@ -63,7 +80,7 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 				{DAMAGE_TYPES.map(d => {
 					const immune = isImmune(doc, combatType(d));
 					const percent = elementPercent(doc, combatType(d));
-					const mode: Mode = immune ? 'immune' : percent !== 0 ? 'percent' : 'normal';
+					const mode: Mode = immune ? 'immune' : percent !== 0 || pinnedPercent.has(d.key) ? 'percent' : 'normal';
 					return (
 						<div key={d.key} className="ss-ed-resist-row">
 							<span className="ss-ed-resist-icon" style={{ background: d.color }} title={d.label} />
