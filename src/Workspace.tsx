@@ -512,6 +512,7 @@ export default function Workspace({
 								searchId={itemSearchId}
 								filters={itemFilters}
 								initialFilters={itemsInitialFilters}
+								searchMode="filter"
 								selectionMode="multi"
 								view="items"
 								draggable

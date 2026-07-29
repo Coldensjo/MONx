@@ -66,6 +66,9 @@ export interface ThingBrowserProps<T> {
 	toolbarExtra?: ReactNode;
 	searchPlaceholder?: string;
 	emptyLabel?: string;
+	/** 'jump' (default, SPRx behaviour) scrolls to the first match; 'filter'
+	 *  narrows the grid to matching cells instead. */
+	searchMode?: 'jump' | 'filter';
 }
 
 /** SPRx's id search, unchanged: "2400", "100-250", "5,7,9-12". */
@@ -323,7 +326,8 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		onContextMenu,
 		toolbarExtra,
 		searchPlaceholder,
-		emptyLabel = 'nothing to display'
+		emptyLabel = 'nothing to display',
+		searchMode = 'jump'
 	} = props;
 
 	const [search, setSearch] = useState('');
@@ -366,9 +370,8 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		return (item: T) => active.every(f => f.test(item));
 	}, [activeFilters, filters]);
 
-	const shown = useMemo(() => (filterFn ? items.filter(filterFn) : items), [items, filterFn]);
-
-	// A search doesn't filter the grid — it jumps to the first match, same as SPRx.
+	// In 'jump' mode a search doesn't filter the grid — it scrolls to the first
+	// match, same as SPRx. In 'filter' mode the same predicate narrows the grid.
 	const matchFn = useMemo(() => {
 		const q = search.trim();
 		if (!q) return null;
@@ -379,6 +382,11 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		if (!searchText) return null;
 		return (item: T) => searchText(item).toLowerCase().includes(needle);
 	}, [search, searchId, searchText]);
+
+	const shown = useMemo(() => {
+		const filtered = filterFn ? items.filter(filterFn) : items;
+		return searchMode === 'filter' && matchFn ? filtered.filter(matchFn) : filtered;
+	}, [items, filterFn, searchMode, matchFn]);
 
 	const filterListQuery = filterSearch.trim().toLowerCase();
 	const visibleFilters = filterListQuery
@@ -690,9 +698,9 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		setSelectedKeys(next);
 	}, [marquee]);
 
-	// When the search matches something, select it and scroll it into view.
+	// Jump mode: when the search matches something, select it and scroll it into view.
 	useEffect(() => {
-		if (!matchFn || cols < 1) return;
+		if (searchMode !== 'jump' || !matchFn || cols < 1) return;
 		const idx = shown.findIndex(matchFn);
 		if (idx < 0) return;
 		const key = orderedKeysRef.current[idx];
@@ -706,7 +714,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		if (cellTop < el.scrollTop || cellTop + cellH > el.scrollTop + el.clientHeight) {
 			el.scrollTop = Math.max(0, cellTop - (el.clientHeight - cellH) / 2);
 		}
-	}, [matchFn, shown, cols, cellH, emit]);
+	}, [searchMode, matchFn, shown, cols, cellH, emit]);
 
 	const gridAnimates = useMemo(
 		() => animateEnabled && !!cellFrames && shown.some(item => cellFrames(item) > 1),
