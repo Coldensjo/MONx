@@ -98,7 +98,11 @@ export default function Workspace({
 	/** The Loot staging tray under the Items browser — collected via right-click,
 	 *  appended to the open monster in one go. Session-scoped, deduped by server id. */
 	const [lootTray, setLootTray] = useState<ItemInfo[]>([]);
-	const [itemMenu, setItemMenu] = useState<{ x: number; y: number; items: ItemInfo[] } | null>(null);
+	/** `item` is the cell under the cursor (for single-item actions like the corpse);
+	 *  `items` is the whole effective selection. */
+	const [itemMenu, setItemMenu] = useState<{ x: number; y: number; item: ItemInfo; items: ItemInfo[] } | null>(
+		null
+	);
 	const label = workspaceLabel(info.paths.monsters);
 
 	// Fall back to the first monster when the remembered one is gone.
@@ -339,8 +343,8 @@ export default function Workspace({
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
 
-	const itemContextMenu = useCallback((_: ItemInfo, e: React.MouseEvent, selected: ItemInfo[]) => {
-		setItemMenu({ x: e.clientX, y: e.clientY, items: selected });
+	const itemContextMenu = useCallback((item: ItemInfo, e: React.MouseEvent, selected: ItemInfo[]) => {
+		setItemMenu({ x: e.clientX, y: e.clientY, item, items: selected });
 	}, []);
 
 	const addToTray = useCallback(
@@ -360,6 +364,32 @@ export default function Workspace({
 		const ok = await confirm(`Clear ${n} ${n === 1 ? 'item' : 'items'} from Loot?`, { title: 'Clear loot' });
 		if (ok) setLootTray([]);
 	}, [lootTray.length]);
+
+	/** Straight onto the open monster, skipping the tray — same entries the tray would make. */
+	const addToMonsterLoot = useCallback(
+		(picked: ItemInfo[]) => {
+			if (!doc || picked.length === 0) return;
+			editDoc({
+				...doc,
+				loot: [...doc.loot, ...picked.map(i => newLootEntry({ serverId: i.serverId, name: i.name }))]
+			});
+			showToast(
+				'ok',
+				`Added ${picked.length} loot ${picked.length === 1 ? 'entry' : 'entries'} to ${doc.name}`
+			);
+		},
+		[doc, editDoc, showToast]
+	);
+
+	// The same mutation as dropping the item on the Look section's corpse field.
+	const setAsCorpse = useCallback(
+		(item: ItemInfo) => {
+			if (!doc) return;
+			editDoc({ ...doc, look: { ...doc.look, corpse: item.serverId } });
+			showToast('ok', `Corpse of ${doc.name} set to ${item.name || `#${item.serverId}`}`);
+		},
+		[doc, editDoc, showToast]
+	);
 
 	const addTrayToMonster = useCallback(() => {
 		if (!doc || lootTray.length === 0) return;
@@ -521,6 +551,32 @@ export default function Workspace({
 										<Package size={14} />
 										Add {itemMenu.items.length === 1 ? 'item' : `${itemMenu.items.length} items`} to Loot
 									</button>
+									{doc && (
+										<>
+											<button
+												className="ss-menu-item"
+												onClick={() => {
+													setItemMenu(null);
+													addToMonsterLoot(itemMenu.items);
+												}}
+											>
+												<Plus size={14} />
+												Add {itemMenu.items.length === 1 ? 'item' : `${itemMenu.items.length} items`} to
+												loot for {doc.name}
+											</button>
+											<div className="ss-menu-sep" />
+											<button
+												className="ss-menu-item"
+												onClick={() => {
+													setItemMenu(null);
+													setAsCorpse(itemMenu.item);
+												}}
+											>
+												<Skull size={14} />
+												Set as corpse for {doc.name}
+											</button>
+										</>
+									)}
 								</div>
 							)}
 						</>
