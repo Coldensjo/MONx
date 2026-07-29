@@ -626,6 +626,39 @@ fn item_usage(state: State<WorkspaceState>, server_id: u32) -> Result<ItemUsage,
     Ok(usage)
 }
 
+/// Every server id the corpus drops as loot, nested container entries included.
+/// The complement is what the Items browser's "not dropped by any monster"
+/// filter shows, so the resolution has to match `item_usage`: a name-only entry
+/// counts only when the name resolves to exactly one id, because an ambiguous
+/// one is an entry the loader drops (§13) — nothing is dropped by it in game.
+#[tauri::command]
+fn dropped_item_ids(state: State<WorkspaceState>) -> Result<Vec<u32>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+
+    fn walk(entries: &[monster::LootEntry], items: &items::ItemIndex, out: &mut Vec<u32>) {
+        for e in entries {
+            if let Some(id) = e.id {
+                if id > 0 {
+                    out.push(id as u32);
+                }
+            } else if let Some(name) = e.name.as_deref() {
+                if let [sid] = items.ids_for_name(name)[..] {
+                    out.push(sid);
+                }
+            }
+            walk(&e.children, items, out);
+        }
+    }
+
+    let mut ids = Vec::new();
+    for doc in &ws.docs {
+        walk(&doc.loot, &ws.items, &mut ids);
+    }
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
+}
+
 /// Every lint in the workspace: the workspace-scope ones plus each monster's
 /// own, for the exported report — the UI only ever holds the active monster's.
 #[tauri::command]
@@ -692,6 +725,7 @@ pub fn run() {
             balance_bands,
             pin_loot_ids,
             item_usage,
+            dropped_item_ids,
             scale_loot_chances,
             all_lints,
             write_text_file

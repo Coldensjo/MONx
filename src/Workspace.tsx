@@ -5,6 +5,7 @@ import {
 	getItem,
 	allLints as fetchAllLints,
 	getMonster,
+	droppedItemIds,
 	itemsRowUrl,
 	itemUrl,
 	itemUsage,
@@ -107,6 +108,9 @@ export default function Workspace({
 	const [lootTray, setLootTray] = useState<ItemInfo[]>([]);
 	/** Frame counts per client id from the .dat, for animating item cells. */
 	const [itemFrames, setItemFrames] = useState<Map<number, number>>(new Map());
+	/** Server ids the saved corpus drops, for the "not dropped by any monster"
+	 *  filter. Re-read after anything that rewrites loot on disk. */
+	const [dropped, setDropped] = useState<Set<number>>(new Set());
 	/** Filter keys the Items browser opens with. Pickupable is the standing default
 	 *  (the view exists to feed loot); Select corpse / Select item override it. */
 	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>(['pickupable']);
@@ -596,6 +600,17 @@ export default function Workspace({
 		searchItems('', Number.MAX_SAFE_INTEGER).then(setItemList).catch(() => setItemList([]));
 	}, []);
 
+	// The dropped-id set comes from the backend's copy of the corpus, so it is
+	// what is on disk — an unsaved buffer does not move an item in or out of the
+	// filter until Ctrl+S. `reloadKey` bumps for the corpus tools; saves refresh
+	// it directly.
+	const refreshDropped = useCallback(() => {
+		droppedItemIds()
+			.then(ids => setDropped(new Set(ids)))
+			.catch(() => {});
+	}, []);
+	useEffect(refreshDropped, [refreshDropped, reloadKey]);
+
 	// The outfit / effect / missile lists come straight from the dat, through the
 	// inherited `get_things`. Loaded once; the client files never change while a
 	// workspace is open.
@@ -658,12 +673,13 @@ export default function Workspace({
 			});
 			showToast('ok', `Saved ${doc.file}`);
 			setWorkspaceLints(await lintWorkspace());
+			refreshDropped();
 		} catch (e) {
 			showToast('error', String(e));
 		} finally {
 			setSaving(false);
 		}
-	}, [doc, showToast]);
+	}, [doc, showToast, refreshDropped]);
 
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
@@ -801,6 +817,14 @@ export default function Workspace({
 		return [
 			{ key: 'pickupable', label: 'Pickupable', section: special, test: (i: ItemInfo) => i.pickupable },
 			{ key: 'corpses', label: 'Show corpses', section: special, test: attr('corpseType') },
+			{
+				// Loot only — an item used as a corpse or worn as a typeex look still
+				// counts as undropped, which is the question being asked.
+				key: 'undropped',
+				label: 'Not dropped by any monster',
+				section: special,
+				test: (i: ItemInfo) => !dropped.has(i.serverId)
+			},
 
 			{ key: 'stackable', label: 'Stackable', section: kind, test: (i: ItemInfo) => i.stackable },
 			{ key: 'container', label: 'Container', section: kind, test: (i: ItemInfo) => i.container },
@@ -846,7 +870,7 @@ export default function Workspace({
 			{ key: 'ambiguous', label: 'Ambiguous name', section: props, test: (i: ItemInfo) => i.ambiguousName },
 			{ key: 'animated', label: 'Animated', section: props, test: (i: ItemInfo) => (itemFrames.get(i.clientId) ?? 1) > 1 }
 		];
-	}, [itemFrames]);
+	}, [itemFrames, dropped]);
 
 	const thingContextMenu = useCallback((t: ThingSummary, e: React.MouseEvent, kind: 'effect' | 'missile') => {
 		const table = kind === 'effect' ? MAGIC_EFFECTS : SHOOT_EFFECTS;

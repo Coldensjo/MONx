@@ -432,6 +432,12 @@ export function itemUsage(serverId: number): Promise<ItemUsage> {
 	return invoke<ItemUsage>('item_usage', { serverId });
 }
 
+/** Every server id the saved corpus drops, for the Items browser's
+ *  "not dropped by any monster" filter. Sorted and deduped. */
+export function droppedItemIds(): Promise<number[]> {
+	return invoke<number[]>('dropped_item_ids');
+}
+
 /** Corpus-wide loot chance scaling; `apply: false` is the preview. */
 export function scaleLootChances(percent: number, apply: boolean): Promise<ScaleReport> {
 	return invoke<ScaleReport>('scale_loot_chances', { percent, apply });
