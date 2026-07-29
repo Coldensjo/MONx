@@ -1,0 +1,42 @@
+/* Light theme. index.css is frozen SPRx and owns the dark :root palette, so
+   the light variant lives here as a [data-theme] override — App.tsx stamps
+   the attribute on <html> and persists the choice under monx.theme. Every
+   variable the dark palette defines (index.css + shell.css) is re-stated;
+   nothing else changes, so both themes flow through the same var() plumbing. */
+
+:root {
+	color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+	color-scheme: light;
+
+	--bg: #f4f4f2;
+	--surface: #ffffff;
+	--surface-2: #ebebe8;
+	--border: #d8d8d4;
+	--border-strong: #c2c2be;
+
+	--text: #1d1d1c;
+	--text-muted: #71716e;
+
+	/* The inherited green, darkened for contrast on white. */
+	--accent: #177a61;
+	--accent-dim: rgba(23, 122, 97, 0.12);
+	--accent-text: #ffffff;
+
+	--destructive: #bf3434;
+	--destructive-dim: rgba(191, 52, 52, 0.1);
+
+	--sprite-bg: #e2e2df;
+
+	--warn: #8f6400;
+	--warn-dim: rgba(143, 100, 0, 0.12);
+	--silent: #5c4fa6;
+	--silent-dim: rgba(92, 79, 166, 0.12);
+}
+
+/* The context-menu shadow is hardcoded dark in frozen index.css; soften it. */
+:root[data-theme='light'] .ss-context-menu {
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}

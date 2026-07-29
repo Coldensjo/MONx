@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { confirm } from '@tauri-apps/plugin-dialog';
-import { AlertCircle, CheckCircle2, Minus, Square, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Minus, Moon, Square, Sun, X } from 'lucide-react';
 import {
 	closeWorkspace,
 	listMonsters,
@@ -38,6 +38,15 @@ export default function App() {
 	const [opening, setOpening] = useState(false);
 	const [droppedPath, setDroppedPath] = useState<string | null>(null);
 	const [recent, setRecent] = useState<RecentWorkspace[]>(loadWorkspaces);
+	const [theme, setTheme] = useState<'dark' | 'light'>(() =>
+		loadSetting('monx.theme', 'dark') === 'light' ? 'light' : 'dark'
+	);
+
+	// The stylesheet keys the light palette off <html data-theme="light">.
+	useEffect(() => {
+		document.documentElement.dataset.theme = theme;
+		saveSetting('monx.theme', theme);
+	}, [theme]);
 	const [toast, setToast] = useState<Toast | null>(null);
 
 	const showToast = useCallback((kind: Toast['kind'], msg: string) => {
@@ -210,6 +219,14 @@ export default function App() {
 					)}
 				</div>
 				<div className="ss-titlebar-spacer" data-tauri-drag-region />
+				<button
+					className="ss-caption-button"
+					onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
+					title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+					aria-label="Toggle theme"
+				>
+					{theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+				</button>
 				<button className="ss-caption-button" onClick={() => void win.minimize()} aria-label="Minimize">
 					<Minus size={14} />
 				</button>

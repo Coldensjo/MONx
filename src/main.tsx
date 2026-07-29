@@ -6,6 +6,7 @@ import './styles/shell.css'; // App shell: titlebar, landing, workspace layout
 import './styles/editor.css'; // The editor sections and field controls
 import './styles/browse.css'; // Monster list, thing browsers, preview, lints
 import './styles/inspect.css'; // UI inspector overlay (hold F2)
+import './styles/theme.css'; // Light-mode palette override (data-theme on <html>)
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>
