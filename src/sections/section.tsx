@@ -44,6 +44,8 @@ export interface SectionProps {
 	nextRaceid: number | null;
 	readOnly: boolean;
 	onBrowseOutfits?: () => void;
+	/** Opens the Items browser pre-filtered to corpses, for the Look section's corpse picker. */
+	onBrowseCorpses?: () => void;
 }
 
 interface ShellProps {

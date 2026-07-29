@@ -267,6 +267,15 @@
 	flex-wrap: wrap;
 }
 
+/* The corpse read-out beside Select corpse — display only, the browser picks. */
+.ss-ed-corpse-name {
+	font-size: 12px;
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 /* ---------- lint badges ---------- */
 
 .ss-ed-lint {

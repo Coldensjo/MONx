@@ -31,6 +31,8 @@ export interface ThingBrowserProps<T> {
 	cellKey: (item: T) => CellKey;
 	cellLabel: (item: T) => string;
 	filters?: Filter<T>[];
+	/** Filter keys active when the browser mounts, e.g. a picker opening pre-filtered. */
+	initialFilters?: string[];
 	onSelect?: (item: T) => void;
 	/** Picker mode: fired on double-click, for "choose this one and close". */
 	onPick?: (item: T) => void;
@@ -330,7 +332,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 	const [gridFrame, setGridFrame] = useState(0);
 	const [primaryKey, setPrimaryKey] = useState<CellKey | null>(null);
 
-	const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+	const [activeFilters, setActiveFilters] = useState<Set<string>>(() => new Set(props.initialFilters ?? []));
 	const [showFilters, setShowFilters] = useState(false);
 	const [filterSearch, setFilterSearch] = useState('');
 

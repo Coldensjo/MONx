@@ -98,6 +98,8 @@ export default function Workspace({
 	/** The Loot staging tray under the Items browser — collected via right-click,
 	 *  appended to the open monster in one go. Session-scoped, deduped by server id. */
 	const [lootTray, setLootTray] = useState<ItemInfo[]>([]);
+	/** Filter keys the Items browser opens with — set by "Select corpse", cleared by plain nav. */
+	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>([]);
 	/** `item` is the cell under the cursor (for single-item actions like the corpse);
 	 *  `items` is the whole effective selection. */
 	const [itemMenu, setItemMenu] = useState<{ x: number; y: number; item: ItemInfo; items: ItemInfo[] } | null>(
@@ -205,11 +207,21 @@ export default function Workspace({
 	);
 
 	// The item browser gets every pickupable item — the grid virtualizes rows,
-	// so the full list costs no more than a page of it. Only pickupable items:
-	// the browser exists to feed loot, and walls or ground tiles can never be
-	// carried. The corpse/typeex pickers search unfiltered.
+	// so the full list costs no more than a page of it. Pickupable because the
+	// browser exists to feed loot, and walls or ground tiles can never be
+	// carried — plus the corpses (not pickupable), so the "Show corpses" filter
+	// and the Look section's Select corpse button have something to show.
 	useEffect(() => {
-		searchItems('', Number.MAX_SAFE_INTEGER, true).then(setItemList).catch(() => setItemList([]));
+		Promise.all([
+			searchItems('', Number.MAX_SAFE_INTEGER, true),
+			searchItems('', Number.MAX_SAFE_INTEGER, false, true)
+		])
+			.then(([pickupable, corpses]) => {
+				const merged = new Map(pickupable.map(i => [i.serverId, i]));
+				for (const c of corpses) merged.set(c.serverId, c);
+				setItemList([...merged.values()].sort((a, b) => a.serverId - b.serverId));
+			})
+			.catch(() => setItemList([]));
 	}, []);
 
 	// The outfit / effect / missile lists come straight from the dat, through the
@@ -342,6 +354,16 @@ export default function Workspace({
 	const itemLabel = useCallback((i: ItemInfo) => i.name || `#${i.serverId}`, []);
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
+	// `corpseType` is what the backend's own corpses_only filter keys on.
+	const itemFilters = useMemo(
+		() => [{ key: 'corpses', label: 'Show corpses', test: (i: ItemInfo) => 'corpseType' in i.attributes }],
+		[]
+	);
+
+	const browseCorpses = useCallback(() => {
+		setItemsInitialFilters(['corpses']);
+		setView('items');
+	}, []);
 
 	const itemContextMenu = useCallback((item: ItemInfo, e: React.MouseEvent, selected: ItemInfo[]) => {
 		setItemMenu({ x: e.clientX, y: e.clientY, item, items: selected });
@@ -435,7 +457,11 @@ export default function Workspace({
 							<button
 								key={n.key}
 								className={`ss-nav-item ${view === n.key ? 'ss-nav-item-active' : ''}`}
-								onClick={() => setView(n.key)}
+								onClick={() => {
+									// Plain navigation never inherits the Select-corpse preset.
+									setItemsInitialFilters([]);
+									setView(n.key);
+								}}
 							>
 								{n.icon}
 								<span className="ss-nav-label">{n.label}</span>
@@ -468,6 +494,7 @@ export default function Workspace({
 								monsterNames={monsterNames}
 								nextRaceid={nextRaceid}
 								onBrowseOutfits={() => setView('outfits')}
+								onBrowseCorpses={browseCorpses}
 								previewUrl={previewUrl}
 								thingAnim={thingAnim}
 							/>
@@ -483,6 +510,8 @@ export default function Workspace({
 								cellLabel={itemLabel}
 								searchText={itemSearchText}
 								searchId={itemSearchId}
+								filters={itemFilters}
+								initialFilters={itemsInitialFilters}
 								selectionMode="multi"
 								view="items"
 								draggable

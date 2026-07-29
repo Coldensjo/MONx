@@ -51,6 +51,8 @@ export interface MonsterEditorProps {
 	nextRaceid?: number | null;
 	onSave?: () => void;
 	onBrowseOutfits?: () => void;
+	/** Opens the Items browser pre-filtered to corpses. */
+	onBrowseCorpses?: () => void;
 	/** Resolves client things to protocol URLs; without it previews degrade to ids. */
 	previewUrl?: PreviewUrl;
 	/** Frame counts for animated things; without it the spell stage guesses a loop. */
@@ -70,6 +72,7 @@ export function MonsterEditor({
 	nextRaceid = null,
 	onSave,
 	onBrowseOutfits,
+	onBrowseCorpses,
 	previewUrl,
 	thingAnim
 }: MonsterEditorProps) {
@@ -156,7 +159,8 @@ export function MonsterEditor({
 		monsterNames,
 		nextRaceid,
 		readOnly,
-		onBrowseOutfits
+		onBrowseOutfits,
+		onBrowseCorpses
 	};
 
 	return (

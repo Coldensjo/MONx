@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Link2, Unlink } from 'lucide-react';
+import { Link2, PackageSearch, Unlink, X } from 'lucide-react';
 import type { Look } from '../monster';
 import { Field } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { ColorSwatchGrid } from '../fields/ColorSwatchGrid';
 import { OutfitPicker } from '../fields/OutfitPicker';
-import { ItemPicker, ItemSprite } from '../fields/ItemPicker';
+import { ItemPicker, ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { DecayChain } from '../fields/DecayChain';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
 import { useDropTarget } from '../dnd';
@@ -23,7 +23,17 @@ const COLOUR_PARTS: { key: 'head' | 'body' | 'legs' | 'feet'; label: string }[] 
 	{ key: 'feet', label: 'Feet' }
 ];
 
-export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, onToggle, onBrowseOutfits }: Props) {
+export function LookSection({
+	doc,
+	patch,
+	lintAt,
+	items,
+	readOnly,
+	collapsed,
+	onToggle,
+	onBrowseOutfits,
+	onBrowseCorpses
+}: Props) {
 	// Health stays locked unless the author deliberately wants a monster that
 	// spawns damaged; the loader clamps now > max and warns (§4).
 	const [healthUnlocked, setHealthUnlocked] = useState(doc.health.now !== doc.health.max);
@@ -39,6 +49,10 @@ export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, on
 	const corpseDrop = useDropTarget(['item'], p => {
 		if (p.kind === 'item' && !readOnly) setLook({ corpse: p.serverId });
 	});
+
+	// Resolves the corpse id to its items.xml name for the read-only display —
+	// the picking itself happens in the Items browser (Select corpse).
+	const corpseInfo = useItemInfo(items, look.corpse === 0 ? null : look.corpse, null);
 
 	const typeexDrop = useDropTarget(['item'], p => {
 		// Dropping an item onto typeex also switches the mode — that is the only
@@ -139,18 +153,35 @@ export function LookSection({ doc, patch, lintAt, items, readOnly, collapsed, on
 
 			<SubGroup title="Corpse">
 				<Field label="Corpse item" lints={lintAt('look.corpse')} hint={look.corpse === 0 ? 'no corpse' : undefined}>
-					<span className="ss-ed-drop" {...corpseDrop}>
-						<ItemPicker
-							index={items}
-							value={look.corpse === 0 ? null : look.corpse}
-							onChange={item => setLook({ corpse: item.serverId })}
-							onClear={() => setLook({ corpse: 0 })}
+					<span className="ss-ed-drop ss-ed-inline" {...corpseDrop}>
+						<ItemSprite serverId={look.corpse === 0 ? null : look.corpse} size={32} />
+						{look.corpse !== 0 && (
+							<span className="ss-ed-corpse-name">
+								{corpseInfo?.name || `#${look.corpse}`}
+							</span>
+						)}
+						<button
+							type="button"
+							className="ss-btn"
 							disabled={readOnly}
-							placeholder="No corpse"
-							corpseFilter
-						/>
+							onClick={onBrowseCorpses}
+							title="Browse the Items grid filtered to corpses, then right-click one to set it"
+						>
+							<PackageSearch size={14} />
+							Select corpse
+						</button>
+						{look.corpse !== 0 && (
+							<button
+								type="button"
+								className="ss-btn ss-btn-ghost"
+								disabled={readOnly}
+								onClick={() => setLook({ corpse: 0 })}
+								title="No corpse"
+							>
+								<X size={13} />
+							</button>
+						)}
 					</span>
-					<ItemSprite serverId={look.corpse === 0 ? null : look.corpse} size={32} />
 				</Field>
 
 				<DecayChain serverId={look.corpse === 0 ? null : look.corpse} />
