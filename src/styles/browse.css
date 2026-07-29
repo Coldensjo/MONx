@@ -339,6 +339,31 @@ body.ss-dragging {
 	font-size: 11px;
 }
 
+/* ---------- Effect/missile → spell context menu ---------- */
+
+/* A monster can carry a dozen spells; the menu scrolls rather than overflowing
+   the window. */
+.ss-spell-menu {
+	max-height: 50vh;
+	overflow-y: auto;
+}
+
+.ss-menu-head {
+	padding: 4px 10px 6px;
+	font-size: 11px;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	border-bottom: 1px solid var(--border);
+	margin-bottom: 4px;
+}
+
+.ss-menu-note {
+	padding: 6px 10px;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
 /* Advisory only — deliberately quiet, and never styled as an error (§14.3). */
 .ss-balance {
 	padding: 4px 0 8px;

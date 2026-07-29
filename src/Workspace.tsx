@@ -27,6 +27,7 @@ import {
 } from './monster';
 import Menubar, { type Menu } from './Menubar';
 import { newLootEntry } from './sections/Loot';
+import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
@@ -105,6 +106,15 @@ export default function Workspace({
 	const [itemMenu, setItemMenu] = useState<{ x: number; y: number; item: ItemInfo; items: ItemInfo[] } | null>(
 		null
 	);
+	/** Right-clicked effect/missile: `entry` is its catalogue row (the XML name), null
+	 *  when the client id has no usable CONST_ME_* / CONST_ANI_* name. */
+	const [thingMenu, setThingMenu] = useState<{
+		x: number;
+		y: number;
+		kind: 'effect' | 'missile';
+		label: string;
+		entry: EffectEntry | null;
+	} | null>(null);
 	const label = workspaceLabel(info.paths.monsters);
 
 	// Fall back to the first monster when the remembered one is gone.
@@ -360,6 +370,42 @@ export default function Workspace({
 		[]
 	);
 
+	const thingContextMenu = useCallback((t: ThingSummary, e: React.MouseEvent, kind: 'effect' | 'missile') => {
+		const table = kind === 'effect' ? MAGIC_EFFECTS : SHOOT_EFFECTS;
+		// The XML wants the CONST_* name, so the client id must resolve to a usable
+		// catalogue row — unreachable names (§21) can never be written.
+		const entry = table.find(en => en.id === t.id && !en.unreachable) ?? null;
+		setThingMenu({ x: e.clientX, y: e.clientY, kind, label: t.name ?? `#${t.id}`, entry });
+	}, []);
+
+	/** The open monster's spell blocks that can carry effect attributes — registered
+	 *  (###) spells are skipped because the loader never reads theirs (§8.1). */
+	const spellTargets = useMemo(() => {
+		if (!doc) return [];
+		const label = (b: (typeof doc.attacks)[number]) => b.name ?? b.script ?? 'unnamed';
+		return [
+			...doc.attacks.map((b, i) => ({ list: 'attacks' as const, i, b, label: `${label(b)} (attack)` })),
+			...doc.defenses.map((b, i) => ({ list: 'defenses' as const, i, b, label: `${label(b)} (defense)` }))
+		].filter(t => t.b.kind !== 'registered');
+	}, [doc]);
+
+	const setSpellEffect = useCallback(
+		(list: 'attacks' | 'defenses', index: number, kind: 'effect' | 'missile', entry: EffectEntry) => {
+			if (!doc) return;
+			const field = kind === 'effect' ? 'areaEffect' : 'shootEffect';
+			const blocks = doc[list].map((b, i) =>
+				i === index ? { ...b, effects: { ...b.effects, [field]: entry.name } } : b
+			);
+			editDoc({ ...doc, [list]: blocks });
+			const spell = doc[list][index];
+			showToast(
+				'ok',
+				`${kind === 'effect' ? 'Effect' : 'Missile'} of ${spell.name ?? spell.script ?? 'spell'} set to ${entry.label}`
+			);
+		},
+		[doc, editDoc, showToast]
+	);
+
 	const browseCorpses = useCallback(() => {
 		setItemsInitialFilters(['corpses']);
 		setView('items');
@@ -423,12 +469,18 @@ export default function Workspace({
 		showToast('ok', `Added ${n} loot ${n === 1 ? 'entry' : 'entries'} to ${doc.name}`);
 	}, [doc, lootTray, editDoc, showToast]);
 
-	// Dismiss the item context menu on any outside press or Escape, as MonsterList does.
+	// Dismiss the context menus on any outside press or Escape, as MonsterList does.
 	useEffect(() => {
-		if (!itemMenu) return;
-		const onDown = () => setItemMenu(null);
+		if (!itemMenu && !thingMenu) return;
+		const onDown = () => {
+			setItemMenu(null);
+			setThingMenu(null);
+		};
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') setItemMenu(null);
+			if (e.key === 'Escape') {
+				setItemMenu(null);
+				setThingMenu(null);
+			}
 		};
 		window.addEventListener('mousedown', onDown);
 		window.addEventListener('keydown', onKey);
@@ -436,7 +488,7 @@ export default function Workspace({
 			window.removeEventListener('mousedown', onDown);
 			window.removeEventListener('keydown', onKey);
 		};
-	}, [itemMenu]);
+	}, [itemMenu, thingMenu]);
 
 	const allLints = useMemo(
 		() => [...monsterLints, ...workspaceLints],
@@ -644,8 +696,44 @@ export default function Workspace({
 							draggable={view === 'outfits'}
 							dragPayload={t => (view === 'outfits' ? { kind: 'outfit', type: t.id } : null)}
 							onPick={view === 'outfits' && doc ? t => void pickOutfit(t) : undefined}
+							onContextMenu={
+								view === 'effects' || view === 'missiles'
+									? (t, e) => thingContextMenu(t, e, view === 'effects' ? 'effect' : 'missile')
+									: undefined
+							}
 							searchPlaceholder="Search client id or name"
 						/>
+					)}
+					{thingMenu && (
+						<div
+							className="ss-context-menu ss-spell-menu"
+							style={{ left: thingMenu.x, top: thingMenu.y }}
+							onMouseDown={e => e.stopPropagation()}
+						>
+							<div className="ss-menu-head">
+								Set {thingMenu.entry?.label ?? thingMenu.label} as {thingMenu.kind} for…
+							</div>
+							{!thingMenu.entry ? (
+								<div className="ss-menu-note">This {thingMenu.kind} has no XML name — it cannot be used from a monster file.</div>
+							) : !doc ? (
+								<div className="ss-menu-note">No monster open.</div>
+							) : spellTargets.length === 0 ? (
+								<div className="ss-menu-note">{doc.name} has no spells that take effects.</div>
+							) : (
+								spellTargets.map(t => (
+									<button
+										key={`${t.list}-${t.i}`}
+										className="ss-menu-item"
+										onClick={() => {
+											setThingMenu(null);
+											setSpellEffect(t.list, t.i, thingMenu.kind, thingMenu.entry!);
+										}}
+									>
+										{t.label}
+									</button>
+								))
+							)}
+						</div>
 					)}
 				</main>
 
