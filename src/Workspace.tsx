@@ -356,14 +356,67 @@ export default function Workspace({
 	const itemLabel = useCallback((i: ItemInfo) => i.name || `#${i.serverId}`, []);
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
-	// `corpseType` is what the backend's own corpses_only filter keys on.
-	const itemFilters = useMemo(
-		() => [
-			{ key: 'pickupable', label: 'Pickupable', test: (i: ItemInfo) => i.pickupable },
-			{ key: 'corpses', label: 'Show corpses', test: (i: ItemInfo) => 'corpseType' in i.attributes }
-		],
-		[]
-	);
+	// Predicates over the raw items.xml attributes (`corpseType` is what the
+	// backend's own corpses_only filter keys on). Filters AND together, as in
+	// SPRx — vocabulary from the corpus: weaponType sword/club/axe/distance/
+	// wand/shield/ammunition, slotType head/body/legs/feet/ring/necklace/
+	// backpack/rune/trinket/two-handed.
+	const itemFilters = useMemo(() => {
+		const attr = (key: string) => (i: ItemInfo) => key in i.attributes;
+		const attrIs = (key: string, value: string) => (i: ItemInfo) => i.attributes[key] === value;
+		const special = 'Special';
+		const kind = 'Kind';
+		const weapons = 'Weapons';
+		const slot = 'Slot';
+		const props = 'Properties';
+		return [
+			{ key: 'pickupable', label: 'Pickupable', section: special, test: (i: ItemInfo) => i.pickupable },
+			{ key: 'corpses', label: 'Show corpses', section: special, test: attr('corpseType') },
+
+			{ key: 'stackable', label: 'Stackable', section: kind, test: (i: ItemInfo) => i.stackable },
+			{ key: 'container', label: 'Container', section: kind, test: (i: ItemInfo) => i.container },
+			{
+				key: 'weapon',
+				label: 'Weapon (any)',
+				section: kind,
+				test: (i: ItemInfo) =>
+					['sword', 'club', 'axe', 'distance', 'wand', 'fist'].includes(i.attributes.weaponType ?? '')
+			},
+			{ key: 'shield', label: 'Shield', section: kind, test: attrIs('weaponType', 'shield') },
+			{ key: 'ammunition', label: 'Ammunition', section: kind, test: attrIs('weaponType', 'ammunition') },
+			{ key: 'rune', label: 'Rune', section: kind, test: attrIs('slotType', 'rune') },
+			{ key: 'fluid', label: 'Fluid container', section: kind, test: attr('fluidSource') },
+
+			{ key: 'sword', label: 'Sword', section: weapons, test: attrIs('weaponType', 'sword') },
+			{ key: 'club', label: 'Club', section: weapons, test: attrIs('weaponType', 'club') },
+			{ key: 'axe', label: 'Axe', section: weapons, test: attrIs('weaponType', 'axe') },
+			{ key: 'distance', label: 'Distance', section: weapons, test: attrIs('weaponType', 'distance') },
+			{ key: 'wand', label: 'Wand', section: weapons, test: attrIs('weaponType', 'wand') },
+
+			{ key: 'slot-head', label: 'Helmet', section: slot, test: attrIs('slotType', 'head') },
+			{ key: 'slot-body', label: 'Armor (body)', section: slot, test: attrIs('slotType', 'body') },
+			{ key: 'slot-legs', label: 'Legs', section: slot, test: attrIs('slotType', 'legs') },
+			{ key: 'slot-feet', label: 'Boots', section: slot, test: attrIs('slotType', 'feet') },
+			{ key: 'slot-ring', label: 'Ring', section: slot, test: attrIs('slotType', 'ring') },
+			{ key: 'slot-necklace', label: 'Necklace', section: slot, test: attrIs('slotType', 'necklace') },
+			{ key: 'slot-trinket', label: 'Trinket', section: slot, test: attrIs('slotType', 'trinket') },
+			{ key: 'slot-backpack', label: 'Backpack slot', section: slot, test: attrIs('slotType', 'backpack') },
+			{ key: 'two-handed', label: 'Two-handed', section: slot, test: attrIs('slotType', 'two-handed') },
+
+			{ key: 'has-attack', label: 'Has attack', section: props, test: attr('attack') },
+			{ key: 'has-defense', label: 'Has defense', section: props, test: attr('defense') },
+			{ key: 'has-armor', label: 'Has armor', section: props, test: attr('armor') },
+			{ key: 'speed', label: 'Speed bonus', section: props, test: attr('speed') },
+			{ key: 'charged', label: 'Has charges', section: props, test: attr('charges') },
+			{ key: 'decays', label: 'Decays', section: props, test: (i: ItemInfo) => 'duration' in i.attributes || 'decayTo' in i.attributes },
+			{ key: 'writeable', label: 'Writable', section: props, test: (i: ItemInfo) => 'writeable' in i.attributes || 'maxTextLen' in i.attributes },
+			{ key: 'blocks', label: 'Blocks projectiles', section: props, test: attr('blockprojectile') },
+			{ key: 'field', label: 'Field (fire/energy/…)', section: props, test: attr('field') },
+			{ key: 'worth', label: 'Has worth', section: props, test: attr('worth') },
+			{ key: 'described', label: 'Has description', section: props, test: attr('description') },
+			{ key: 'ambiguous', label: 'Ambiguous name', section: props, test: (i: ItemInfo) => i.ambiguousName }
+		];
+	}, []);
 
 	const thingContextMenu = useCallback((t: ThingSummary, e: React.MouseEvent, kind: 'effect' | 'missile') => {
 		const table = kind === 'effect' ? MAGIC_EFFECTS : SHOOT_EFFECTS;
