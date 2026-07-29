@@ -318,7 +318,11 @@ body.ss-dragging {
 	image-rendering: pixelated;
 }
 
+/* The hint is a grid item in a min-content column — without the span and
+   nowrap it wraps into the two icon rows. */
 .ss-loot-tray-empty {
+	grid-row: 1 / -1;
+	white-space: nowrap;
 	color: var(--text-muted);
 	font-size: 11px;
 }
