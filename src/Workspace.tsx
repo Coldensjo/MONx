@@ -955,7 +955,7 @@ export default function Workspace({
 				</aside>
 
 				<main className="ss-main">
-					{view === 'monsters' && tabs.length > 0 && (
+					{tabs.length > 0 && (
 						<div className="ss-ed-tabs">
 							{tabs.map(f => {
 								const m = monsters.find(mm => mm.file === f);
@@ -965,7 +965,11 @@ export default function Workspace({
 										className={`ss-ed-tabitem${f === selected ? ' ss-ed-tabitem-active' : ''}`}
 										title={f}
 										onMouseDown={e => {
-											if (e.button === 0) setSelected(f);
+											// Activating a tab from a browser view also returns to the editor.
+											if (e.button === 0) {
+												setSelected(f);
+												setView('monsters');
+											}
 											// Middle-click closes; preventDefault stops autoscroll.
 											if (e.button === 1) {
 												e.preventDefault();
