@@ -5,7 +5,7 @@ import { Field } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { ColorSwatchGrid } from '../fields/ColorSwatchGrid';
 import { OutfitPicker } from '../fields/OutfitPicker';
-import { ItemPicker, ItemSprite, useItemInfo } from '../fields/ItemPicker';
+import { ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { DecayChain } from '../fields/DecayChain';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
 import { useDropTarget } from '../dnd';
@@ -32,7 +32,8 @@ export function LookSection({
 	collapsed,
 	onToggle,
 	onBrowseOutfits,
-	onBrowseCorpses
+	onBrowseCorpses,
+	onBrowseItems
 }: Props) {
 	// Health stays locked unless the author deliberately wants a monster that
 	// spawns damaged; the loader clamps now > max and warns (§4).
@@ -53,6 +54,7 @@ export function LookSection({
 	// Resolves the corpse id to its items.xml name for the read-only display —
 	// the picking itself happens in the Items browser (Select corpse).
 	const corpseInfo = useItemInfo(items, look.corpse === 0 ? null : look.corpse, null);
+	const typeexInfo = useItemInfo(items, look.typeex, null);
 
 	const typeexDrop = useDropTarget(['item'], p => {
 		// Dropping an item onto typeex also switches the mode — that is the only
@@ -82,15 +84,43 @@ export function LookSection({
 
 				{typeex ? (
 					<Field label="Item" lints={lintAt('look.typeex')}>
-						<span className="ss-ed-drop" {...typeexDrop}>
-							<ItemPicker
-								index={items}
-								value={look.typeex}
-								onChange={item => setLook({ typeex: item.serverId })}
-								onClear={() => setLook({ typeex: null })}
+						<span className="ss-ed-drop ss-ed-inline" {...typeexDrop}>
+							{look.typeex === null ? (
+								<ItemSprite serverId={null} size={32} />
+							) : (
+								// No cell param — native composed size, as the corpse shows.
+								<img
+									className="ss-ed-item-sprite"
+									src={itemUrl(look.typeex)}
+									alt=""
+									draggable={false}
+									onError={e => (e.currentTarget.style.visibility = 'hidden')}
+								/>
+							)}
+							{look.typeex !== null && (
+								<span className="ss-ed-corpse-name">{typeexInfo?.name || `#${look.typeex}`}</span>
+							)}
+							<button
+								type="button"
+								className="ss-btn"
 								disabled={readOnly}
-								placeholder="Pick the item to appear as…"
-							/>
+								onClick={onBrowseItems}
+								title="Browse the Items grid, then right-click one to set it as the outfit"
+							>
+								<PackageSearch size={14} />
+								Select item
+							</button>
+							{look.typeex !== null && (
+								<button
+									type="button"
+									className="ss-btn ss-btn-ghost"
+									disabled={readOnly}
+									onClick={() => setLook({ typeex: null })}
+									title="Clear"
+								>
+									<X size={13} />
+								</button>
+							)}
 						</span>
 					</Field>
 				) : (

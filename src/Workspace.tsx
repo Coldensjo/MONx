@@ -411,6 +411,22 @@ export default function Workspace({
 		setView('items');
 	}, []);
 
+	const browseItems = useCallback(() => {
+		setItemsInitialFilters([]);
+		setView('items');
+	}, []);
+
+	// The same mutation as dropping the item on the typeex field: setting the
+	// item also switches the mode, since typeex has no effect otherwise.
+	const setAsTypeex = useCallback(
+		(item: ItemInfo) => {
+			if (!doc) return;
+			editDoc({ ...doc, look: { ...doc.look, mode: 'typeex', typeex: item.serverId } });
+			showToast('ok', `Outfit (typeex) of ${doc.name} set to ${item.name || `#${item.serverId}`}`);
+		},
+		[doc, editDoc, showToast]
+	);
+
 	const itemContextMenu = useCallback((item: ItemInfo, e: React.MouseEvent, selected: ItemInfo[]) => {
 		setItemMenu({ x: e.clientX, y: e.clientY, item, items: selected });
 	}, []);
@@ -547,6 +563,7 @@ export default function Workspace({
 								nextRaceid={nextRaceid}
 								onBrowseOutfits={() => setView('outfits')}
 								onBrowseCorpses={browseCorpses}
+								onBrowseItems={browseItems}
 								previewUrl={previewUrl}
 								thingAnim={thingAnim}
 							/>
@@ -659,6 +676,16 @@ export default function Workspace({
 											>
 												<Skull size={14} />
 												Set as corpse for {doc.name}
+											</button>
+											<button
+												className="ss-menu-item"
+												onClick={() => {
+													setItemMenu(null);
+													setAsTypeex(itemMenu.item);
+												}}
+											>
+												<PersonStanding size={14} />
+												Set as outfit (typeex) for {doc.name}
 											</button>
 										</>
 									)}

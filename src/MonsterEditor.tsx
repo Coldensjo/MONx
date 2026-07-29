@@ -53,6 +53,8 @@ export interface MonsterEditorProps {
 	onBrowseOutfits?: () => void;
 	/** Opens the Items browser pre-filtered to corpses. */
 	onBrowseCorpses?: () => void;
+	/** Opens the Items browser unfiltered, for the typeex picker. */
+	onBrowseItems?: () => void;
 	/** Resolves client things to protocol URLs; without it previews degrade to ids. */
 	previewUrl?: PreviewUrl;
 	/** Frame counts for animated things; without it the spell stage guesses a loop. */
@@ -73,6 +75,7 @@ export function MonsterEditor({
 	onSave,
 	onBrowseOutfits,
 	onBrowseCorpses,
+	onBrowseItems,
 	previewUrl,
 	thingAnim
 }: MonsterEditorProps) {
@@ -160,7 +163,8 @@ export function MonsterEditor({
 		nextRaceid,
 		readOnly,
 		onBrowseOutfits,
-		onBrowseCorpses
+		onBrowseCorpses,
+		onBrowseItems
 	};
 
 	return (

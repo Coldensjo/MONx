@@ -46,6 +46,8 @@ export interface SectionProps {
 	onBrowseOutfits?: () => void;
 	/** Opens the Items browser pre-filtered to corpses, for the Look section's corpse picker. */
 	onBrowseCorpses?: () => void;
+	/** Opens the Items browser unfiltered, for the Look section's typeex picker. */
+	onBrowseItems?: () => void;
 }
 
 interface ShellProps {
