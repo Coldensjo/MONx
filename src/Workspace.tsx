@@ -454,6 +454,30 @@ export default function Workspace({
 		[doc, editDoc, showToast]
 	);
 
+	// Outfit filters read the .dat geometry: width/height are in 32px tiles,
+	// patternX is directions, patternY addons, patternZ the mount variant, and
+	// a second layer is the colour template an outfit needs to be dyeable.
+	const outfitFilters = useMemo(() => {
+		const size = 'Size';
+		const features = 'Features';
+		return [
+			{ key: 'size-32', label: '32×32', section: size, test: (t: ThingSummary) => t.width === 1 && t.height === 1 },
+			{ key: 'size-64', label: '64×64', section: size, test: (t: ThingSummary) => t.width === 2 && t.height === 2 },
+			{
+				key: 'size-mixed',
+				label: '64×32 / 32×64',
+				section: size,
+				test: (t: ThingSummary) => t.width + t.height === 3
+			},
+			{ key: 'animated', label: 'Animated', section: features, test: (t: ThingSummary) => t.frames > 1 },
+			{ key: 'directional', label: 'Directional', section: features, test: (t: ThingSummary) => t.patternX >= 4 },
+			{ key: 'fixed', label: 'Single direction', section: features, test: (t: ThingSummary) => t.patternX === 1 },
+			{ key: 'addons', label: 'Has addons', section: features, test: (t: ThingSummary) => t.patternY > 1 },
+			{ key: 'mount', label: 'Has mount variant', section: features, test: (t: ThingSummary) => t.patternZ > 1 },
+			{ key: 'colourable', label: 'Colourable', section: features, test: (t: ThingSummary) => t.layers > 1 }
+		];
+	}, []);
+
 	const browseCorpses = useCallback(() => {
 		setItemsInitialFilters(['corpses']);
 		setView('items');
@@ -770,6 +794,7 @@ export default function Workspace({
 							}
 							searchId={t => t.id}
 							searchText={t => t.name ?? ''}
+							filters={view === 'outfits' ? outfitFilters : undefined}
 							selectionMode="single"
 							view={view}
 							draggable={view === 'outfits'}
