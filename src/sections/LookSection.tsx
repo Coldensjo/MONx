@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link2, PackageSearch, Unlink, X } from 'lucide-react';
-import type { Look } from '../monster';
+import { itemUrl, type Look } from '../monster';
 import { Field } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { ColorSwatchGrid } from '../fields/ColorSwatchGrid';
@@ -154,7 +154,19 @@ export function LookSection({
 			<SubGroup title="Corpse">
 				<Field label="Corpse item" lints={lintAt('look.corpse')} hint={look.corpse === 0 ? 'no corpse' : undefined}>
 					<span className="ss-ed-drop ss-ed-inline" {...corpseDrop}>
-						<ItemSprite serverId={look.corpse === 0 ? null : look.corpse} size={32} />
+						{look.corpse === 0 ? (
+							<ItemSprite serverId={null} size={32} />
+						) : (
+							// No cell param: /item.png returns the corpse at its native
+							// composed size, so a 2×2-tile corpse reads as 64×64.
+							<img
+								className="ss-ed-item-sprite"
+								src={itemUrl(look.corpse)}
+								alt=""
+								draggable={false}
+								onError={e => (e.currentTarget.style.visibility = 'hidden')}
+							/>
+						)}
 						{look.corpse !== 0 && (
 							<span className="ss-ed-corpse-name">
 								{corpseInfo?.name || `#${look.corpse}`}
