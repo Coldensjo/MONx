@@ -1363,7 +1363,9 @@
 
 .ss-lootsim-modal {
 	width: min(720px, calc(100vw - 80px));
-	max-height: calc(100vh - 120px);
+	/* The table takes whatever the modal has left, so the modal's own ceiling is
+	   what decides how many item rows are on screen. */
+	max-height: calc(100vh - 72px);
 	display: flex;
 	flex-direction: column;
 }
@@ -1453,6 +1455,16 @@
 
 .ss-lootsim-row:nth-child(even) {
 	background: var(--surface-2);
+}
+
+/* 32 wide, 20 tall: the sprite keeps its native pixel scale and is cropped top
+   and bottom (object-fit: cover, never scaled down), which packs the rows
+   tighter without turning the items into thumbnails. Item sprites carry
+   transparent margin, so the crop costs almost nothing. */
+.ss-lootsim-row .ss-ed-item-sprite {
+	width: 32px;
+	height: 20px;
+	object-fit: cover;
 }
 
 .ss-lootsim-head {
