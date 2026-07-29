@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Ban, Check, ChevronDown, Ghost, ShieldAlert, X } from 'lucide-react';
 import type { Lint, LintSeverity } from './monster';
 
@@ -83,6 +83,26 @@ export default function LintPanel({
 		const away = () => setRowMenu(null);
 		window.addEventListener('mousedown', away);
 		return () => window.removeEventListener('mousedown', away);
+	}, [rowMenu]);
+
+	// The drawer lives at the bottom of the window, so a menu dropped at the
+	// cursor lands off-screen. Measured once and clamped into the viewport, which
+	// puts it above the click when there is no room below; hidden until then, so
+	// the uncorrected position is never painted.
+	const menuRef = useRef<HTMLDivElement>(null);
+	const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null);
+	useLayoutEffect(() => {
+		if (!rowMenu) {
+			setMenuPos(null);
+			return;
+		}
+		const el = menuRef.current;
+		if (!el) return;
+		const { width, height } = el.getBoundingClientRect();
+		setMenuPos({
+			left: Math.max(4, Math.min(rowMenu.x, window.innerWidth - width - 4)),
+			top: Math.max(4, Math.min(rowMenu.y, window.innerHeight - height - 4))
+		});
 	}, [rowMenu]);
 
 	useEffect(() => {
@@ -243,8 +263,13 @@ export default function LintPanel({
 
 			{rowMenu && onIgnoreCode && (
 				<div
+					ref={menuRef}
 					className="ss-context-menu"
-					style={{ left: rowMenu.x, top: rowMenu.y }}
+					style={{
+						left: menuPos?.left ?? rowMenu.x,
+						top: menuPos?.top ?? rowMenu.y,
+						visibility: menuPos ? 'visible' : 'hidden'
+					}}
 					onMouseDown={e => e.stopPropagation()}
 				>
 					<button
