@@ -263,6 +263,65 @@ body.ss-dragging {
 	text-align: center;
 }
 
+/* ---------- Loot tray (Items browser) ---------- */
+
+/* The staging strip under the Items grid: right-clicked selections land here,
+   then move onto the open monster in one press. Sits below the grid-wrap, which
+   keeps its flex:1 scroll area. */
+.ss-loot-tray {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px;
+	border-top: 1px solid var(--border);
+	background: var(--surface);
+}
+
+.ss-loot-tray-head {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+.ss-loot-tray-items {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	overflow-x: auto;
+}
+
+.ss-loot-tray-chip {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 6px 2px 2px;
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+.ss-loot-tray-chip img {
+	background: var(--sprite-bg);
+	border-radius: 3px;
+	image-rendering: pixelated;
+}
+
+.ss-loot-tray-empty {
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
 /* Advisory only — deliberately quiet, and never styled as an error (§14.3). */
 .ss-balance {
 	padding: 4px 0 8px;

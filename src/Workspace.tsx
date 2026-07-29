@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { confirm } from '@tauri-apps/plugin-dialog';
-import { Package, PersonStanding, Save, Skull, Sparkles, Wand2 } from 'lucide-react';
+import { Package, PersonStanding, Plus, Save, Skull, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import {
 	getItem,
 	getMonster,
@@ -26,6 +26,7 @@ import {
 	type WorkspaceInfo
 } from './monster';
 import Menubar, { type Menu } from './Menubar';
+import { newLootEntry } from './sections/Loot';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
@@ -94,6 +95,10 @@ export default function Workspace({
 		effect: [],
 		missile: []
 	});
+	/** The Loot staging tray under the Items browser — collected via right-click,
+	 *  appended to the open monster in one go. Session-scoped, deduped by server id. */
+	const [lootTray, setLootTray] = useState<ItemInfo[]>([]);
+	const [itemMenu, setItemMenu] = useState<{ x: number; y: number; items: ItemInfo[] } | null>(null);
 	const label = workspaceLabel(info.paths.monsters);
 
 	// Fall back to the first monster when the remembered one is gone.
@@ -334,6 +339,53 @@ export default function Workspace({
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
 
+	const itemContextMenu = useCallback((_: ItemInfo, e: React.MouseEvent, selected: ItemInfo[]) => {
+		setItemMenu({ x: e.clientX, y: e.clientY, items: selected });
+	}, []);
+
+	const addToTray = useCallback(
+		(picked: ItemInfo[]) => {
+			setLootTray(prev => {
+				const have = new Set(prev.map(i => i.serverId));
+				const fresh = picked.filter(i => !have.has(i.serverId));
+				return fresh.length > 0 ? [...prev, ...fresh] : prev;
+			});
+			showToast('ok', `Added ${picked.length} ${picked.length === 1 ? 'item' : 'items'} to Loot`);
+		},
+		[showToast]
+	);
+
+	const clearTray = useCallback(async () => {
+		const n = lootTray.length;
+		const ok = await confirm(`Clear ${n} ${n === 1 ? 'item' : 'items'} from Loot?`, { title: 'Clear loot' });
+		if (ok) setLootTray([]);
+	}, [lootTray.length]);
+
+	const addTrayToMonster = useCallback(() => {
+		if (!doc || lootTray.length === 0) return;
+		editDoc({
+			...doc,
+			loot: [...doc.loot, ...lootTray.map(i => newLootEntry({ serverId: i.serverId, name: i.name }))]
+		});
+		const n = lootTray.length;
+		showToast('ok', `Added ${n} loot ${n === 1 ? 'entry' : 'entries'} to ${doc.name}`);
+	}, [doc, lootTray, editDoc, showToast]);
+
+	// Dismiss the item context menu on any outside press or Escape, as MonsterList does.
+	useEffect(() => {
+		if (!itemMenu) return;
+		const onDown = () => setItemMenu(null);
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') setItemMenu(null);
+		};
+		window.addEventListener('mousedown', onDown);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('mousedown', onDown);
+			window.removeEventListener('keydown', onKey);
+		};
+	}, [itemMenu]);
+
 	const allLints = useMemo(
 		() => [...monsterLints, ...workspaceLints],
 		[monsterLints, workspaceLints]
@@ -393,24 +445,82 @@ export default function Workspace({
 							<div className="mx-empty">Select a monster</div>
 						)
 					) : view === 'items' ? (
-						<ThingBrowser<ItemInfo>
-							items={itemList}
-							rowAtlasUrl={itemRowUrl}
-							cellKey={itemKey}
-							cellLabel={itemLabel}
-							searchText={itemSearchText}
-							searchId={itemSearchId}
-							selectionMode="single"
-							view="items"
-							draggable
-							dragPayload={i => ({
-								kind: 'item',
-								serverId: i.serverId,
-								name: i.name,
-								container: i.container
-							})}
-							searchPlaceholder="Search server id or name"
-						/>
+						<>
+							<ThingBrowser<ItemInfo>
+								items={itemList}
+								rowAtlasUrl={itemRowUrl}
+								cellKey={itemKey}
+								cellLabel={itemLabel}
+								searchText={itemSearchText}
+								searchId={itemSearchId}
+								selectionMode="multi"
+								view="items"
+								draggable
+								dragPayload={i => ({
+									kind: 'item',
+									serverId: i.serverId,
+									name: i.name,
+									container: i.container
+								})}
+								onContextMenu={itemContextMenu}
+								searchPlaceholder="Search server id or name"
+							/>
+							<div className="ss-loot-tray">
+								<button
+									className="ss-btn"
+									disabled={lootTray.length === 0}
+									onClick={() => void clearTray()}
+									title="Clear the Loot section"
+								>
+									<Trash2 size={14} />
+									Clear
+								</button>
+								<div className="ss-loot-tray-head">
+									Loot
+									{lootTray.length > 0 && <span className="ss-nav-meta">{lootTray.length}</span>}
+								</div>
+								<div className="ss-loot-tray-items">
+									{lootTray.length === 0 ? (
+										<span className="ss-loot-tray-empty">
+											Right-click selected items above to add them here.
+										</span>
+									) : (
+										lootTray.map(i => (
+											<span key={i.serverId} className="ss-loot-tray-chip" title={`#${i.serverId}`}>
+												<img src={itemUrl(i.serverId, 24)} width={24} height={24} alt="" />
+												{i.name || `#${i.serverId}`}
+											</span>
+										))
+									)}
+								</div>
+								<button
+									className="ss-btn ss-btn-primary"
+									disabled={!doc || lootTray.length === 0}
+									onClick={addTrayToMonster}
+								>
+									<Plus size={14} />
+									{doc ? `Add loot to ${doc.name}` : 'Add loot'}
+								</button>
+							</div>
+							{itemMenu && (
+								<div
+									className="ss-context-menu"
+									style={{ left: itemMenu.x, top: itemMenu.y }}
+									onMouseDown={e => e.stopPropagation()}
+								>
+									<button
+										className="ss-menu-item"
+										onClick={() => {
+											setItemMenu(null);
+											addToTray(itemMenu.items);
+										}}
+									>
+										<Package size={14} />
+										Add {itemMenu.items.length === 1 ? 'item' : `${itemMenu.items.length} items`} to Loot
+									</button>
+								</div>
+							)}
+						</>
 					) : (
 						<ThingBrowser<ThingSummary>
 							key={view}

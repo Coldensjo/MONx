@@ -57,7 +57,9 @@ export interface ThingBrowserProps<T> {
 	dragPayload?: (item: T) => DragPayload | null;
 	/** Sprite URL used as the drag ghost (DESIGN §13). */
 	dragGhostUrl?: (item: T) => string;
-	onContextMenu?: (item: T, e: React.MouseEvent) => void;
+	/** `selected` is the effective selection after the right-click's collapse rule
+	 *  (clicking outside the selection collapses onto the clicked item), in grid order. */
+	onContextMenu?: (item: T, e: React.MouseEvent, selected: T[]) => void;
 	/** Extra controls appended to the toolbar. */
 	toolbarExtra?: ReactNode;
 	searchPlaceholder?: string;
@@ -128,6 +130,9 @@ interface RowProps<T> {
 	selectedKeys: Set<CellKey>;
 	primaryKey: CellKey | null;
 	draggable: boolean;
+	/** Multi-select grids: only an already-selected cell starts a dnd carry, so a
+	 *  plain drag from anywhere else stays a paint-selection. */
+	dragFromSelection: boolean;
 	props: ThingBrowserProps<T>;
 	onCellMouseDown: (e: React.MouseEvent, key: CellKey) => void;
 	onCellContextMenu: (e: React.MouseEvent, key: CellKey) => void;
@@ -148,6 +153,7 @@ function GridRowInner<T>({
 	selectedKeys,
 	primaryKey,
 	draggable,
+	dragFromSelection,
 	props,
 	onCellMouseDown,
 	onCellContextMenu,
@@ -181,6 +187,7 @@ function GridRowInner<T>({
 						selected={selectedKeys.has(key)}
 						primary={primaryKey === key}
 						draggable={draggable}
+						dragFromSelection={dragFromSelection}
 						dragPayload={props.dragPayload}
 						dragGhostUrl={props.dragGhostUrl}
 						onMouseDown={onCellMouseDown}
@@ -213,6 +220,7 @@ interface BrowserCellProps<T> {
 	selected: boolean;
 	primary: boolean;
 	draggable: boolean;
+	dragFromSelection: boolean;
 	dragPayload?: (item: T) => DragPayload | null;
 	dragGhostUrl?: (item: T) => string;
 	onMouseDown: (e: React.MouseEvent, key: CellKey) => void;
@@ -238,6 +246,7 @@ function BrowserCellInner<T>({
 	selected,
 	primary,
 	draggable,
+	dragFromSelection,
 	dragPayload,
 	dragGhostUrl,
 	onMouseDown,
@@ -248,7 +257,18 @@ function BrowserCellInner<T>({
 		() => (dragPayload ? dragPayload(item) : null),
 		{ ghostUrl: dragGhostUrl ? dragGhostUrl(item) : undefined, ghostSize: zoom }
 	);
-	const dragProps = draggable && dragPayload ? drag : null;
+	// In a multi-select grid a plain drag paints the selection, so the carry only
+	// arms from a cell that was already selected before this press (pointerdown
+	// fires before the mousedown that reselects) and only without modifiers —
+	// ctrl toggles, shift ranges, alt marquees.
+	const carryDown = useCallback(
+		(e: React.PointerEvent) => {
+			if (dragFromSelection && (!selected || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey)) return;
+			drag.onPointerDown(e);
+		},
+		[dragFromSelection, selected, drag]
+	);
+	const dragProps = draggable && dragPayload ? { onPointerDown: carryDown } : null;
 	return (
 		<div
 			className={`ss-cell${selected ? ' ss-cell-selected' : ''}${primary ? ' ss-cell-primary' : ''}`}
@@ -471,11 +491,15 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 			} else {
 				// Plain press: select this one and begin a paint-drag. Moving the
 				// cursor over more cells adds them; re-crossing never removes.
-				// A draggable grid skips both: preventDefault would kill the caret/focus
-				// handoff, and paint-selection would fight the drag for the same gesture.
-				if (!draggable) e.preventDefault();
+				// In a draggable grid the same gesture also means "carry this cell
+				// out", so the press is split by prior selection: an unselected cell
+				// paints, an already-selected one starts the dnd carry instead (the
+				// cell gates its own pointerdown the same way) — preventDefault would
+				// kill the caret/focus handoff the carry needs.
+				const carries = draggable && selectedKeysRef.current.has(key);
+				if (!carries) e.preventDefault();
 				setSelectedKeys(new Set([key]));
-				setPainting(!draggable);
+				setPainting(!carries);
 			}
 			setAnchorKey(key);
 			setPrimaryKey(key);
@@ -488,15 +512,28 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		e.preventDefault();
 		// Right-clicking outside the current selection collapses it onto the clicked
 		// item; right-clicking within it keeps the multi-selection.
-		if (!selectedKeysRef.current.has(key)) {
-			setSelectedKeys(new Set([key]));
+		let keys = selectedKeysRef.current;
+		if (!keys.has(key)) {
+			keys = new Set([key]);
+			setSelectedKeys(keys);
 			setAnchorKey(key);
 		}
 		setPrimaryKey(key);
 		const item = byKeyRef.current.get(key);
 		if (item !== undefined) {
 			onSelectRef.current?.(item);
-			onContextMenuRef.current?.(item, e);
+			if (onContextMenuRef.current) {
+				// The effective selection, resolved here because the setState above
+				// has not landed yet — in grid order, so the menu's list reads the
+				// same way the grid does.
+				const selected: T[] = [];
+				for (const k of orderedKeysRef.current) {
+					if (!keys.has(k)) continue;
+					const it = byKeyRef.current.get(k);
+					if (it !== undefined) selected.push(it);
+				}
+				onContextMenuRef.current(item, e, selected);
+			}
 		}
 	}, []);
 
@@ -568,15 +605,17 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 				setDragging(true);
 			} else {
 				// A plain press on empty grid space clears the selection and starts a
-				// paint-drag from nothing (dragging into cells then adds them).
+				// paint-drag from nothing (dragging into cells then adds them). No
+				// carry can start here — there is no cell under the press — so this
+				// is safe even in a draggable grid.
 				const target = e.target as HTMLElement;
 				if (target === el || target.classList.contains('ss-grid-inner')) {
 					setSelectedKeys(new Set());
-					if (!draggable) setPainting(true);
+					setPainting(true);
 				}
 			}
 		},
-		[draggable]
+		[]
 	);
 
 	useEffect(() => {
@@ -812,6 +851,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 							selectedKeys={selectedKeys}
 							primaryKey={primaryKey}
 							draggable={draggable}
+							dragFromSelection={multi && draggable}
 							props={props}
 							onCellMouseDown={handleCellMouseDown}
 							onCellContextMenu={handleCellContextMenu}
