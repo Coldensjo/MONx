@@ -205,30 +205,45 @@ export default function Workspace({
 		};
 	}, [selected, reloadKey, onOpenFile, showToast]);
 
-	const closeTab = useCallback(
-		async (file: string) => {
-			if (dirtyFiles.has(file) && !(await confirm(`${file} has unsaved changes. Close the tab and discard them?`))) {
-				return;
+	const closeTabs = useCallback(
+		async (files: string[]) => {
+			if (files.length === 0) return;
+			const dirtyClosing = files.filter(f => dirtyFiles.has(f));
+			if (dirtyClosing.length > 0) {
+				const msg =
+					dirtyClosing.length === 1
+						? `${dirtyClosing[0]} has unsaved changes. Close and discard them?`
+						: `${dirtyClosing.length} tabs have unsaved changes. Close and discard them?`;
+				if (!(await confirm(msg))) return;
 			}
-			buffersRef.current.delete(file);
-			setDirtyFiles(prev => {
-				const next = new Set(prev);
-				next.delete(file);
-				return next;
-			});
+			const closing = new Set(files);
+			for (const f of files) buffersRef.current.delete(f);
+			setDirtyFiles(prev => new Set([...prev].filter(f => !closing.has(f))));
 			setTabs(prev => {
-				const idx = prev.indexOf(file);
-				const next = prev.filter(f => f !== file);
-				if (file === selected) {
-					// The neighbour takes over; with no tabs left the list's own
-					// fallback reopens the first monster.
-					setSelected(next[Math.min(idx, next.length - 1)] ?? null);
+				const next = prev.filter(f => !closing.has(f));
+				if (selected && closing.has(selected)) {
+					// The nearest survivor takes over; with no tabs left the list's
+					// own fallback reopens the first monster.
+					const idx = prev.indexOf(selected);
+					let fallback: string | null = null;
+					for (let d = 1; d < prev.length && fallback === null; d++) {
+						const right = prev[idx + d];
+						const left = prev[idx - d];
+						if (right !== undefined && !closing.has(right)) fallback = right;
+						else if (left !== undefined && !closing.has(left)) fallback = left;
+					}
+					setSelected(fallback ?? next[0] ?? null);
 				}
 				return next;
 			});
 		},
 		[dirtyFiles, selected]
 	);
+
+	const closeTab = useCallback((file: string) => closeTabs([file]), [closeTabs]);
+
+	/** Right-clicked tab, for the Close-others / left / right menu. */
+	const [tabMenu, setTabMenu] = useState<{ x: number; y: number; file: string } | null>(null);
 
 	useEffect(() => {
 		listMonsterGroups().then(setGroups).catch(() => setGroups([]));
@@ -872,15 +887,17 @@ export default function Workspace({
 
 	// Dismiss the context menus on any outside press or Escape, as MonsterList does.
 	useEffect(() => {
-		if (!itemMenu && !thingMenu) return;
+		if (!itemMenu && !thingMenu && !tabMenu) return;
 		const onDown = () => {
 			setItemMenu(null);
 			setThingMenu(null);
+			setTabMenu(null);
 		};
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') {
 				setItemMenu(null);
 				setThingMenu(null);
+				setTabMenu(null);
 			}
 		};
 		window.addEventListener('mousedown', onDown);
@@ -889,7 +906,7 @@ export default function Workspace({
 			window.removeEventListener('mousedown', onDown);
 			window.removeEventListener('keydown', onKey);
 		};
-	}, [itemMenu, thingMenu]);
+	}, [itemMenu, thingMenu, tabMenu]);
 
 	const allLints = useMemo(
 		() => [...monsterLints, ...workspaceLints],
@@ -949,6 +966,16 @@ export default function Workspace({
 										title={f}
 										onMouseDown={e => {
 											if (e.button === 0) setSelected(f);
+											// Middle-click closes; preventDefault stops autoscroll.
+											if (e.button === 1) {
+												e.preventDefault();
+												void closeTab(f);
+											}
+										}}
+										onAuxClick={e => e.preventDefault()}
+										onContextMenu={e => {
+											e.preventDefault();
+											setTabMenu({ x: e.clientX, y: e.clientY, file: f });
 										}}
 									>
 										<span className="ss-ed-tabname">{m?.name ?? f}</span>
@@ -964,6 +991,63 @@ export default function Workspace({
 									</div>
 								);
 							})}
+						</div>
+					)}
+					{tabMenu && (
+						<div
+							className="ss-context-menu"
+							style={{ left: tabMenu.x, top: tabMenu.y }}
+							onMouseDown={e => e.stopPropagation()}
+						>
+							<button
+								className="ss-menu-item"
+								onClick={() => {
+									setTabMenu(null);
+									void closeTab(tabMenu.file);
+								}}
+							>
+								Close
+							</button>
+							<button
+								className="ss-menu-item"
+								disabled={tabs.length < 2}
+								onClick={() => {
+									setTabMenu(null);
+									void closeTabs(tabs.filter(f => f !== tabMenu.file));
+								}}
+							>
+								Close all except this one
+							</button>
+							<button
+								className="ss-menu-item"
+								disabled={tabs.indexOf(tabMenu.file) === 0}
+								onClick={() => {
+									setTabMenu(null);
+									void closeTabs(tabs.slice(0, tabs.indexOf(tabMenu.file)));
+								}}
+							>
+								Close all to the left
+							</button>
+							<button
+								className="ss-menu-item"
+								disabled={tabs.indexOf(tabMenu.file) === tabs.length - 1}
+								onClick={() => {
+									setTabMenu(null);
+									void closeTabs(tabs.slice(tabs.indexOf(tabMenu.file) + 1));
+								}}
+							>
+								Close all to the right
+							</button>
+							<div className="ss-menu-sep" />
+							<button
+								className="ss-menu-item"
+								onClick={() => {
+									setTabMenu(null);
+									void closeTabs([...tabs]);
+								}}
+							>
+								Close all
+							</button>
 						</div>
 					)}
 					{view === 'monsters' ? (
