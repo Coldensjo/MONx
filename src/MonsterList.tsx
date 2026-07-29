@@ -9,7 +9,7 @@ import {
 	type MonsterSummary
 } from './monster';
 import type { Toast } from './App';
-import { loadSetting, saveSetting } from './settings';
+import { saveSetting } from './settings';
 import { useDragSource } from './dnd';
 
 // The sidebar monster list. Virtualized over `/monsters.png` row atlases so every
@@ -178,14 +178,12 @@ export default function MonsterList({
 		return () => ro.disconnect();
 	}, []);
 
-	// Restore the last selection once the list arrives, if the parent has none.
-	const restoredRef = useRef(false);
-	useEffect(() => {
-		if (restoredRef.current || selectedFile !== null || monsters.length === 0) return;
-		restoredRef.current = true;
-		const last = loadSetting(LAST_MONSTER_KEY, null);
-		if (last && monsters.some(m => m.file === last)) onSelect(last);
-	}, [monsters, selectedFile, onSelect]);
+	// The list deliberately does not restore a selection of its own. It used to,
+	// guarded by a ref that never armed (the shell always had a selection by the
+	// time the effect first ran), so the guard only came into play later — the
+	// moment the selection went empty, which is what closing the last tab does.
+	// Reopening the file that was just closed was the visible result. First-open
+	// restoration belongs to the shell, which owns `monx.lastMonster`.
 
 	const select = useCallback(
 		(file: string) => {
