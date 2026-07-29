@@ -122,8 +122,8 @@ src/
   App.tsx              Root shell: titlebar, workspace state, toasts
   Landing.tsx          Three-folder workspace picker + recent workspaces
   Workspace.tsx        Three-column layout, sidebar nav
-  Menubar.tsx          Titlebar menus (File, Edit, Tools, …)
-  MonsterEditor.tsx    The nine editor sections
+  Menubar.tsx          Titlebar menus (File, Edit, Tools, Preferences)
+  MonsterEditor.tsx    The editor sections (ten, some hidden by preference)
   sections/  fields/   Section components and field controls
   MonsterList.tsx      Virtualized monster list with look previews
   ThingBrowser.tsx     Items/outfits/effects/missiles browser (generalised from
@@ -131,10 +131,12 @@ src/
   PreviewPanel.tsx     Right-hand preview + derived math
   LintPanel.tsx        Lint drawer
   PinLootDialog.tsx    Corpus-wide loot id pinning (Tools menu)
+  PreferencesDialog.tsx  Editor tab visibility + default tab (Preferences menu)
   UiInspector.tsx      Hold-F2 element inspector overlay
   monster.ts           Monster/workspace types, invoke wrappers, protocol URL builders
   spr.ts               Inherited invoke wrappers + protocol URLs
   settings.ts          localStorage (monx.* keys)
+  prefs.ts             Editor tab preferences (monx.prefs)
   fixtures.ts          Fixture data for component development
   catalog.ts  derive.ts  dnd.ts  spellsim.ts
   index.css            SPRx base stylesheet — frozen

@@ -32,9 +32,12 @@ import {
 } from './monster';
 import Menubar, { type Menu } from './Menubar';
 import { newLootEntry } from './sections/Loot';
+import { SECTION_IDS } from './sections/section';
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 import { applyLintFix } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
+import PreferencesDialog from './PreferencesDialog';
+import { loadPrefs, savePrefs, type Prefs } from './prefs';
 import ScaleLootDialog from './ScaleLootDialog';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
@@ -82,6 +85,9 @@ export default function Workspace({
 }: Props) {
 	const [view, setView] = useState<View>('monsters');
 	const [tool, setTool] = useState<PinScope | null>(null);
+	/** Editor tab preferences; the dialog writes them straight through to storage. */
+	const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+	const [prefsOpen, setPrefsOpen] = useState(false);
 	const [selected, setSelected] = useState<string | null>(() =>
 		loadSetting('monx.lastMonster', null)
 	);
@@ -706,6 +712,11 @@ export default function Workspace({
 	// unsaved editor buffer would be silently overwritten by the next save.
 	// Blocked rather than merged: the fix is one Ctrl+S away.
 	const toolsBlocked = dirty ? ' — save first' : '';
+
+	const updatePrefs = (next: Prefs) => {
+		setPrefs(next);
+		savePrefs(next);
+	};
 	const menus: Menu[] = [
 		{
 			label: 'File',
@@ -747,6 +758,18 @@ export default function Workspace({
 				{
 					label: 'Export patch notes…',
 					onSelect: () => void exportPatchNotes()
+				}
+			]
+		},
+		{
+			label: 'Preferences',
+			items: [
+				{ label: 'Editor tabs…', onSelect: () => setPrefsOpen(true) },
+				{
+					label: 'Show every tab',
+					separated: true,
+					disabled: prefs.visibleSections.length === SECTION_IDS.length,
+					onSelect: () => updatePrefs({ ...prefs, visibleSections: [...SECTION_IDS] })
 				}
 			]
 		}
@@ -1218,6 +1241,7 @@ export default function Workspace({
 								onBrowseItems={browseItems}
 								previewUrl={previewUrl}
 								thingAnim={thingAnim}
+								prefs={prefs}
 							/>
 						) : (
 							<div className="mx-empty">Select a monster</div>
@@ -1568,6 +1592,10 @@ export default function Workspace({
 						);
 					}}
 				/>
+			)}
+
+			{prefsOpen && (
+				<PreferencesDialog prefs={prefs} onChange={updatePrefs} onClose={() => setPrefsOpen(false)} />
 			)}
 
 			<LintPanel

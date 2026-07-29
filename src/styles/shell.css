@@ -109,6 +109,37 @@
 	max-width: calc(100vw - 64px);
 }
 
+.mx-prefs-modal {
+	width: 460px;
+	max-width: calc(100vw - 64px);
+}
+
+.mx-prefs-default {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* Two columns of tab checkboxes — ten tabs in one column would run past the
+   dialog's natural height. */
+.mx-prefs-tabs {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 4px 12px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface-2);
+}
+
+.mx-prefs-tab {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 12px;
+	cursor: pointer;
+}
+
 .mx-pin-list {
 	max-height: 260px;
 	overflow: auto;

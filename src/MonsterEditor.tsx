@@ -4,6 +4,7 @@ import { tauriItemIndex, type ItemIndex, type Lint, type MonsterDoc, type SpellN
 import { loadSetting, saveSetting } from './settings';
 import { PreviewProvider, ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
+import { DEFAULT_PREFS, landingSection, visibleSectionIds, type Prefs } from './prefs';
 import { Identity } from './sections/Identity';
 import { LookSection } from './sections/LookSection';
 import { Combat } from './sections/Combat';
@@ -11,7 +12,8 @@ import { Spells } from './sections/Spells';
 import { Resistances } from './sections/Resistances';
 import { Loot } from './sections/Loot';
 import { Summons } from './sections/Summons';
-import { VoicesEvents } from './sections/VoicesEvents';
+import { Voices } from './sections/Voices';
+import { PacifistEvents } from './sections/PacifistEvents';
 
 const STATE_KEY = 'monx.editor';
 
@@ -59,6 +61,8 @@ export interface MonsterEditorProps {
 	previewUrl?: PreviewUrl;
 	/** Frame counts for animated things; without it the spell stage guesses a loop. */
 	thingAnim?: ThingAnimLookup;
+	/** Tab visibility and the tab a monster opens on (Preferences). */
+	prefs?: Prefs;
 }
 
 export function MonsterEditor({
@@ -77,11 +81,14 @@ export function MonsterEditor({
 	onBrowseCorpses,
 	onBrowseItems,
 	previewUrl,
-	thingAnim
+	thingAnim,
+	prefs = DEFAULT_PREFS
 }: MonsterEditorProps) {
 	const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => new Set(loadState().collapsed));
-	const [active, setActive] = useState<SectionId>('identity');
+	const [active, setActive] = useState<SectionId>(() => landingSection(prefs) ?? 'identity');
 	const scrollRef = useRef<HTMLDivElement>(null);
+	const visible = useMemo(() => visibleSectionIds(prefs), [prefs]);
+	const shown = useCallback((id: SectionId) => visible.includes(id), [visible]);
 
 	useEffect(() => {
 		saveSetting(STATE_KEY, JSON.stringify({ collapsed: [...collapsed] } satisfies EditorState));
@@ -131,7 +138,7 @@ export function MonsterEditor({
 		});
 	}, []);
 
-	const jump = (id: SectionId) => {
+	const jump = useCallback((id: SectionId, behavior: ScrollBehavior = 'smooth') => {
 		setActive(id);
 		setCollapsed(prev => {
 			if (!prev.has(id)) return prev;
@@ -139,8 +146,19 @@ export function MonsterEditor({
 			next.delete(id);
 			return next;
 		});
-		document.getElementById(`ss-ed-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-	};
+		document.getElementById(`ss-ed-${id}`)?.scrollIntoView({ behavior, block: 'start' });
+	}, []);
+
+	// Opening a monster lands on the default tab, instantly: this is where the
+	// work starts, so animating there would only be a delay. Keyed on the file,
+	// so switching tabs or reloading a monster re-lands but editing does not.
+	useEffect(() => {
+		const id = landingSection(prefs);
+		if (!id) return;
+		// One frame late, so the sections the new doc renders exist to scroll to.
+		const frame = requestAnimationFrame(() => jump(id, 'auto'));
+		return () => cancelAnimationFrame(frame);
+	}, [doc.file, prefs, jump]);
 
 	const lintCounts = useMemo(() => {
 		let error = 0;
@@ -172,7 +190,7 @@ export function MonsterEditor({
 			<ThingAnimProvider value={thingAnim ?? null}>
 			<div className="ss-ed">
 				<nav className="ss-ed-bar">
-					{SECTION_IDS.map(id => (
+					{visible.map(id => (
 						<button
 							key={id}
 							type="button"
@@ -200,20 +218,31 @@ export function MonsterEditor({
 							</div>
 						)}
 
-						<Identity {...common} collapsed={collapsed.has('identity')} onToggle={toggle} />
-						<LookSection {...common} collapsed={collapsed.has('look')} onToggle={toggle} />
-						<Combat {...common} collapsed={collapsed.has('combat')} onToggle={toggle} />
-						<Spells {...common} which="attacks" collapsed={collapsed.has('attacks')} onToggle={toggle} />
-						<Spells {...common} which="defenses" collapsed={collapsed.has('defenses')} onToggle={toggle} />
-						<Resistances {...common} collapsed={collapsed.has('resistances')} onToggle={toggle} />
-						<Loot {...common} collapsed={collapsed.has('loot')} onToggle={toggle} />
-						<Summons {...common} collapsed={collapsed.has('summons')} onToggle={toggle} />
-						<VoicesEvents
-							{...common}
-							knownEvents={knownEvents}
-							collapsed={collapsed.has('voices')}
-							onToggle={toggle}
-						/>
+						{/* A hidden tab renders nothing at all — its data still round-trips,
+						    because the document is written whole from the model either way. */}
+						{shown('identity') && <Identity {...common} collapsed={collapsed.has('identity')} onToggle={toggle} />}
+						{shown('look') && <LookSection {...common} collapsed={collapsed.has('look')} onToggle={toggle} />}
+						{shown('combat') && <Combat {...common} collapsed={collapsed.has('combat')} onToggle={toggle} />}
+						{shown('attacks') && (
+							<Spells {...common} which="attacks" collapsed={collapsed.has('attacks')} onToggle={toggle} />
+						)}
+						{shown('defenses') && (
+							<Spells {...common} which="defenses" collapsed={collapsed.has('defenses')} onToggle={toggle} />
+						)}
+						{shown('resistances') && (
+							<Resistances {...common} collapsed={collapsed.has('resistances')} onToggle={toggle} />
+						)}
+						{shown('loot') && <Loot {...common} collapsed={collapsed.has('loot')} onToggle={toggle} />}
+						{shown('summons') && <Summons {...common} collapsed={collapsed.has('summons')} onToggle={toggle} />}
+						{shown('voices') && <Voices {...common} collapsed={collapsed.has('voices')} onToggle={toggle} />}
+						{shown('events') && (
+							<PacifistEvents
+								{...common}
+								knownEvents={knownEvents}
+								collapsed={collapsed.has('events')}
+								onToggle={toggle}
+							/>
+						)}
 					</div>
 				</div>
 			</div>

@@ -12,7 +12,8 @@ export const SECTION_IDS = [
 	'resistances',
 	'loot',
 	'summons',
-	'voices'
+	'voices',
+	'events'
 ] as const;
 
 export type SectionId = (typeof SECTION_IDS)[number];
@@ -26,7 +27,8 @@ export const SECTION_LABEL: Record<SectionId, string> = {
 	resistances: 'Resistances',
 	loot: 'Loot',
 	summons: 'Summons',
-	voices: 'Voices & Events'
+	voices: 'Voices',
+	events: 'Pacifist & Events'
 };
 
 /** Everything a section needs. `patch` takes a whole-doc partial so no section
