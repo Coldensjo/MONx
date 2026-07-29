@@ -259,7 +259,7 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 								const observed = stats.totalKills > 0 ? item.drops / stats.totalKills : 0;
 								return (
 									<div className="ss-lootsim-row" key={item.serverId}>
-										<ItemSprite serverId={item.serverId} size={24} />
+										<ItemSprite serverId={item.serverId} size={32} />
 										<span className="ss-lootsim-name">{item.name}</span>
 										<span className="mono">{Math.round(item.total / result.sessions).toLocaleString()}</span>
 										<span
