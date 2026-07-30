@@ -9,7 +9,6 @@ import {
 	FolderOpen,
 	History,
 	Image,
-	Languages,
 	Loader2,
 	Package,
 	Pencil,
@@ -29,7 +28,6 @@ import {
 	type SavedWorkspace
 } from './settings';
 import { workspaceLabel } from './App';
-import { getLocale, LOCALES, setLocale, type Locale } from './i18n';
 
 /** The four folder rows. `engine` is on `WorkspacePaths` too, but it is a
  *  choice rather than a path and gets its own control below the rows.
@@ -182,21 +180,9 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 		<div className="ss-landing">
 			<img src="/icon.png" alt="" className="ss-landing-icon" width={40} height={40} />
 
-			{/* Always visible, and above everything else that needs reading. The
-			    engine picker below only appears once a workspace probes clean, so
-			    it is the wrong neighbour for the one control a user who cannot
-			    read this screen has to find first. */}
-			<label className="mx-lang-pick">
-				<Languages size={14} />
-				<select value={getLocale()} onChange={e => setLocale(e.target.value as Locale)}>
-					{LOCALES.map(l => (
-						<option key={l.key} value={l.key}>
-							{l.label}
-						</option>
-					))}
-				</select>
-			</label>
-
+			{/* No language picker here: the titlebar's flags are on screen directly
+			    above this, in every state the app has. Two pickers a few pixels
+			    apart would only make the choice look like two different settings. */}
 			{error && <div className="ss-landing-error">{error}</div>}
 
 			{/* Two columns: picking folders on the left, workspaces you already have

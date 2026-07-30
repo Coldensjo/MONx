@@ -968,17 +968,61 @@
 
 /* The language picker sits at the top of the landing column, before anything
    that has to be read. Deliberately quiet — it is findable, not prominent. */
-.mx-lang-pick {
+/* ---------- Language: three flag buttons ---------- */
+
+.mx-lang {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	margin: -4px 0 4px;
-	font-size: 12px;
-	color: var(--ss-text-dim);
+	margin-right: 4px;
 }
 
-.mx-lang-pick select {
-	font-size: 12px;
+/* Full titlebar height, like the caption buttons it sits beside, so the hover
+   fill is the same shape as theirs — but narrower, since a flag is wider than
+   an icon and three of them in a 40px grid would crowd the title.
+   `relative` anchors the active marker. */
+.mx-lang-flag {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 32px;
+	padding: 0 6px;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	/* The inactive flags are dimmed rather than hidden: all three stay legible,
+	   which is the point of showing flags instead of a dropdown. */
+	opacity: 0.42;
+	transition: opacity 90ms ease;
+}
+
+.mx-lang-flag:hover {
+	opacity: 0.85;
+	background: var(--surface-2);
+}
+
+.mx-lang-flag[data-on='true'] {
+	opacity: 1;
+}
+
+/* The active language is marked under the flag rather than around it — a border
+   would change the flag's size and make the row jump as it moves. */
+.mx-lang-flag[data-on='true']::after {
+	content: '';
+	position: absolute;
+	left: 6px;
+	right: 6px;
+	bottom: 4px;
+	height: 2px;
+	border-radius: 1px;
+	background: var(--accent);
+}
+
+.mx-lang-flag svg {
+	display: block;
+	/* White and yellow bands vanish against a light titlebar without this. */
+	outline: 1px solid rgba(0, 0, 0, 0.28);
+	outline-offset: -1px;
 }
 
 /* ---------- Landing: saved workspaces ---------- */

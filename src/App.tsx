@@ -17,6 +17,7 @@ import { openDat, openSpr } from './spr';
 import { loadSetting, loadWorkspaces, saveSetting, saveWorkspace, type RecentWorkspace } from './settings';
 import Landing from './Landing';
 import Workspace from './Workspace';
+import LanguagePicker from './LanguagePicker';
 import UiInspector from './UiInspector';
 
 export interface Toast {
@@ -231,6 +232,10 @@ export default function App() {
 					)}
 				</div>
 				<div className="ss-titlebar-spacer" data-tauri-drag-region />
+				{/* Beside the theme toggle: both are app-wide display settings, and the
+				    titlebar is the one strip on screen in every state, so the language
+				    is reachable from the landing screen and mid-edit alike. */}
+				<LanguagePicker />
 				<button
 					className="ss-caption-button"
 					onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}

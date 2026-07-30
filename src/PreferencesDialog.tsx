@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_PREFS, visibleSectionIds, type Prefs } from './prefs';
 import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
-import { getLocale, LOCALES, setLocale, type Locale } from './i18n';
+import LanguagePicker from './LanguagePicker';
 
 interface Props {
 	prefs: Prefs;
@@ -38,20 +38,10 @@ export default function PreferencesDialog({ prefs, onChange, onClose }: Props) {
 				{/* Language first: it is the one preference that changes every other
 				    word in this dialog, so it should not be below them. */}
 				<div className="ss-modal-desc">
-					<label className="mx-prefs-default">
+					<div className="mx-prefs-default">
 						{t('Language')}
-						<select
-							className="ss-ed-input"
-							value={getLocale()}
-							onChange={e => setLocale(e.target.value as Locale)}
-						>
-							{LOCALES.map(l => (
-								<option key={l.key} value={l.key}>
-									{l.label}
-								</option>
-							))}
-						</select>
-					</label>
+						<LanguagePicker size={16} />
+					</div>
 					<div className="ss-ed-field-note">
 						{t('Applies immediately. Only the interface is translated — monster data, item names and engine values are left exactly as the server writes them.')}
 					</div>
