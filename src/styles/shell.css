@@ -404,6 +404,101 @@
 	color: var(--text-muted);
 }
 
+/* ---------- Compare ---------- */
+
+.mx-cmp-modal {
+	width: 820px;
+	max-width: calc(100vw - 64px);
+}
+
+.mx-cmp-heads {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.mx-cmp-head {
+	display: flex;
+	flex: 1 1 0;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.mx-cmp-look {
+	width: 48px;
+	height: 48px;
+	image-rendering: pixelated;
+}
+
+.mx-cmp-pick {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.mx-cmp-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.mx-cmp-list {
+	max-height: 52vh;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.mx-cmp-group {
+	margin: 8px 0 2px;
+	color: var(--text-muted);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.mx-cmp-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr 56px;
+	gap: 8px;
+	padding: 1px 4px;
+	border-radius: var(--radius);
+}
+
+/* Only the rows that differ carry weight; the rest are context. */
+.mx-cmp-diff {
+	background: var(--surface);
+}
+
+.mx-cmp-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-muted);
+}
+
+.mx-cmp-a,
+.mx-cmp-b {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mx-cmp-diff .mx-cmp-b {
+	color: var(--accent);
+}
+
+.mx-cmp-delta {
+	color: var(--accent);
+	font-size: 11px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.mx-cmp-down {
+	color: var(--warn);
+}
+
 /* ---------- Quick-open ---------- */
 
 /* Sits high rather than centred: the eye is already at the top of the window

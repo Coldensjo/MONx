@@ -60,6 +60,7 @@ import {
 import ScaleLootDialog from './ScaleLootDialog';
 import BatchEditDialog from './BatchEditDialog';
 import QuickOpenDialog from './QuickOpenDialog';
+import CompareDialog from './CompareDialog';
 import PatchNotesDialog from './PatchNotesDialog';
 import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
 import { getThing, getThings, type ThingSummary } from './spr';
@@ -441,6 +442,7 @@ export default function Workspace({
 	const [scaling, setScaling] = useState<{ itemId: number | null } | null>(null);
 	const [batchOpen, setBatchOpen] = useState(false);
 	const [quickOpen, setQuickOpen] = useState(false);
+	const [compareOpen, setCompareOpen] = useState(false);
 	/** Species the corpus actually uses, for the batch filter's dropdown. */
 	const speciesList = useMemo(
 		() => [...new Set(monsters.map(m => m.species).filter((s): s is string => !!s))].sort(),
@@ -1233,6 +1235,13 @@ export default function Workspace({
 			enabled: !dirty,
 			run: () => setBatchOpen(true)
 		},
+		{
+			id: 'compare-monsters',
+			label: 'Compare monsters…',
+			group: 'Tools',
+			enabled: monsters.length > 1,
+			run: () => setCompareOpen(true)
+		},
 		{ id: 'export-lints', label: 'Export lint report…', group: 'Tools', run: () => void exportLints() },
 		{ id: 'export-patch-notes', label: 'Export patch notes…', group: 'Tools', run: () => setPatchOpen(true) },
 		{
@@ -1299,7 +1308,8 @@ export default function Workspace({
 				item('pin-all', { label: `Pin all loot ids…${toolsBlocked}` }),
 				item('scale-loot', { label: `Scale loot chances…${toolsBlocked}` }),
 				item('batch-edit', { label: `Batch edit fields…${toolsBlocked}` }),
-				item('export-lints', { separated: true }),
+				item('compare-monsters', { separated: true }),
+				item('export-lints'),
 				item('export-patch-notes'),
 				item('set-patch-cutoff', { label: `Set patch notes cut-off point${patchCutoffAge}` })
 			]
@@ -1912,6 +1922,15 @@ export default function Workspace({
 						</div>
 					</div>
 				</div>
+			)}
+
+			{compareOpen && (
+				<CompareDialog
+					monsters={monsters}
+					initialFile={selected}
+					onClose={() => setCompareOpen(false)}
+					onError={m => showToast('error', m)}
+				/>
 			)}
 
 			{quickOpen && (
