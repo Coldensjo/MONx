@@ -64,6 +64,21 @@ impl FrameGroup {
     pub fn sprite(&self, layer: u32, x: u32, y: u32, z: u32, frame: u32) -> Option<u32> {
         self.sprite_ids.get(self.index(layer, x, y, z, frame)?).copied()
     }
+
+    /// How many 32-px tiles wide — and tall — one composed cell is.
+    ///
+    /// `bounding_square` would say, but it is not always present; the sprite
+    /// count per pattern cell is the reliable signal, and tiles are square in
+    /// practice: 1, 4 (2×2) or 9 (3×3).
+    pub fn tile_side(&self) -> u32 {
+        let cells = self.pattern_width.max(1)
+            * self.pattern_height.max(1)
+            * self.pattern_depth.max(1)
+            * self.layers.max(1)
+            * self.frames.max(1);
+        let tiles = (self.sprite_ids.len() as u32 / cells.max(1)).max(1);
+        (tiles as f64).sqrt().round().max(1.0) as u32
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -77,6 +92,39 @@ impl Thing {
     /// The idle group, or the only one.
     pub fn idle(&self) -> Option<&FrameGroup> {
         self.groups.first()
+    }
+
+    /// This thing's groups read as the single animation strip the `.dat`
+    /// format stored.
+    ///
+    /// An outfit here is two groups — a standing pose and a walking loop —
+    /// where the old format held one strip with the standing pose at frame 0
+    /// and the walk after it. Concatenating them in order restores exactly
+    /// that strip, so `skipsStandingFrame`, the browser's frame counter and
+    /// the editor's preview all mean the same thing on both formats and none
+    /// of them has to know which one it is looking at.
+    pub fn strip_frames(&self) -> u32 {
+        self.groups.iter().map(|g| g.frames.max(1)).sum::<u32>().max(1)
+    }
+
+    /// Which group a strip frame falls in, and its index inside that group.
+    pub fn strip_frame(&self, frame: u32) -> (usize, u32) {
+        let mut left = frame % self.strip_frames();
+        for (i, group) in self.groups.iter().enumerate() {
+            let n = group.frames.max(1);
+            if left < n {
+                return (i, left);
+            }
+            left -= n;
+        }
+        (0, 0)
+    }
+
+    /// Whether frame 0 belongs to the animation rather than being a standing
+    /// pose to hold still. True when the idle group animates on its own —
+    /// the fire elementals, whose flames must not freeze in the browser.
+    pub fn animates_always(&self) -> bool {
+        self.idle().is_none_or(|g| g.frames > 1)
     }
 }
 

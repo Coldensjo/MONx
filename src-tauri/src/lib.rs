@@ -82,11 +82,18 @@ struct ThingSummary {
 #[tauri::command]
 fn get_things(
     state: State<DatManagerState>,
+    ws: State<WorkspaceState>,
     path: String,
     category: String,
 ) -> Result<Vec<ThingSummary>, String> {
     let cat =
         Category::parse(&category).ok_or_else(|| format!("invalid category: {}", category))?;
+    // A modern bundle has no `.dat` to enumerate; its appearance tables answer
+    // the same question, and the summary is what the browser needs either way.
+    let bundle = ws.read().map_err(|e| format!("lock: {e}"))?.bundle.clone();
+    if let Some(bundle) = bundle {
+        return Ok(bundle_things(&bundle, cat));
+    }
     let manager = state.read().map_err(|e| format!("lock: {e}"))?;
     let file = manager.file(&path)?;
     Ok(file
@@ -106,6 +113,50 @@ fn get_things(
             name: t.name.clone(),
         })
         .collect())
+}
+
+/// Every appearance of one category, as the browser's `ThingSummary`.
+///
+/// The two formats disagree about what a "frame" is: the `.dat` held one strip
+/// per thing, while a bundle splits an outfit into an idle group and a walking
+/// one. `Thing::strip_frames` reads the groups back as that single strip, so
+/// the frame counts here mean what the frontend already assumes they mean.
+fn bundle_things(bundle: &assets::Bundle, cat: Category) -> Vec<ThingSummary> {
+    let kind = match cat {
+        Category::Item => appearances::Kind::Object,
+        Category::Outfit => appearances::Kind::Outfit,
+        Category::Effect => appearances::Kind::Effect,
+        Category::Missile => appearances::Kind::Missile,
+    };
+    let mut things: Vec<ThingSummary> = bundle
+        .appearances
+        .table(kind)
+        .values()
+        .map(|t| {
+            let g = t.idle().cloned().unwrap_or_default();
+            let side = g.tile_side().min(255) as u8;
+            ThingSummary {
+                id: t.id,
+                width: side,
+                height: side,
+                layers: g.layers.min(255) as u8,
+                pattern_x: g.pattern_width.min(255) as u8,
+                pattern_y: g.pattern_height.min(255) as u8,
+                pattern_z: g.pattern_depth.min(255) as u8,
+                frames: t.strip_frames().min(255) as u8,
+                animate_always: t.animates_always(),
+                // The bundle carries no per-thing flag names — those are
+                // `.dat` properties, and the browser's property filters are
+                // only offered where they exist.
+                prop_names: Vec::new(),
+                name: t.name.clone(),
+            }
+        })
+        .collect();
+    // The `.dat` yields things in id order and the grid relies on it; a hash
+    // table does not.
+    things.sort_by_key(|t| t.id);
+    things
 }
 
 #[tauri::command]

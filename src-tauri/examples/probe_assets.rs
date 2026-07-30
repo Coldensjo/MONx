@@ -157,7 +157,7 @@ fn main() {
                     g.map_or(0, |g| g.sprite_ids.len())
                 );
                 for dir in 0..4u32 {
-                    match bundle.compose(monx_lib::appearances::Kind::Outfit, look, 0, dir, 0, 0, Some(0)) {
+                    match bundle.compose(monx_lib::appearances::Kind::Outfit, look, 0, 0, dir, 0, 0, Some(0)) {
                         Ok(r) => {
                             let opaque = r.rgba.chunks_exact(4).filter(|p| p[3] != 0).count();
                             if dir == 0 {

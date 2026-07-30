@@ -220,10 +220,15 @@ impl Bundle {
     /// `layer` selects a single layer — outfits pass `Some(0)` for the body and
     /// `Some(1)` for the colour mask, and `protocol.rs` blends them with the
     /// same `colourize` the `.spr` path uses.
+    ///
+    /// `group` is the frame group: 0 is idle, 1 the walk for an outfit that has
+    /// one. Callers get it from `Thing::strip_frame`, which reads the groups as
+    /// the single strip the `.dat` format stored.
     pub fn compose(
         &self,
         kind: crate::appearances::Kind,
         id: u32,
+        group: usize,
         frame: u32,
         x: u32,
         y: u32,
@@ -235,7 +240,9 @@ impl Bundle {
             .get(kind, id)
             .ok_or_else(|| format!("no appearance {id:?} {id}"))?;
         let group = thing
-            .idle()
+            .groups
+            .get(group)
+            .or_else(|| thing.idle())
             .ok_or_else(|| format!("appearance {id} has no frame group"))?;
 
         // A thing wider or taller than one tile is stored as several sprites;
@@ -305,17 +312,9 @@ impl Bundle {
     }
 }
 
-/// How big one composed cell is. `bounding_square` would say, but it is not
-/// always present; the sprite count per pattern cell is the reliable signal.
+/// How big one composed cell is, in pixels.
 fn group_square(group: &crate::appearances::FrameGroup, sw: usize, sh: usize) -> (usize, usize) {
-    let cells = (group.pattern_width.max(1)
-        * group.pattern_height.max(1)
-        * group.pattern_depth.max(1)
-        * group.layers.max(1)
-        * group.frames.max(1)) as usize;
-    let tiles = if cells == 0 { 1 } else { (group.sprite_ids.len() / cells).max(1) };
-    // Tiles are square in practice: 1, 4 (2×2) or 9 (3×3).
-    let side = (tiles as f64).sqrt().round().max(1.0) as usize;
+    let side = group.tile_side() as usize;
     (sw * side, sh * side)
 }
 

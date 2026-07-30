@@ -556,6 +556,24 @@ Three things were needed, and the first is the only one that took a dependency:
   bundle path with identical query parameters, so the frontend cannot tell which it is talking
   to.
 
+**The browser's own two routes were missed the first time**, and it showed: the Outfits,
+Effects and Missiles grids were empty and nothing animated anywhere, because `/thing.png` and
+`/things.png` are inherited from SPRx and take their `.spr`/`.dat` paths as query parameters —
+which a bundle workspace has not got. They now go the bundle path too, and `get_things` answers
+from the appearance tables instead of the `.dat`.
+
+That exposed the one place the formats genuinely disagree. **The `.dat` held one animation
+strip per thing; a bundle splits an outfit into an idle group and a walking one** — 1,418 of
+Canary's 1,443 outfits have two. `Thing::strip_frames` reads the groups back as that single
+strip, concatenated in order, which is exactly what the old format stored: the standing pose at
+frame 0 and the walk after it. So `skipsStandingFrame` keeps meaning what it always meant, and
+the 275 outfits whose *idle* group animates on its own — fire elementals and friends — report
+`animateAlways`, so the browser holds none of their frames back. Nothing above the protocol
+layer learned a new concept.
+
+Addons are the other disagreement, and smaller: a bitmask over separate sprites in the `.dat`,
+the pattern-y axis here. `look.addons` indexes that axis directly, and mounts index z.
+
 `items.otb` also became optional as part of this. The modern engines have no server↔client id
 split, so the file does not exist and requiring it cost the entire item database — every loot
 name and icon — for an indirection that is not there. Canary loads 37,506 items from

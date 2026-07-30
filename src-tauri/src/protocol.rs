@@ -305,7 +305,40 @@ fn dispatch_bundle(
     // Modern clients address items by their client id directly; there is no OTB
     // indirection, so a server id *is* the appearance id.
     let item_cell = |id: u32| -> Result<ThingRender, String> {
-        bundle.compose(Kind::Object, id, 0, 0, 0, 0, None)
+        bundle.compose(Kind::Object, id, 0, 0, 0, 0, 0, None)
+    };
+
+    // One cell of any thing, with a strip frame resolved to its group. The
+    // pattern axes are the three the `.dat` route takes: `dir` is x (directions
+    // for an outfit, variants for an object), `diry` is y (addons), `patz` is z
+    // (mounts).
+    let thing_cell = |kind: Kind,
+                      id: u32,
+                      frame: u32,
+                      x: u32,
+                      y: u32,
+                      z: u32,
+                      layer: Option<u32>|
+     -> Result<ThingRender, String> {
+        let thing = bundle
+            .appearances
+            .get(kind, id)
+            .ok_or_else(|| format!("unknown thing id {id}"))?;
+        let (gi, gframe) = thing.strip_frame(frame);
+        let group = thing
+            .groups
+            .get(gi)
+            .ok_or_else(|| format!("thing {id} has no frame group"))?;
+        bundle.compose(
+            kind,
+            id,
+            gi,
+            gframe,
+            x % group.pattern_width.max(1),
+            y % group.pattern_height.max(1),
+            z % group.pattern_depth.max(1),
+            layer,
+        )
     };
 
     let look_cell = |look: &Look, dir: u32, frame: u32| -> Result<ThingRender, String> {
@@ -318,29 +351,15 @@ fn dispatch_bundle(
             .get(Kind::Outfit, id)
             .ok_or_else(|| format!("unknown outfit id {id}"))?;
         let group = thing.idle().ok_or("outfit has no frame group")?;
-        let dirs = group.pattern_width.max(1);
-        let frames = group.frames.max(1);
-        let mut base = bundle.compose(
-            Kind::Outfit,
-            id,
-            frame % frames,
-            dir % dirs,
-            0,
-            0,
-            Some(0),
-        )?;
+        // Addons are the y axis here, not a bitmask over separate sprites as in
+        // the old format: y 0 is the bare outfit and each step up adds one.
+        let addon = look.addons.min(group.pattern_height.saturating_sub(1));
+        let mount = u32::from(look.mount > 0);
+        let mut base = thing_cell(Kind::Outfit, id, frame, dir, addon, mount, Some(0))?;
         // Two layers marks a colourable outfit, exactly as in the old format:
         // layer 1 is the template mask, and `colourize` is shared with it.
         if group.layers >= 2 {
-            let mask = bundle.compose(
-                Kind::Outfit,
-                id,
-                frame % frames,
-                dir % dirs,
-                0,
-                0,
-                Some(1),
-            )?;
+            let mask = thing_cell(Kind::Outfit, id, frame, dir, addon, mount, Some(1))?;
             colourize(&mut base, &mask, look.head, look.body, look.legs, look.feet);
         }
         Ok(base)
@@ -352,7 +371,70 @@ fn dispatch_bundle(
         rgba: Vec::new(),
     };
 
+    // `cat` names the same four categories in both formats.
+    let kind = || match query.get("cat").map(String::as_str).unwrap_or("") {
+        "item" => Ok(Kind::Object),
+        "outfit" => Ok(Kind::Outfit),
+        "effect" => Ok(Kind::Effect),
+        "missile" => Ok(Kind::Missile),
+        _ => Err("invalid `cat` query param".to_string()),
+    };
+
     match path_seg {
+        // The browser's own routes. A bundle workspace has no `.spr`/`.dat` for
+        // the inherited pair to open, so without these the Outfits, Effects and
+        // Missiles grids have nothing to draw and nothing animates.
+        "/thing.png" => {
+            let kind = kind()?;
+            let id = num::<u32>(query, "id", 0);
+            // Outfits face south by default, as `dat::preview_pattern` has it.
+            let def_dir = if kind == Kind::Outfit { 2 } else { 0 };
+            let render = thing_cell(
+                kind,
+                id,
+                num(query, "frame", 0),
+                num(query, "dir", def_dir),
+                num(query, "diry", 0),
+                num(query, "patz", 0),
+                None,
+            )?;
+            Ok(("image/png", dat::encode_png(&render)?))
+        }
+        "/things.png" => {
+            let kind = kind()?;
+            let ids: Vec<u32> = csv(query, "ids")
+                .iter()
+                .filter_map(|s| s.parse().ok())
+                .collect();
+            if ids.is_empty() {
+                return Err("no thing ids requested".to_string());
+            }
+            if ids.len() > 256 {
+                return Err("too many thing ids in one request".to_string());
+            }
+            let global_frame = num::<u32>(query, "frame", 0);
+            let animate = num::<u32>(query, "anim", num::<u32>(query, "animItems", 0)) != 0;
+            let def_dir = if kind == Kind::Outfit { 2 } else { 0 };
+            let renders: Vec<ThingRender> = ids
+                .iter()
+                .map(|&id| {
+                    // Each thing runs its own strip, so a 4-frame torch and a
+                    // 25-frame one both stay in step with the global tick.
+                    let frames = bundle
+                        .appearances
+                        .get(kind, id)
+                        .map(|t| t.strip_frames())
+                        .unwrap_or(1);
+                    let frame = if animate && frames > 1 {
+                        global_frame % frames
+                    } else {
+                        0
+                    };
+                    thing_cell(kind, id, frame, def_dir, 0, 0, None).unwrap_or_else(|_| blank())
+                })
+                .collect();
+            Ok(("image/png", dat::encode_png(&row_atlas(renders, cell))?))
+        }
         "/look.png" => {
             let typeex = query.get("typeex").and_then(|v| v.parse::<u32>().ok());
             let look = Look {
@@ -720,8 +802,16 @@ pub fn handle<R: tauri::Runtime>(
     let query = parse_query(uri.query().unwrap_or(""));
 
     tauri::async_runtime::spawn_blocking(move || {
+        // `/thing.png` and `/things.png` are inherited from SPRx and take their
+        // `.spr`/`.dat` paths as query params. A bundle workspace has neither
+        // file, so those two go the workspace route as well when one is open —
+        // the frontend asks the same URL either way and cannot tell.
+        let bundle_open = ws.read().map(|w| w.bundle.is_some()).unwrap_or(false);
         let result = match path_seg.as_str() {
             "/look.png" | "/item.png" | "/items.png" | "/monsters.png" => {
+                dispatch_monx(&spr, &dat, &ws, &path_seg, &query)
+            }
+            "/thing.png" | "/things.png" if bundle_open => {
                 dispatch_monx(&spr, &dat, &ws, &path_seg, &query)
             }
             _ => dispatch(&spr, &dat, &path_seg, &query),
