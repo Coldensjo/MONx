@@ -632,9 +632,28 @@ and Canary's outfits are split between the two:
 | 2 | 158 | 2 | 20–205 | 205 ms |
 
 A two-phase outfit driven at the eight-phase rate flickers, which is exactly how it looked.
-Effects and missiles are phase-timed and use their own declared duration; outfit cells animate
-the walk cycle and use the foot delay. There is no creature in a browser to read a speed from,
-so it uses a nominal one — the clamp swallows the choice for anything below about speed 375.
+
+**And an outfit that never walks is not on that clock at all.** The `animateAlways` things —
+braziers, torches, the fire elementals — burn in place and take no steps, so the foot delay is
+meaningless for them; there are 39 in BlackTek's corpus and a good handful in Ironcore's. They
+run on their declared durations where the format states any, and where it does not, otclient
+does not invent a per-frame constant either: it spreads **the whole cycle over exactly one
+second**, `round(1000 / phases)`. So a two-phase brazier holds 500 ms and a six-phase one 167,
+and MONx's old fixed 220 was wrong for both.
+
+That is the answer to "surely the client stores how long each animation should be": it stores
+it for 10.50+ and derives it everywhere else, and *which* rule applies is decided by what kind
+of animation it is, never by the engine.
+
+| Outfit | Timing | Source |
+|---|---|---|
+| Has a walk group | foot delay from speed, clamped | derived, `walkFrameMs` |
+| `animateAlways`, 10.50+ | declared phase durations | the file |
+| `animateAlways`, pre-10.50 | `1000 / phases` | derived, `idleCycleMs` |
+| Effects and missiles | declared phase durations | the file |
+
+There is no creature in a browser to read a speed from, so the grid uses a nominal one — the
+clamp swallows the choice for anything below about speed 375.
 
 The `.spr`/`.dat` engines state no durations at all, so they keep the fixed tick their client
 used. The fallback is not a guess there — it is the format's actual answer.

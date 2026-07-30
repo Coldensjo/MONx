@@ -77,6 +77,20 @@ const SERVER_BEAT = 50;
  * That clamp is the whole point. Canary's outfits *declare* 300 ms per walk
  * phase, but the client never reads it and plays them at 80.
  */
+/**
+ * How long an outfit that never walks holds one frame, when its format states
+ * no durations.
+ *
+ * These are the `animateAlways` things — braziers, torches, anything that burns
+ * in place — and pre-10.50 clients carry no timing for them at all. otclient
+ * does not invent a per-frame constant: it spreads **the whole cycle over
+ * exactly one second**, so a two-phase brazier holds 500 ms and a six-phase one
+ * 167. Driving them at the walk rate instead is what made them race.
+ */
+export function idleCycleMs(phases: number): number {
+	return phases > 0 ? Math.max(1, Math.round(1000 / phases)) : 0;
+}
+
 export function walkFrameMs(speed: number, walkPhases: number, enhanced: boolean): number {
 	if (speed < 1 || walkPhases < 1) return 0;
 	let stepDuration = Math.floor((1000 * GROUND_SPEED) / speed);

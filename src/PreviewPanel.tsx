@@ -25,7 +25,7 @@ import {
 	type BalanceVerdict
 } from './derive';
 import { useDropTarget } from './dnd';
-import { frameMs, useThingAnim, walkFrameMs } from './fields/preview';
+import { frameMs, idleCycleMs, useThingAnim, walkFrameMs } from './fields/preview';
 
 // The right-hand column: the monster's look rendered live, the numbers the XML
 // never states, and an advisory balance hint (DESIGN §14).
@@ -155,18 +155,25 @@ export default function PreviewPanel({
 	// all (animateAlways, or one frame group) plays its idle instead, which is
 	// what keeps a fire elemental burning while it stands still.
 	const idleFrames = outfitAnim?.idleFrames ?? 1;
-	const firstFrame = outfitAnim?.animateAlways || frames <= idleFrames ? 0 : Math.min(idleFrames, frames - 1);
+	// An outfit with a walk group walks, starting where the idle run ends. One
+	// without — an `animateAlways` torch, or anything with a single group — has
+	// only its idle animation, so that plays from frame 0 on its own durations.
+	const hasWalk = (outfitAnim?.walkFrames ?? 0) > 0 && frames > idleFrames;
+	const firstFrame = hasWalk ? Math.min(idleFrames, frames - 1) : 0;
 	// A walk frame is timed by how fast the monster moves, not by the sprite's
 	// declared phase duration — the client never reads that for a walk cycle.
-	const walkMs = walkFrameMs(doc.speed, outfitAnim?.walkFrames ?? 0, enhancedAnimations);
+	const walkMs = hasWalk ? walkFrameMs(doc.speed, outfitAnim?.walkFrames ?? 0, enhancedAnimations) : 0;
 
 	// `typeex` renders an item, which has nothing to animate.
 	//
 	// A chained timeout rather than one interval, because frames are not held
 	// for equal lengths: an idle animation states a duration per phase and they
 	// differ within a single outfit, while a walk runs at the foot delay the
-	// creature's speed implies. Where neither is stated — the `.spr`/`.dat`
-	// engines carry no durations at all — the fixed tick stands in.
+	// creature's speed implies. Where neither is stated — a pre-10.50 client
+	// carries no durations at all — an outfit that only ever idles spreads its
+	// cycle over one second, which is the client's own rule and not a constant
+	// MONx picked.
+	const idleMs = hasWalk ? ANIM_INTERVAL_MS : idleCycleMs(frames);
 	useEffect(() => {
 		if (!playing || typeex || frames <= firstFrame + 1) {
 			setFrame(firstFrame);
@@ -176,7 +183,7 @@ export default function PreviewPanel({
 		let timer: ReturnType<typeof setTimeout>;
 		const step = (current: number) => {
 			const walking = current >= idleFrames;
-			const ms = walking && walkMs > 0 ? walkMs : frameMs(outfitAnim, current, ANIM_INTERVAL_MS);
+			const ms = walking && walkMs > 0 ? walkMs : frameMs(outfitAnim, current, idleMs);
 			timer = setTimeout(() => {
 				const next = current + 1 < frames ? current + 1 : firstFrame;
 				setFrame(next);
@@ -185,7 +192,7 @@ export default function PreviewPanel({
 		};
 		step(firstFrame);
 		return () => clearTimeout(timer);
-	}, [playing, typeex, frames, firstFrame, idleFrames, walkMs, outfitAnim]);
+	}, [playing, typeex, frames, firstFrame, idleFrames, walkMs, idleMs, outfitAnim]);
 
 	const drop = useDropTarget(['outfit'], p => {
 		if (p.kind === 'outfit') onLookType?.(p.type);

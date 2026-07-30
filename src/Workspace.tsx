@@ -76,7 +76,7 @@ import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
-import { ThingAnimProvider, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { ThingAnimProvider, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 
 /** The speed the Outfits grid animates at, having no creature to read one from.
  *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
@@ -108,10 +108,11 @@ type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
 type ThingView = 'outfits' | 'effects' | 'missiles';
 
 /** How many strip frames are the walk cycle — what an outfit cell loops. Zero
- *  when there is nothing but idle: a one-frame outfit, or an animateAlways one
- *  whose whole strip is the animation. */
+ *  when the outfit has no walk group at all: a one-frame outfit, or one of the
+ *  `animateAlways` torches that burns in place and never takes a step. Those
+ *  loop their whole strip instead, on their own declared durations. */
 function walkCells(t: ThingSummary): number {
-	if (t.animateAlways) return 0;
+	if (!t.walkFrames) return 0;
 	return Math.max(0, t.frames - (t.idleFrames ?? 1));
 }
 
@@ -467,8 +468,15 @@ export default function Workspace({
 	// clamp swallows the choice for anything below about speed 375.
 	const cellIntervalFor = useCallback(
 		(view: ThingView, t: ThingSummary) => {
+			// An outfit with a walk cycle is timed by the foot delay. One without
+			// — the `animateAlways` torches and braziers, which burn in place and
+			// never take a step — falls back to its declared durations, and to
+			// the client's one-second cycle where the format states none.
+			// Running either at the walk rate is what made them race.
 			if (view === 'outfits') {
-				return walkFrameMs(NOMINAL_SPEED, t.walkFrames ?? 0, info.enhancedAnimations);
+				const walk = walkFrameMs(NOMINAL_SPEED, t.walkFrames ?? 0, info.enhancedAnimations);
+				if (walk > 0) return walk;
+				return commonest(t.frameDurations ?? []) ?? idleCycleMs(t.frames);
 			}
 			return commonest(t.frameDurations ?? []) ?? 0;
 		},
