@@ -267,6 +267,7 @@ export const FIXTURE_WORKSPACE: WorkspaceInfo = {
 	datPath: 'C:\\Servers\\Software\\MONx\\assets\\client\\Tibia.dat',
 	spriteCount: 10313,
 	transparent: false,
+	enhancedAnimations: false,
 	lints: [
 		{
 			severity: 'warning',

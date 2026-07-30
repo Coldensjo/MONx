@@ -81,6 +81,17 @@ struct ThingSummary {
     /// client ran everything at one fixed tick, and so does the preview.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     frame_durations: Vec<u32>,
+    /// How many leading frames are the idle animation. The rest are the walk
+    /// cycle, which the client does **not** time from `frame_durations` — it
+    /// derives a foot delay from the creature's speed instead. Splitting the
+    /// strip here is what lets the preview play the walk at the right pace.
+    idle_frames: u8,
+    /// otclient's `footAnimPhases`: the phase count it divides the step
+    /// duration by. **Not** always `frames - idle_frames` — a bundle outfit has
+    /// a separate walk animator and reports its phases, while a `.dat` outfit
+    /// has one animator over the whole strip and reports all of it, standing
+    /// frame included. Getting this wrong is a ~2.5× error in walk speed.
+    walk_frames: u8,
 }
 
 
@@ -117,6 +128,19 @@ fn get_things(
             prop_names: t.props.iter().map(|p| p.name.clone()).collect(),
             name: t.name.clone(),
             frame_durations: Vec::new(),
+            // The `.dat` has no groups: frame 0 is the standing pose and the
+            // rest are the walk — except under `animateAlways`, where the whole
+            // strip is one idle animation and there is no walk at all.
+            idle_frames: if dat::thing_animate_always(t) {
+                t.frames
+            } else {
+                t.frames.min(1)
+            },
+            walk_frames: if dat::thing_animate_always(t) {
+                0
+            } else {
+                t.frames
+            },
         })
         .collect())
 }
@@ -157,6 +181,20 @@ fn bundle_things(bundle: &assets::Bundle, cat: Category) -> Vec<ThingSummary> {
                 prop_names: Vec::new(),
                 name: t.name.clone(),
                 frame_durations: t.strip_durations(),
+                // Two groups means a real idle animator: group 0 idles, group 1
+                // walks, and the client indexes the walk after the idle. One
+                // group behaves like a `.dat` strip — frame 0 stands, the rest
+                // walk — unless it animates on its own, when none of it walks.
+                idle_frames: match t.groups.len() {
+                    0 | 1 if t.animates_always() => t.strip_frames().min(255) as u8,
+                    0 | 1 => 1,
+                    _ => g.frames.min(255) as u8,
+                },
+                walk_frames: match t.groups.get(1) {
+                    Some(walk) => walk.frames.min(255) as u8,
+                    None if t.animates_always() => 0,
+                    None => t.strip_frames().min(255) as u8,
+                },
             }
         })
         .collect();
@@ -247,6 +285,7 @@ fn open_workspace(
     // handed the same `transparency` or the pixel stream decodes to nothing.
     let mut transparent = false;
     let mut sprite_count = 0u32;
+    let mut client_version = 0u32;
     if let (Some(dat_path), Some(spr_path)) = (dat_path.as_ref(), spr_path.as_ref()) {
         let otfi = dat::find_otfi(&dat_path.to_string_lossy());
         let extended = otfi.as_ref().and_then(|o| o.extended);
@@ -257,7 +296,8 @@ fn open_workspace(
         };
         sprite_count = spr_info.sprite_count;
         let mut manager = dat_state.write().map_err(|e| format!("lock: {e}"))?;
-        manager.open_file(dat_path.to_string_lossy().into_owned(), None)?;
+        let dat_info = manager.open_file(dat_path.to_string_lossy().into_owned(), None)?;
+        client_version = dat_info.version;
     }
 
     // A modern client asset bundle in the client slot, where there is no
@@ -269,6 +309,12 @@ fn open_workspace(
         .filter(|_| dat_path.is_none() || spr_path.is_none())
         .and_then(|d| crate::assets::Bundle::load(d).ok())
         .map(std::sync::Arc::new);
+
+    // otclient's `GameEnhancedAnimations`, on from client 10.50 and in every
+    // modern bundle. It changes both how many frames a walk cycle has and how
+    // fast they play — see `walkFrameMs` on the frontend, the only thing that
+    // reads this.
+    let enhanced_animations = bundle.is_some() || client_version >= 1050;
 
     // An unreadable or absent items folder is a degraded workspace, not a
     // failed one: loot ids stay numbers and the lints that need the database
@@ -327,6 +373,7 @@ fn open_workspace(
         dat_path: path_string(dat_path.as_deref()),
         sprite_count,
         transparent,
+        enhanced_animations,
         lints,
     };
 

@@ -25,7 +25,7 @@ import {
 	type BalanceVerdict
 } from './derive';
 import { useDropTarget } from './dnd';
-import { frameMs, useThingAnim } from './fields/preview';
+import { frameMs, useThingAnim, walkFrameMs } from './fields/preview';
 
 // The right-hand column: the monster's look rendered live, the numbers the XML
 // never states, and an advisory balance hint (DESIGN §14).
@@ -57,6 +57,9 @@ interface Props {
 	onLootChange?: (loot: LootEntry[]) => void;
 	/** Shows the Loot heading's Edit button: back to the editor, on the Loot tab. */
 	onGoToLoot?: () => void;
+	/** otclient's enhanced animations, from the client version. It changes how
+	 *  fast a walk cycle plays; see `walkFrameMs`. */
+	enhancedAnimations?: boolean;
 }
 
 function fmt(n: number): string {
@@ -118,7 +121,8 @@ export default function PreviewPanel({
 	onOpenLints,
 	onLookType,
 	onLootChange,
-	onGoToLoot
+	onGoToLoot,
+	enhancedAnimations = false
 }: Props) {
 	const [dir, setDir] = useState(2);
 	const [frame, setFrame] = useState(0);
@@ -145,18 +149,24 @@ export default function PreviewPanel({
 	// of the three every outfit used to be assumed to have.
 	const outfitAnim = useThingAnim('outfit', typeex ? null : doc.look.type);
 	const frames = Math.max(1, outfitAnim?.frames ?? FALLBACK_FRAMES);
-	// Frame 0 is the standing pose and the walk cycle is 1..n-1 — except under
-	// animateAlways, where the whole strip is the animation (a fire elemental
-	// burns standing still, and skipping frame 0 is what left it frozen).
-	const firstFrame = outfitAnim?.animateAlways || frames < 2 ? 0 : 1;
+	// The strip is the idle animation followed by the walk cycle. The preview
+	// walks, so it plays from the end of the idle run — frame 1 for the usual
+	// outfit, whose idle is a single standing pose. An outfit with no walk at
+	// all (animateAlways, or one frame group) plays its idle instead, which is
+	// what keeps a fire elemental burning while it stands still.
+	const idleFrames = outfitAnim?.idleFrames ?? 1;
+	const firstFrame = outfitAnim?.animateAlways || frames <= idleFrames ? 0 : Math.min(idleFrames, frames - 1);
+	// A walk frame is timed by how fast the monster moves, not by the sprite's
+	// declared phase duration — the client never reads that for a walk cycle.
+	const walkMs = walkFrameMs(doc.speed, outfitAnim?.walkFrames ?? 0, enhancedAnimations);
 
 	// `typeex` renders an item, which has nothing to animate.
 	//
-	// Each frame is held for as long as the client's own data says, which is a
-	// chained timeout rather than one interval — a modern bundle gives every
-	// phase its own duration, and they differ within a single outfit. The
-	// `.spr`/`.dat` engines state none, so those fall back to the fixed tick
-	// their client used for everything.
+	// A chained timeout rather than one interval, because frames are not held
+	// for equal lengths: an idle animation states a duration per phase and they
+	// differ within a single outfit, while a walk runs at the foot delay the
+	// creature's speed implies. Where neither is stated — the `.spr`/`.dat`
+	// engines carry no durations at all — the fixed tick stands in.
 	useEffect(() => {
 		if (!playing || typeex || frames <= firstFrame + 1) {
 			setFrame(firstFrame);
@@ -165,15 +175,17 @@ export default function PreviewPanel({
 		setFrame(firstFrame);
 		let timer: ReturnType<typeof setTimeout>;
 		const step = (current: number) => {
+			const walking = current >= idleFrames;
+			const ms = walking && walkMs > 0 ? walkMs : frameMs(outfitAnim, current, ANIM_INTERVAL_MS);
 			timer = setTimeout(() => {
 				const next = current + 1 < frames ? current + 1 : firstFrame;
 				setFrame(next);
 				step(next);
-			}, frameMs(outfitAnim, current, ANIM_INTERVAL_MS));
+			}, ms);
 		};
 		step(firstFrame);
 		return () => clearTimeout(timer);
-	}, [playing, typeex, frames, firstFrame, outfitAnim]);
+	}, [playing, typeex, frames, firstFrame, idleFrames, walkMs, outfitAnim]);
 
 	const drop = useDropTarget(['outfit'], p => {
 		if (p.kind === 'outfit') onLookType?.(p.type);

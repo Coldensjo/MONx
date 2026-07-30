@@ -71,6 +71,10 @@ pub struct WorkspaceInfo {
     /// `/thing.png` and `/things.png` routes, which take it as a query param;
     /// the MONx routes read it from workspace state instead.
     pub transparent: bool,
+    /// otclient's `GameEnhancedAnimations`: on from client 10.50, and in every
+    /// modern bundle. It decides both how many frames a walk cycle has and how
+    /// fast they play, so the preview cannot time a walk without it.
+    pub enhanced_animations: bool,
     /// The engine profile in force, and how it was arrived at. The titlebar
     /// shows it: silently editing a TVP corpus under Ironcore's rules is the
     /// failure mode this whole feature exists to prevent, so it must never be

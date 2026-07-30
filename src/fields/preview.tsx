@@ -42,6 +42,12 @@ export interface ThingAnim {
 	 *  format carries no durations — the `.spr`/`.dat` engines held every thing
 	 *  at one fixed tick, and a modern bundle states a duration per phase. */
 	durations: number[];
+	/** How many leading frames are the idle animation; the rest are the walk. */
+	idleFrames: number;
+	/** otclient's `footAnimPhases` — what a step duration is divided by. Not
+	 *  always `frames - idleFrames`: a `.dat` outfit counts its standing frame
+	 *  in, a bundle outfit's walk animator does not. */
+	walkFrames: number;
 }
 
 /** How long frame `i` should be held, given a thing's durations and the fixed
@@ -49,6 +55,47 @@ export interface ThingAnim {
  *  never said how fast. */
 export function frameMs(anim: ThingAnim | null, i: number, fallback: number): number {
 	return anim?.durations?.[i] || fallback;
+}
+
+/** Ground speed of an ordinary tile. The client reads it off whatever the
+ *  creature is standing on; a preview has no floor, and 150 is the default it
+ *  falls back to. */
+const GROUND_SPEED = 150;
+/** The server's tick, which the client rounds a step up to from 8.6 onwards. */
+const SERVER_BEAT = 50;
+
+/**
+ * How long one walking frame is held, in milliseconds.
+ *
+ * A walk cycle is **not** timed by the sprite's own phase durations — the
+ * client derives it from how fast the creature moves, so the feet keep pace
+ * with the ground. This is otclient's `Creature::updateWalkAnimation` and
+ * `getStepDuration`, which between them clamp the result hard: with enhanced
+ * animations a walk frame is never slower than 80 ms however sluggish the
+ * monster, and never faster than 30 ms.
+ *
+ * That clamp is the whole point. Canary's outfits *declare* 300 ms per walk
+ * phase, but the client never reads it and plays them at 80.
+ */
+export function walkFrameMs(speed: number, walkPhases: number, enhanced: boolean): number {
+	if (speed < 1 || walkPhases < 1) return 0;
+	let stepDuration = Math.floor((1000 * GROUND_SPEED) / speed);
+	stepDuration = Math.ceil(stepDuration / SERVER_BEAT) * SERVER_BEAT;
+
+	let phases = walkPhases;
+	// Without enhanced animations the client drops one phase from the count it
+	// divides by, having already dropped the standing frame from the cycle.
+	if (!enhanced && phases > 2) phases -= 1;
+
+	let minDelay = 20;
+	let divisor = phases;
+	if (enhanced && phases > 2) {
+		minDelay += 10;
+		// Integer division, as in the C++ — 8 phases divide by 5, not 5.33.
+		divisor = Math.trunc(divisor / 1.5);
+	}
+	const maxDelay = phases > 2 ? 80 : 205;
+	return Math.min(Math.max(Math.floor(stepDuration / Math.max(1, divisor)), minDelay), maxDelay);
 }
 
 export type ThingAnimLookup = (kind: 'effect' | 'missile' | 'outfit' | 'item', id: number) => Promise<ThingAnim | null>;

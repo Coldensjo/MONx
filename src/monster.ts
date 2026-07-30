@@ -65,6 +65,9 @@ export interface WorkspaceInfo {
 	/** From the sibling `.otfi`. The inherited `/thing.png` and `/things.png`
 	 *  routes take it as a query param; the MONx routes read it server-side. */
 	transparent: boolean;
+	/** otclient enhanced animations, from the client version — it decides how
+	 *  fast a walk cycle plays. */
+	enhancedAnimations: boolean;
 	/** The engine whose rules are in force, and how it was arrived at. Shown in
 	 *  the titlebar: editing a TVP corpus under Ironcore's rules is the failure
 	 *  mode this exists to prevent, so it must never be ambiguous. */

@@ -59,6 +59,11 @@ export interface ThingSummary {
 	 *  .spr/.dat engines — that format carries no durations, so their preview
 	 *  runs at the fixed tick their client did. */
 	frameDurations?: number[];
+	/** How many leading frames are the idle animation; the rest are the walk. */
+	idleFrames?: number;
+	/** otclient's `footAnimPhases` — the phase count a step duration is divided
+	 *  by. Not always `frames - idleFrames`; see the Rust side. */
+	walkFrames?: number;
 }
 
 export interface ThingProp {

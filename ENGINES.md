@@ -588,8 +588,37 @@ an assumed three, at the speed a 7.x client ran. Neither number is in the modern
 `SpriteAnimation` is now parsed — phases, `default_start_phase`, `synchronized`, `loop_count` —
 and `Thing::strip_durations` returns the per-frame milliseconds in strip order. The preview
 holds each frame for as long as its own phase says, which is a chained timeout rather than one
-interval, because the durations differ *within* a single outfit: a dragon lord is
-`[0, 300 × 8]`, the leading zero being the standing pose that is held until something moves.
+interval, because the durations differ *within* a single outfit.
+
+**A walk cycle, though, is not timed by those durations at all.** This is the trap, and it cost
+a round: a dragon lord's phases read `[0, 300 × 8]`, so honouring them plays the walk at
+300 ms — and the client never reads them. `Creature::updateWalkAnimation` derives a foot delay
+from how fast the creature *moves*, so its feet keep pace with the ground, and then clamps it
+hard:
+
+```text
+stepDuration = ceil(1000 * groundSpeed / speed / serverBeat) * serverBeat   // groundSpeed 150
+footDelay    = clamp(stepDuration / divisor, minDelay, maxDelay)
+```
+
+With `GameEnhancedAnimations` — on from client 10.50, and in every bundle — a walk frame is
+never slower than **80 ms** however sluggish the monster, and never faster than 30. The 300 ms
+the file states is exactly `stepDuration / divisor` for a speed-100 monster, and the clamp is
+what throws it away. `walkFrameMs` is that formula, and `ThingSummary` carries the two counts
+it needs: where the idle run ends, and otclient's `footAnimPhases`. Those are **not** the same
+subtraction in both formats — a bundle outfit reports its walk animator's phases, a `.dat`
+outfit reports the whole strip including the standing frame, and confusing the two is a 2.5×
+error in speed.
+
+| Client | Walk phases | Divisor | Clamp | Result |
+|---|---|---|---|---|
+| Canary bundle, speed 100 | 8 | 5 | 30–80 | **80 ms** (was 300) |
+| BlackTek 10.98, speed 200 | 3 | 2 | 30–80 | **80 ms** (was 220) |
+| Ironcore 8.0, speed 250 | 3 → 2 | 2 | 20–205 | **205 ms** (was 220) |
+| Ironcore 8.0, speed 800 | 3 → 2 | 2 | 20–205 | **100 ms** |
+
+The last row is the point of doing it properly rather than picking a better constant: a fast
+monster's feet really do move faster, and now the preview shows it.
 
 Two places still run one clock for many things, and deliberately. The browser grid gets the
 duration that dominates its category — a contact sheet of two hundred things cannot afford two

@@ -471,7 +471,9 @@ export default function Workspace({
 				patternX: t.patternX,
 				patternY: t.patternY,
 				animateAlways: t.animateAlways,
-				durations: t.frameDurations ?? []
+				durations: t.frameDurations ?? [],
+				idleFrames: t.idleFrames ?? 1,
+				walkFrames: t.walkFrames ?? Math.max(0, t.frames - (t.idleFrames ?? 1))
 			};
 		},
 		[thingIndex]
@@ -2025,6 +2027,7 @@ export default function Workspace({
 						doc={doc}
 						items={items}
 						lintCount={visibleMonsterLints.length}
+						enhancedAnimations={info.enhancedAnimations}
 						onOpenLints={() => setLintsOpen(true)}
 						onLookType={type => editDoc({ ...doc, look: { ...doc.look, mode: 'type', type } })}
 						onLootChange={loot => editDoc({ ...doc, loot })}
