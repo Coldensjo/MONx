@@ -3,8 +3,14 @@ dist
 src-tauri/target
 src-tauri/gen/schemas
 
-# Per-agent git worktrees for the parallel build (agents/README.md §4).
+# Per-agent git worktrees, and each machine's own Claude Code settings.
 .claude/worktrees/
+.claude/settings.local.json
+
+# Probe output: `probe_dat`/`probe_assets` write their PNGs next to wherever
+# they are run from, which is usually src-tauri/. The app's own icons live in
+# src-tauri/icons/ and are committed.
+src-tauri/*.png
 
 # The fixture workspace: a real server's monster/item data and a full Tibia
 # client (Tibia.spr alone is 54 MB). Needed on disk to run and verify MONx —

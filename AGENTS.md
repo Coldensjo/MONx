@@ -10,7 +10,7 @@ Opens a workspace of up to four folders: the server's `monster/` folder, its `it
 
 **The item database has three spellings**: `items.xml`, BlackTek's `items.toml`, and Nostalrius's 7.x `items.srv` — all three read by `items.rs` into one `ItemInfo`, so nothing above it asks which file it came from. `items.otb` is optional; without one the server id *is* the client id, which is how the modern engines, BlackTek and Nostalrius all address things. Ask `ItemIndex::client_id()` for the mapping rather than the OTB, or previews go blank on every engine that has no OTB.
 
-MONx is a fork of **SPRx** (kept at [SPRx/](SPRx/) for reference). The sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image server, the virtualized browsers — is inherited whole. What's new is the monster-XML layer on top.
+MONx is a fork of **SPRx**, a sprite browser for the same client formats. The sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image server, the virtualized browsers — is inherited whole. What's new is the monster-XML layer on top.
 
 ## Stack
 
@@ -161,7 +161,7 @@ src/
   sections/  fields/   Section components and field controls
   MonsterList.tsx      Virtualized monster list with look previews
   ThingBrowser.tsx     Items/outfits/effects/missiles browser (generalised from
-                       SPRx's ThingsView, kept at SPRx/src/ThingsView.tsx)
+                       SPRx's ThingsView)
   PreviewPanel.tsx     Right-hand preview + derived math
   LintPanel.tsx        Lint drawer
   PinLootDialog.tsx    Corpus-wide loot id pinning (Tools menu)
