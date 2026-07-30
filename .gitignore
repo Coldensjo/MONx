@@ -10,3 +10,4 @@ src-tauri/gen/schemas
 # client (Tibia.spr alone is 54 MB). Needed on disk to run and verify MONx —
 # see AGENTS.md — but deliberately never committed.
 assets/
+sources/
