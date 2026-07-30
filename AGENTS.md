@@ -6,7 +6,9 @@ Opens a workspace of up to four folders: the server's `monster/` folder, its `it
 
 **Only the monsters folder is required.** Canary and BlackTek ship no `items.otb`, so a workspace can open with monsters alone — reading, linting and saving all work regardless.
 
-**The client slot takes either kind of client.** A `.spr`/`.dat` folder goes through the inherited SPRx engine; a modern asset bundle (a folder with `catalog-content.json`, as Canary and any 12.x+ client ship) goes through `assets.rs` + `appearances.rs` instead. `items.otb` is likewise optional — without one the server id *is* the client id, which is how the modern engines address things.
+**The client slot takes either kind of client.** A `.spr`/`.dat` folder goes through the inherited SPRx engine; a modern asset bundle (a folder with `catalog-content.json`, as Canary and any 12.x+ client ship) goes through `assets.rs` + `appearances.rs` instead. BlackTek is a third case that needs no third reader: its `assets.dat` is a stock 10.98 `.dat` under another name, and `open_workspace` prefers one found in the items folder over the client folder's.
+
+**The item database is `items.xml` or `items.toml`** — BlackTek ships the latter, a narrow enough subset that `items.rs` reads it directly. `items.otb` is optional; without one the server id *is* the client id, which is how the modern engines and BlackTek address things. Ask `ItemIndex::client_id()` for the mapping rather than the OTB, or previews go blank on every engine that has no OTB.
 
 MONx is a fork of **SPRx** (kept at [SPRx/](SPRx/) for reference). The sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image server, the virtualized browsers — is inherited whole. What's new is the monster-XML layer on top.
 
@@ -117,7 +119,7 @@ cargo run --example probe_assets -- <assets-dir> [out_dir]
 │  assets.rs   — modern client bundle: LZMA sprite sheets    │
 │  appearances.rs — appearances.dat protobuf (12.x+ things)  │
 │  otb.rs      — items.otb server↔client id map            │
-│  items.rs    — items.xml database + name search          │
+│  items.rs    — items.xml / items.toml database + search  │
 │  spr.rs      — .spr file reader (inherited, frozen)      │
 │  dat.rs      — .dat parser, thing composition (frozen)   │
 │  protocol.rs — monx:// image serving                     │
@@ -197,9 +199,9 @@ assets/                fixture workspace: monsters/, items/, client/
 
 **Do not infer behaviour from upstream TFS.** Ironcore diverges in ways that matter constantly: per-spell cooldowns, extra flags, the pacifist system, `force` on summons, `corpseactionid`, `masterEffect`.
 
-MONx also opens **TheForgottenServer 1.x, TheVioletProject, Nostalrius, Canary/OTServBR and BlackTek** corpora. Everything below describes Ironcore, which is the default profile; what the other three do differently lives in `engine.rs` and is summarised in [ENGINES.md](ENGINES.md). Three consequences worth knowing before touching anything:
+MONx also opens **TheForgottenServer 1.x, TheVioletProject, Nostalrius, Canary/OTServBR and BlackTek** corpora. Everything below describes Ironcore, which is the default profile; what the other five do differently lives in `engine.rs` and is summarised in [ENGINES.md](ENGINES.md). Four consequences worth knowing before touching anything:
 
-- **The reader, writer and linter all take a `&'static EngineProfile`.** There is one `MonsterDoc` for all four engines — a superset — and the profile decides which parts the reader populates and the writer emits. Never hard-code a spelling like `raceid` or `CONST_ME_*`; ask the profile.
+- **The reader, writer and linter all take a `&'static EngineProfile`.** There is one `MonsterDoc` for all six engines — a superset — and the profile decides which parts the reader populates and the writer emits. Never hard-code a spelling like `raceid` or `CONST_ME_*`; ask the profile.
 - **Two formats, one model.** Canary and BlackTek define monsters as Lua tables, not XML. `Parsed` is an enum with an XML body and a Lua body; `read_bytes`/`write_bytes` dispatch on `profile.format`. Everything above the document layer — `MonsterDoc`, the lints, the editor — is shared, and should stay that way.
 - **A corpus can be a tree.** Only Ironcore is flat. A monster's key is its path relative to the monsters folder (`monsters/demon.xml`), matching its `file=` in `monsters.xml`.
 - **A lint the engine has no rule for is suppressed, not reported.** `silent` severity is only worth anything if it means the server really would say nothing; firing Ironcore's rules at a TVP corpus inverts that. Per-engine suppressions live on the profile.

@@ -165,9 +165,20 @@ fn open_workspace(
     // lints and writes monsters; it just cannot draw them or name a loot id.
     let items_dir = workspace::resolve_folder(&paths.items);
     let client_dir = workspace::resolve_folder(&paths.client);
-    let dat_path = client_dir
+    // BlackTek keeps its thing table beside the item database as `assets.dat` —
+    // a stock 10.98 dat with its own items appended — and takes sprites from an
+    // ordinary client folder. Where both exist the server's own file wins: the
+    // stock client dat is missing every custom item, and picking it would draw
+    // blanks for exactly the things that make the server what it is.
+    //
+    // Matched by name rather than extension on purpose. Canary's items folder
+    // also holds a `.dat` — `appearances.dat` — which is a protobuf and not a
+    // thing table at all.
+    let dat_path = items_dir
         .as_deref()
-        .and_then(|d| workspace::find_by_ext(d, "dat"));
+        .map(|d| d.join("assets.dat"))
+        .filter(|p| p.is_file())
+        .or_else(|| client_dir.as_deref().and_then(|d| workspace::find_by_ext(d, "dat")));
     let spr_path = client_dir
         .as_deref()
         .and_then(|d| workspace::find_by_ext(d, "spr"));

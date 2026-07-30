@@ -333,8 +333,9 @@ pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
             ))
         }),
         items: slot(Some(&expanded.items), |dir| {
-            if !dir.join("items.xml").is_file() {
-                return Err("items.xml not found".to_string());
+            // BlackTek ships items.toml instead of items.xml.
+            if !dir.join("items.xml").is_file() && !dir.join("items.toml").is_file() {
+                return Err("no items.xml or items.toml here".to_string());
             }
             // `items.otb` is optional: the modern engines have no server↔client
             // id split and ship none.

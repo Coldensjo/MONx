@@ -178,16 +178,16 @@ fn render_look(
     spr: &crate::spr::SprManager,
     file: &dat::DatFile,
     spr_path: &str,
-    otb: &crate::otb::Otb,
+    items: &crate::items::ItemIndex,
     look: &Look,
     dir: u32,
     frame: u32,
     transparent: bool,
 ) -> Result<ThingRender, String> {
     if let Some(typeex) = look.typeex.filter(|_| look.mode == "typeex") {
-        let client_id = otb
+        let client_id = items
             .client_id(typeex)
-            .ok_or_else(|| format!("typeex {typeex} has no items.otb entry"))?;
+            .ok_or_else(|| format!("typeex {typeex} has no client id"))?;
         let thing = file
             .thing(Category::Item, client_id)
             .ok_or_else(|| format!("unknown item client id {client_id}"))?;
@@ -456,9 +456,8 @@ fn dispatch_monx(
     let item_thing = |sid: u32| -> Result<&dat::Thing, String> {
         let cid = ws
             .items
-            .otb()
             .client_id(sid)
-            .ok_or_else(|| format!("item {sid} has no items.otb entry"))?;
+            .ok_or_else(|| format!("item {sid} has no client id"))?;
         file.thing(Category::Item, cid)
             .ok_or_else(|| format!("unknown item client id {cid}"))
     };
@@ -483,7 +482,7 @@ fn dispatch_monx(
                 &spr_manager,
                 file,
                 spr_path,
-                ws.items.otb(),
+                &ws.items,
                 &look,
                 num(query, "dir", 2),
                 num(query, "frame", 0),
@@ -580,7 +579,7 @@ fn dispatch_monx(
                                 &spr_manager,
                                 file,
                                 spr_path,
-                                ws.items.otb(),
+                                &ws.items,
                                 &m.look,
                                 dir,
                                 frame,

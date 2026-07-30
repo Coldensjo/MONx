@@ -509,8 +509,8 @@ would be a diff nobody asked for.
 | | Canary | BlackTek |
 |---|---|---|
 | `monsters.xml` registry | — (every script autoloads) | — |
-| `items.otb` | — (`items.xml` only; **read anyway**) | — (`assets.dat`) |
-| `.spr` / `.dat` client | — (asset bundle; **read anyway**) | — (`assets.dat`) |
+| `items.otb` | — (`items.xml` only; **read anyway**) | — (`items.toml`; **read anyway**) |
+| `.spr` / `.dat` client | — (asset bundle; **read anyway**) | — (`assets.dat` is a 10.98 `.dat`) |
 | Bestiary | ✅ `Bestiary` + `bosstiary` | — |
 | `strategiesTarget` | ✅ (`nearest`/`health`/`damage`/`random`) | — |
 | Numeric flags | inside `monster.flags` | top level, as TFS |
@@ -523,8 +523,8 @@ MONx opens a workspace with **only** a monsters folder, which it previously coul
 and client were both required, and demanding them would have made these corpora unopenable.
 The Landing screen says what is missing and the editor degrades rather than refusing.
 
-**Canary does get sprites**, though, because it ships a modern client asset bundle and MONx
-now reads one — see §7.1. BlackTek does not: its `assets.dat` is a different, custom format.
+**Both get sprites**, by opposite routes. Canary ships a modern client asset bundle and MONx
+now reads one — see §7.1. BlackTek's `assets.dat` needed no new reader at all — see §7.2.
 
 ### 7.1 Canary's sprites — the modern asset bundle
 
@@ -565,6 +565,26 @@ name and icon — for an indirection that is not there. Canary loads 37,506 item
 the result can be looked at rather than trusted — a sheet that decodes to the right *size* and
 the wrong *pixels* is exactly what a byte count would miss.
 
+### 7.2 BlackTek's sprites — a stock client under a new name
+
+BlackTek needed no new format work at all. `assets.dat` is an ordinary Tibia `.dat`, version
+10.98, renamed; its own `Items::loadFromDat` skips a 4-byte signature, reads a u16 item count
+and skips three more u16s — the same header `dat.rs` has always parsed. Pointing `probe_dat` at
+it read 26,282 items, 903 outfits, 175 effects and 54 missiles on the first try, and the stock
+1098 `Tibia.spr` supplies the pixels. Two lines in `open_workspace` were the whole change:
+prefer an `assets.dat` sitting in the items folder over a `.dat` in the client folder.
+
+`items.toml` is the item database, and it is a narrow enough subset of TOML — `[[items]]`
+tables of scalar keys — that a hand-rolled reader beside the existing `items.xml` one was
+smaller than a dependency. It carries **no `clientId` key at all**, in any of its 21,881
+entries: like the modern engines, BlackTek's server id *is* the client id.
+
+That last point is where it first went wrong. The item and look protocol routes asked
+`items.otb` for the mapping and got nothing, so every preview came back blank while the list
+rendered fine — a database fully loaded and entirely undrawable. `ItemIndex::client_id()` now
+owns the question: OTB if there is one, the item's own `client_id` otherwise. The protocol asks
+the index, never the OTB, and the same code serves all six engines.
+
 ### Two findings worth the whole exercise
 
 - **`monster.skull` is fatal on Canary.** It calls `mtype:skull(…)`, and no such method is
@@ -579,22 +599,20 @@ the wrong *pixels* is exactly what a byte count would miss.
 
 ## 8. Still open
 
-**Two engines still have no item database or sprites MONx can read.** Canary's are done (§7.1);
-what remains is a different file format in each case, and each is its own reader.
+**One engine still has no item database MONx can read.** Canary's and BlackTek's are done
+(§7.1, §7.2).
 
 | Engine | Ships | Status |
 |---|---|---|
 | Canary | `items.xml` + client asset bundle | **read** — 37,506 items, sprites, outfits |
+| BlackTek | `items.toml` + `assets.dat` (10.98) | **read** — 21,881 items, sprites, outfits |
 | Nostalrius | `items.srv` (7.x text) | not read — needs an `items.srv` parser |
-| BlackTek | `assets.dat` | not read — a custom format, not yet investigated |
 
-Nostalrius is the smaller of the two: `items.srv` is a text format, and its sprites would come
-from an ordinary `.spr`/`.dat` pair, which MONx already reads if one is supplied. BlackTek's
-`assets.dat` begins `a3 42 00 00` and is neither OTB nor protobuf appearances; working out what
-it is comes before anything else.
+`items.srv` is a text format and the smaller job of the two that were left; Nostalrius's sprites
+would come from an ordinary `.spr`/`.dat` pair, which MONx already reads if one is supplied.
 
-Both engines' monsters open, lint and save correctly regardless — this is only about drawing
-them and naming their loot.
+Its monsters open, lint and save correctly regardless — this is only about drawing them and
+naming their loot.
 
 **TVP's `speed=` collision is reported, not resolved.** The loader reads `speed` as the cast
 cadence and then, on a `speed` spell, again as the delta — so one node cannot carry both. MONx

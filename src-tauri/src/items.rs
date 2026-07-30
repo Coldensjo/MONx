@@ -72,6 +72,21 @@ impl ItemIndex {
         &self.otb
     }
 
+    /// The client id to draw a server id with.
+    ///
+    /// Goes through the OTB where there is one, and through the item entry
+    /// where there is not — the modern engines and BlackTek have no id split,
+    /// so asking the (empty) OTB would report every item as unrenderable.
+    pub fn client_id(&self, server_id: u32) -> Option<u32> {
+        if let Some(id) = self.otb.client_id(server_id) {
+            return Some(id);
+        }
+        self.by_id
+            .get(&server_id)
+            .map(|i| i.client_id)
+            .filter(|id| *id != 0)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.by_id.is_empty()
     }
@@ -151,7 +166,14 @@ impl ItemIndex {
 
     /// Loads the item database from a folder holding `items.otb` + `items.xml`.
     pub fn load(dir: &Path) -> Result<ItemIndex, String> {
-        let mut index = ItemIndex::load_xml(&dir.join("items.xml"))?;
+        // BlackTek replaced `items.xml` with `items.toml`. Same database, same
+        // fields, different punctuation.
+        let xml = dir.join("items.xml");
+        let mut index = if xml.is_file() {
+            ItemIndex::load_xml(&xml)?
+        } else {
+            ItemIndex::load_toml(&dir.join("items.toml"))?
+        };
         match Otb::load(&dir.join("items.otb")) {
             Ok(otb) => {
                 index.apply_otb(&otb);
@@ -163,6 +185,105 @@ impl ItemIndex {
             // every loot name and icon, for an indirection that does not exist.
             Err(_) => index.assume_direct_ids(),
         }
+        Ok(index)
+    }
+
+    /// `items.toml` — BlackTek's item database.
+    ///
+    /// An array of tables, `[[items]]`, each a flat run of `key = value` with
+    /// string, integer, boolean and the occasional inline-table value. That is
+    /// a small enough slice of TOML to read directly, the same call `spr.rs`
+    /// and `appearances.rs` made for their formats; a full TOML parser would be
+    /// a dependency earning its keep on 21,881 records of `name = "..."`.
+    ///
+    /// Anything not understood is kept verbatim in `attributes`, so a field
+    /// MONx has no opinion about is still visible in the editor.
+    pub fn load_toml(items_toml: &Path) -> Result<ItemIndex, String> {
+        let text = std::fs::read_to_string(items_toml)
+            .map_err(|e| format!("Failed to read {}: {}", items_toml.display(), e))?;
+
+        let mut index = ItemIndex::default();
+        let mut current: Option<(Option<u32>, Option<u32>, BTreeMap<String, String>)> = None;
+
+        // A record ends where the next `[[items]]` begins, or at end of file.
+        let flush = |slot: &mut Option<(Option<u32>, Option<u32>, BTreeMap<String, String>)>,
+                         index: &mut ItemIndex| {
+            let Some((from, to, mut attrs)) = slot.take() else {
+                return;
+            };
+            let Some(name) = attrs.remove("name") else { return };
+            let article = attrs.remove("article").filter(|a| !a.is_empty());
+            let Some(first) = from else { return };
+            // `fromid`/`toid` declares a run of ids sharing one definition.
+            let last = to.unwrap_or(first);
+            let stackable = attrs.get("type").map(String::as_str) == Some("stackable");
+            let container = attrs.get("type").map(String::as_str) == Some("container")
+                || attrs.contains_key("containerSize");
+
+            for id in first..=last.max(first) {
+                index.by_id.insert(
+                    id,
+                    ItemInfo {
+                        server_id: id,
+                        client_id: id,
+                        name: name.clone(),
+                        article: article.clone(),
+                        attributes: attrs.clone(),
+                        stackable,
+                        container,
+                        pickupable: false,
+                        ambiguous_name: false,
+                    },
+                );
+                index
+                    .by_name
+                    .entry(name.to_lowercase())
+                    .or_default()
+                    .push(id);
+            }
+        };
+
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if line.starts_with("[[") {
+                flush(&mut current, &mut index);
+                current = Some((None, None, BTreeMap::new()));
+                continue;
+            }
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            let Some((from, to, attrs)) = current.as_mut() else {
+                continue;
+            };
+            let key = key.trim();
+            let value = unquote(value.trim());
+            match key {
+                "id" | "fromid" => *from = value.parse().ok(),
+                "toid" => *to = value.parse().ok(),
+                _ => {
+                    attrs.insert(key.to_string(), value);
+                }
+            }
+        }
+        flush(&mut current, &mut index);
+
+        // A name owned by several ids is the same §13 drop hazard as in XML.
+        let ambiguous: Vec<u32> = index
+            .by_name
+            .values()
+            .filter(|ids| ids.len() > 1)
+            .flat_map(|ids| ids.iter().copied())
+            .collect();
+        for id in ambiguous {
+            if let Some(item) = index.by_id.get_mut(&id) {
+                item.ambiguous_name = true;
+            }
+        }
+
         Ok(index)
     }
 
@@ -352,4 +473,15 @@ fn parse_attributes(body: &str) -> BTreeMap<String, String> {
             Some((key.to_string(), value))
         })
         .collect()
+}
+
+/// Strips TOML quoting from a scalar. Inline tables and arrays are kept as
+/// written — MONx does not model them, and the text is more useful than a
+/// parse it would only have to render back.
+fn unquote(value: &str) -> String {
+    let v = value.trim();
+    match v.strip_prefix('"').and_then(|r| r.strip_suffix('"')) {
+        Some(inner) => inner.replace("\\\"", "\"").replace("\\\\", "\\"),
+        None => v.to_string(),
+    }
 }
