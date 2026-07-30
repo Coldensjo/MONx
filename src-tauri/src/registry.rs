@@ -208,8 +208,13 @@ fn parse(bytes: &[u8]) -> Registry {
                     if key.eq_ignore_ascii_case("name") {
                         name = value;
                     } else if key.eq_ignore_ascii_case("file") {
-                        // `file` is resolved relative to data/monster/ (§1).
-                        file = value.rsplit(['/', '\\']).next().unwrap_or(&value).to_string();
+                        // `file` is resolved relative to data/monster/ (§1) and
+                        // is kept whole: on TFS, TVP and Nostalrius it names a
+                        // subfolder (`monsters/demon.xml`, `raids/orc.xml`), and
+                        // reducing it to the basename made two monsters in
+                        // different subtrees look like the same entry. Slashes
+                        // are normalised so it compares equal to `file_key`.
+                        file = value.replace('\\', "/");
                     }
                 }
                 if !name.is_empty() || !file.is_empty() {

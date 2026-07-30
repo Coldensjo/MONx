@@ -1,5 +1,6 @@
 pub mod catalog;
 pub mod dat;
+pub mod engine;
 pub mod items;
 pub mod lint;
 pub mod monster;
@@ -174,20 +175,32 @@ fn open_workspace(
 
     let index = items::ItemIndex::load(&items_dir)?;
 
+    // The engine is settled once, here, and everything downstream reads it off
+    // the workspace. An explicit key from the Landing picker wins; otherwise the
+    // probe's detection does, and the label goes into `WorkspaceInfo` so the
+    // titlebar can say which rules are in force.
+    let detection = workspace::probe(&paths).engine;
+    let profile = paths
+        .engine
+        .as_deref()
+        .and_then(engine::by_key)
+        .or_else(|| engine::by_key(&detection.best))
+        .unwrap_or_else(engine::default_profile);
+
     // The whole corpus is parsed up front, mirroring the server's own
     // `forceMonsterTypesOnLoad = true`: cross-file lints need all of it.
     let registry = registry::Registry::load(&monsters_dir.join("monsters.xml"));
     let spells = spells::SpellIndex::load(
         paths.spells.as_ref().map(std::path::PathBuf::from).as_deref(),
     );
-    let (docs, read_errors) = monster::read_corpus(&monsters_dir, &registry, &spells);
+    let (docs, read_errors) = monster::read_corpus(profile, &monsters_dir, &registry, &spells);
 
     let registered_count = docs.iter().filter(|d| d.registered).count() as u32;
     let orphan_count = docs.len() as u32 - registered_count;
-    let mut lints = lint::lint_workspace(&docs, &registry, &spells, &index, &monsters_dir);
+    let mut lints = lint::lint_workspace(profile, &docs, &registry, &spells, &index, &monsters_dir);
     lints.extend(read_errors);
     lints.extend(item_lints(&index));
-    let monsters = lint::summaries(&docs, &spells, &index);
+    let monsters = lint::summaries(profile, &docs, &spells, &index);
 
     let info = WorkspaceInfo {
         paths: WorkspacePaths {
@@ -195,7 +208,11 @@ fn open_workspace(
             items: items_dir.to_string_lossy().into_owned(),
             client: client_dir.to_string_lossy().into_owned(),
             spells: paths.spells.clone(),
+            engine: Some(profile.key.to_string()),
         },
+        engine: profile.key.to_string(),
+        engine_label: profile.label.to_string(),
+        engine_detection: detection,
         monster_count: monsters.len() as u32,
         registered_count,
         orphan_count,
@@ -209,6 +226,7 @@ fn open_workspace(
     };
 
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    ws.profile = profile;
     ws.paths = info.paths.clone();
     ws.items = index;
     ws.monsters = monsters;
@@ -269,8 +287,8 @@ fn item_lints(index: &items::ItemIndex) -> Vec<Lint> {
 fn refresh(ws: &mut workspace::Workspace) {
     let dir = ws.monsters_dir();
     ws.registry = registry::Registry::load(&dir.join("monsters.xml"));
-    let (docs, _) = monster::read_corpus(&dir, &ws.registry, &ws.spells);
-    ws.monsters = lint::summaries(&docs, &ws.spells, &ws.items);
+    let (docs, _) = monster::read_corpus(ws.profile, &dir, &ws.registry, &ws.spells);
+    ws.monsters = lint::summaries(ws.profile, &docs, &ws.spells, &ws.items);
     ws.docs = docs;
 }
 
@@ -284,7 +302,7 @@ fn list_monsters(state: State<WorkspaceState>) -> Result<Vec<MonsterSummary>, St
 fn get_monster(state: State<WorkspaceState>, file: String) -> Result<MonsterDoc, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
     let mut doc =
-        monster::read_file(&ws.monsters_dir().join(&file), ws.registry.has_file(&file))?.doc;
+        monster::read_file_keyed(ws.profile, &ws.monsters_dir().join(&file), &file, ws.registry.has_file(&file))?.doc;
     // §8.1 resolution needs spells.xml, which only the workspace has.
     ws.spells.classify_doc(&mut doc);
     Ok(doc)
@@ -293,10 +311,10 @@ fn get_monster(state: State<WorkspaceState>, file: String) -> Result<MonsterDoc,
 #[tauri::command]
 fn save_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<Vec<Lint>, String> {
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
-    let lints = monster::save(&ws.monsters_dir(), &ws.registry, &doc)?;
+    let lints = monster::save(ws.profile, &ws.monsters_dir(), &ws.registry, &doc)?;
     refresh(&mut ws);
     let mut all = lints;
-    all.extend(lint::lint_monster(&doc, &ws.spells, &ws.items));
+    all.extend(lint::lint_monster(ws.profile, &doc, &ws.spells, &ws.items));
     Ok(all)
 }
 
@@ -308,7 +326,7 @@ fn create_monster(
     group: String,
 ) -> Result<MonsterDoc, String> {
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
-    let doc = monster::create(&ws.monsters_dir(), &ws.registry, &name, &file, &group)?;
+    let doc = monster::create(ws.profile, &ws.monsters_dir(), &ws.registry, &name, &file, &group)?;
     refresh(&mut ws);
     Ok(doc)
 }
@@ -320,7 +338,7 @@ fn duplicate_monster(
     new_name: String,
 ) -> Result<MonsterDoc, String> {
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
-    let doc = monster::duplicate(&ws.monsters_dir(), &ws.registry, &file, &new_name)?;
+    let doc = monster::duplicate(ws.profile, &ws.monsters_dir(), &ws.registry, &file, &new_name)?;
     refresh(&mut ws);
     Ok(doc)
 }
@@ -341,7 +359,7 @@ fn rename_monster(
     new_file: String,
 ) -> Result<MonsterDoc, String> {
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
-    let doc = monster::rename(&ws.monsters_dir(), &ws.registry, &file, &new_name, &new_file)?;
+    let doc = monster::rename(ws.profile, &ws.monsters_dir(), &ws.registry, &file, &new_name, &new_file)?;
     refresh(&mut ws);
     Ok(doc)
 }
@@ -386,6 +404,7 @@ fn reveal_monster(state: State<WorkspaceState>, file: String) -> Result<(), Stri
 fn lint_workspace(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
     Ok(lint::lint_workspace(
+        ws.profile,
         &ws.docs,
         &ws.registry,
         &ws.spells,
@@ -397,7 +416,7 @@ fn lint_workspace(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
 #[tauri::command]
 fn lint_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<Vec<Lint>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    Ok(lint::lint_monster(&doc, &ws.spells, &ws.items))
+    Ok(lint::lint_monster(ws.profile, &doc, &ws.spells, &ws.items))
 }
 
 #[tauri::command]
@@ -444,6 +463,7 @@ fn pin_loot_ids(
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
     let docs = std::mem::take(&mut ws.docs);
     let report = monster::pin_loot_ids(
+        ws.profile,
         &ws.monsters_dir(),
         &ws.registry,
         &ws.items,
@@ -660,7 +680,7 @@ fn scale_loot_chances(
 
     if apply {
         for d in &to_save {
-            monster::save(&ws.monsters_dir(), &ws.registry, d)?;
+            monster::save(ws.profile, &ws.monsters_dir(), &ws.registry, d)?;
         }
         refresh(&mut ws);
     }
@@ -756,7 +776,7 @@ fn batch_edit(
 
     if apply {
         for d in &to_save {
-            monster::save(&ws.monsters_dir(), &ws.registry, d)?;
+            monster::save(ws.profile, &ws.monsters_dir(), &ws.registry, d)?;
         }
         refresh(&mut ws);
     }
@@ -982,6 +1002,7 @@ fn patch_marks(state: State<WorkspaceState>) -> Result<Vec<PatchMark>, String> {
 fn all_lints(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
     let mut all = lint::lint_workspace(
+        ws.profile,
         &ws.docs,
         &ws.registry,
         &ws.spells,
@@ -989,7 +1010,7 @@ fn all_lints(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
         &ws.monsters_dir(),
     );
     for doc in &ws.docs {
-        all.extend(lint::lint_monster(doc, &ws.spells, &ws.items));
+        all.extend(lint::lint_monster(ws.profile, doc, &ws.spells, &ws.items));
     }
     Ok(all)
 }

@@ -30,6 +30,7 @@ use std::path::Path;
 
 use crate::catalog;
 use crate::items::ItemIndex;
+use crate::engine::EngineProfile;
 use crate::monster::{
     self, Child, FlagValue, Lint, MonsterDoc, MonsterSummary, Node, Parsed, SpellBlock,
 };
@@ -41,19 +42,29 @@ const WARNING: &str = "warning";
 const SILENT: &str = "silent";
 
 struct Report {
+    profile: &'static EngineProfile,
     file: Option<String>,
     lints: Vec<Lint>,
 }
 
 impl Report {
-    fn new(file: Option<String>) -> Report {
+    fn new(profile: &'static EngineProfile, file: Option<String>) -> Report {
         Report {
+            profile,
             file,
             lints: Vec::new(),
         }
     }
 
+    /// Drops any finding this engine has no rule for. Suppressing beats
+    /// reporting: `silent` severity is MONx's loudest signal precisely because
+    /// the server never says a word, and firing one against an engine that
+    /// doesn't implement the rule inverts exactly the thing that makes it
+    /// worth trusting.
     fn add(&mut self, severity: &str, code: &str, path: Option<&str>, fixable: bool, message: String) {
+        if !self.profile.lint_applies(code) {
+            return;
+        }
         self.lints.push(Lint {
             severity: severity.to_string(),
             code: code.to_string(),
@@ -71,10 +82,16 @@ impl Report {
 
 /// Everything §24 can prove from a `MonsterDoc` alone. Safe to call on every
 /// keystroke: it touches no filesystem and allocates only the findings.
-pub fn lint_monster(doc: &MonsterDoc, spells: &SpellIndex, items: &ItemIndex) -> Vec<Lint> {
-    let mut r = Report::new(Some(doc.file.clone()));
+pub fn lint_monster(
+    profile: &'static EngineProfile,
+    doc: &MonsterDoc,
+    spells: &SpellIndex,
+    items: &ItemIndex,
+) -> Vec<Lint> {
+    let mut r = Report::new(profile, Some(doc.file.clone()));
 
     identity(doc, &mut r);
+    engine_shape(doc, &mut r);
     flags(doc, &mut r);
     resistances(doc, &mut r);
     for (i, s) in doc.attacks.iter().enumerate() {
@@ -97,6 +114,11 @@ fn identity(doc: &MonsterDoc, r: &mut Report) {
     }
 
     match doc.raceid {
+        // On Ironcore every monster is expected to carry one. On TFS the id
+        // exists only to key the bestiary, and most of its corpus has no
+        // `<bestiary>` block at all — warning on those would be 604 findings
+        // about monsters that are working exactly as intended.
+        None if r.profile.has_bestiary && doc.bestiary.is_none() => {}
         None => r.add(WARNING, "raceid.missing", Some("raceid"), true,
             format!("'{}' has no raceid — the bestiary cannot track it", doc.name)),
         Some(id) if id <= 0 => r.add(WARNING, "raceid.invalid", Some("raceid"), false,
@@ -116,13 +138,13 @@ fn identity(doc: &MonsterDoc, r: &mut Report) {
     }
 
     if let Some(race) = &doc.race {
-        if !catalog::is_race(race) {
+        if !r.profile.is_race(race) {
             r.add(WARNING, "race.unknown", Some("race"), false,
                 format!("Unknown race \"{race}\" — the server keeps the default (blood)"));
         }
     }
     // Unknown skulls resolve to `none` without a word from the server (§19).
-    if !doc.skull.is_empty() && !catalog::is_skull(&doc.skull) {
+    if !doc.skull.is_empty() && !r.profile.is_skull(&doc.skull) {
         r.add(SILENT, "skull.unknown", Some("skull"), true,
             format!("Unknown skull \"{}\" — silently becomes \"none\"", doc.skull));
     }
@@ -170,6 +192,116 @@ fn identity(doc: &MonsterDoc, r: &mut Report) {
     }
 }
 
+/// Rules that only exist on some engines, and that would be nonsense on the
+/// rest. Each one is a thing the *server* does — a warning it prints, a block it
+/// discards, an attribute it reads twice — not a house style.
+fn engine_shape(doc: &MonsterDoc, r: &mut Report) {
+    let p = r.profile;
+
+    // ---- <targetstrategy> (TVP, Nostalrius) ----
+    if let Some((node, _)) = p.target_strategy {
+        match &doc.target_strategy {
+            None => r.add(WARNING, "targetstrategy.missing", Some("targetStrategy"), true,
+                format!("No <{node}> — the server warns about missing target change strategies")),
+            Some(s) if p.target_strategy_sums_100 => {
+                let sum = s.nearest + s.weakest + s.mostdamage + s.random;
+                if sum != 100 {
+                    r.add(WARNING, "targetstrategy.weights-not-100", Some("targetStrategy"), false,
+                        format!("Target strategy weights add up to {sum}, not 100"));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // ---- <bestiary> (TFS) ----
+    if let Some(b) = &doc.bestiary {
+        // `isValidBestiaryInfo` throws the whole block away, silently as far as
+        // the monster is concerned — it just never enters the bestiary.
+        if doc.raceid.unwrap_or(0) <= 0 {
+            r.add(WARNING, "bestiary.invalid", Some("bestiary"), false,
+                "A <bestiary> block without a raceId is discarded whole".to_string());
+        }
+        if let Some(d) = &b.difficulty {
+            const LEVELS: [&str; 6] =
+                ["harmless", "trivial", "easy", "medium", "hard", "challenging"];
+            if !LEVELS.iter().any(|l| l.eq_ignore_ascii_case(d)) {
+                r.add(WARNING, "bestiary.unknown-difficulty", Some("bestiary.difficulty"), false,
+                    format!("Unknown bestiary difficulty \"{d}\""));
+            }
+        }
+        // The loader casts `occurrence` with `pugi::cast<uint32_t>`, so the
+        // shipped corpus's `occurrence="common"` silently reads as 0.
+        if let Some(o) = &b.occurrence {
+            if o.trim().parse::<u32>().is_err() {
+                r.add(SILENT, "bestiary.occurrence-not-numeric", Some("bestiary.occurrence"), false,
+                    format!("occurrence=\"{o}\" is cast to a number and silently becomes 0"));
+            }
+        }
+    }
+
+    // ---- melee on <attacks> (Nostalrius) ----
+    if let Some(s) = &doc.attacks_stats {
+        if s.attack == 0 || s.skill == 0 {
+            r.add(WARNING, "attacks.incomplete-melee", Some("attacksStats"), false,
+                "<attacks> needs both attack and skill for the monster to melee".to_string());
+        }
+    }
+
+    // ---- voices with no cadence (TVP, Nostalrius) ----
+    if !p.voices_interval && !doc.voices.lines.is_empty() {
+        if let Some(extra) = doc.unknown_attributes.get("voices") {
+            for key in extra.keys() {
+                if ["interval", "speed", "chance"].contains(&key.to_ascii_lowercase().as_str()) {
+                    r.add(SILENT, "voices.inert", Some("voices"), true,
+                        format!("{key} on <voices> does nothing — this engine never reads it"));
+                }
+            }
+        }
+    }
+
+    for (i, s) in doc.attacks.iter().chain(doc.defenses.iter()).enumerate() {
+        let path = if i < doc.attacks.len() {
+            format!("attacks[{i}]")
+        } else {
+            format!("defenses[{}]", i - doc.attacks.len())
+        };
+        engine_spell(s, &path, r);
+    }
+}
+
+fn engine_spell(s: &SpellBlock, path: &str, r: &mut Report) {
+    use crate::engine::{ConditionSpell, SpeedSpell};
+    let p = r.profile;
+
+    // Nostalrius drops the whole spell when a condition has no `count`.
+    if p.condition_spell == ConditionSpell::Count {
+        if let Some(c) = &s.condition {
+            if c.count.is_none() {
+                r.add(ERROR, "spell.count-missing", Some(&format!("{path}.condition.count")), false,
+                    "A condition spell without count is rejected and never loads".to_string());
+            }
+        }
+    }
+
+    // TVP reads `speed=` as the cast cadence *before* reading it as the speed
+    // delta, so one node cannot carry both.
+    if p.speed_spell == SpeedSpell::SpeedVariation {
+        if let Some(st) = &s.status {
+            if st.speedchange.is_some() {
+                r.add(SILENT, "spell.speed-attribute-collision", Some(&format!("{path}.interval")), false,
+                    "This engine reads speed= as the cast interval first and the speed change second — the spell cannot also have its own interval".to_string());
+            }
+        }
+    }
+
+    // `delay` is an `else if` after `chance`, on both spells and summons.
+    if s.delay.is_some() && p.has_spell_delay() && s.chance != 100 {
+        r.add(SILENT, "spell.delay-ignored", Some(&format!("{path}.delay")), false,
+            "delay is only read when chance is absent — with both, delay is silently ignored".to_string());
+    }
+}
+
 fn flag_true(doc: &MonsterDoc, name: &str) -> bool {
     matches!(doc.flags.get(name), Some(FlagValue::Bool(true)))
 }
@@ -177,7 +309,7 @@ fn flag_true(doc: &MonsterDoc, name: &str) -> bool {
 fn flags(doc: &MonsterDoc, r: &mut Report) {
     for (name, value) in &doc.flags {
         let path = format!("flags.{name}");
-        if !catalog::is_known_flag(name) {
+        if !r.profile.is_known_flag(name) {
             r.add(WARNING, "flag.unknown", Some(&path), false,
                 format!("Unknown flag attribute \"{name}\""));
             continue;
@@ -224,13 +356,13 @@ fn flags(doc: &MonsterDoc, r: &mut Report) {
 
 fn resistances(doc: &MonsterDoc, r: &mut Report) {
     for name in doc.immunities.keys() {
-        if !catalog::is_immunity_name(name) {
+        if !r.profile.is_immunity_name(name) {
             r.add(WARNING, "immunity.unknown", Some(&format!("immunities.{name}")), false,
                 format!("Unknown immunity name \"{name}\""));
         }
     }
     for (attr, value) in &doc.elements {
-        if !catalog::is_element_attr(attr) {
+        if !r.profile.is_element_attr(attr) {
             r.add(WARNING, "element.unknown-percent", Some(&format!("elements.{attr}")), false,
                 format!("Unknown element percent \"{attr}\""));
             continue;
@@ -273,7 +405,7 @@ fn spell(s: &SpellBlock, path: &str, spells: &SpellIndex, r: &mut Report) {
     let lname = name.to_ascii_lowercase();
     let registered = spells.is_registered(&name);
 
-    if s.script.is_none() && !registered && !catalog::is_builtin_spell(&name) {
+    if s.script.is_none() && !registered && !r.profile.is_builtin_spell(&name) {
         // Without a spells.xml the name can only be checked against the §22
         // catalogue, and an unverifiable name is not the same as a wrong one.
         if spells.verified {
@@ -309,9 +441,9 @@ fn spell(s: &SpellBlock, path: &str, spells: &SpellIndex, r: &mut Report) {
         r.add(WARNING, "spell.interval-under-1", Some(&p("interval")), true,
             format!("interval {} is forced to 1", s.interval));
     }
-    if s.range > catalog::MAX_SPELL_RANGE {
+    if s.range > r.profile.spell_range_max {
         r.add(WARNING, "spell.range-over-max", Some(&p("range")), true,
-            format!("range {} is clamped to {}", s.range, catalog::MAX_SPELL_RANGE));
+            format!("range {} is clamped to {}", s.range, r.profile.spell_range_max));
     }
 
     // §8.2: the loader silently swaps them, so the file no longer says what
@@ -354,8 +486,10 @@ fn spell(s: &SpellBlock, path: &str, spells: &SpellIndex, r: &mut Report) {
 
     // `spell.melee-bleed-value-ignored` lives in `lint_source`: by the time a
     // block is in the model the value is already the 0 the engine will use.
+    // Presence, not value: the loader needs both attributes written before it
+    // derives melee damage, so `skill` alone is the whole finding.
     if let Some(m) = &s.melee {
-        if m.skill != 0 && m.attack == 0 {
+        if m.skill.is_some() && m.attack.is_none() {
             r.add(WARNING, "spell.melee-skill-without-attack", Some(&p("melee.attack")), false,
                 "skill without attack — explicit min/max are used instead".to_string());
         }
@@ -371,9 +505,9 @@ fn effect_value(value: Option<&str>, key: &str, path: &str, r: &mut Report) {
     let is_shoot = key == "shootEffect";
 
     let known = if is_shoot {
-        catalog::is_shoot_effect(value)
+        r.profile.is_shoot_effect(value)
     } else {
-        catalog::is_magic_effect(value)
+        r.profile.is_magic_effect(value)
     };
     if known {
         // §21 defect 3: the name table points KNIFE at PITCHFORK's id.
@@ -392,9 +526,9 @@ fn effect_value(value: Option<&str>, key: &str, path: &str, r: &mut Report) {
     }
 
     let fix = if is_shoot {
-        catalog::shoot_effect_case_fix(value)
+        r.profile.shoot_effect_case_fix(value)
     } else {
-        catalog::magic_effect_case_fix(value)
+        r.profile.magic_effect_case_fix(value)
     };
     match fix {
         Some(correct) => r.add(WARNING, "effect.wrong-case", Some(path), true,
@@ -426,9 +560,9 @@ fn summons(doc: &MonsterDoc, r: &mut Report) {
         }
         for (key, value) in [("effect", &e.effect), ("masterEffect", &e.master_effect)] {
             let Some(value) = value else { continue };
-            if !catalog::is_magic_effect(value) {
+            if !r.profile.is_magic_effect(value) {
                 let path = format!("{path}.{key}");
-                match catalog::magic_effect_case_fix(value) {
+                match r.profile.magic_effect_case_fix(value) {
                     Some(correct) => r.add(WARNING, "effect.wrong-case", Some(&path), true,
                         format!("{key} \"{value}\" is matched case-sensitively — write \"{correct}\"")),
                     None => r.add(WARNING, "effect.unknown", Some(&path), false,
@@ -448,11 +582,14 @@ fn loot(entries: &[monster::LootEntry], path: &str, items: &ItemIndex, r: &mut R
                 "Loot entry has neither an id nor a name — the entry is dropped".to_string());
         }
 
-        // §13: countmax over 100 is a rejection, not a clamp.
-        if e.countmax > catalog::MAX_LOOT_COUNTMAX {
-            r.add(ERROR, "loot.countmax-over-100", Some(&format!("{p}.countmax")), true,
-                format!("countmax {} is above the hard maximum of {} — the whole entry is dropped, not clamped",
-                    e.countmax, catalog::MAX_LOOT_COUNTMAX));
+        // §13: countmax over 100 is a rejection, not a clamp. Only Ironcore
+        // has a ceiling at all — the others just floor the value at 1.
+        if let Some(max) = r.profile.loot_countmax_max {
+            if e.countmax > max {
+                r.add(ERROR, "loot.countmax-over-100", Some(&format!("{p}.countmax")), true,
+                    format!("countmax {} is above the hard maximum of {max} — the whole entry is dropped, not clamped",
+                        e.countmax));
+            }
         }
         if e.countmax < 1 {
             r.add(WARNING, "loot.countmax-under-1", Some(&format!("{p}.countmax")), true,
@@ -512,11 +649,19 @@ fn loot(entries: &[monster::LootEntry], path: &str, items: &ItemIndex, r: &mut R
 fn ignored_attributes(doc: &MonsterDoc, r: &mut Report) {
     for (path, attrs) in &doc.unknown_attributes {
         for key in attrs.keys() {
-            // Exact-casing traps, in the three places §24 calls out.
-            if path.is_empty() && key == "raceId" {
-                r.add(SILENT, "raceid.wrong-case", Some("raceid"), true,
-                    "raceId is silently ignored — the attribute is spelled raceid".to_string());
-                continue;
+            // Exact-casing traps, in the three places §24 calls out. Which
+            // spelling is the *dead* one depends on the engine: Ironcore reads
+            // `raceid` and ignores `raceId`, TFS reads `raceId` and ignores
+            // `raceid`. Comparing against the profile is what keeps this rule
+            // from being exactly backwards on half the engines.
+            if path.is_empty() {
+                if let Some(live) = r.profile.raceid_attr {
+                    if key != live && key.eq_ignore_ascii_case("raceid") {
+                        r.add(SILENT, "raceid.wrong-case", Some("raceid"), true,
+                            format!("{key} is silently ignored — this engine spells the attribute {live}"));
+                        continue;
+                    }
+                }
             }
             if path == "summons" && key.eq_ignore_ascii_case("maxSummons") && key != "maxSummons" {
                 r.add(SILENT, "summons.maxsummons-wrong-case", Some("summons.maxSummons"), true,
@@ -552,8 +697,8 @@ fn ignored_attributes(doc: &MonsterDoc, r: &mut Report) {
 /// The §24 rules that are about the text rather than the value: whether an
 /// attribute was written at all, and whether it was written more than once.
 /// Runs at load time, where the original nodes are still available.
-pub fn lint_source(parsed: &Parsed) -> Vec<Lint> {
-    let mut r = Report::new(Some(parsed.doc.file.clone()));
+pub fn lint_source(profile: &'static EngineProfile, parsed: &Parsed) -> Vec<Lint> {
+    let mut r = Report::new(profile, Some(parsed.doc.file.clone()));
     let root = &parsed.root;
 
     for child in root.children.iter().filter_map(as_element) {
@@ -601,12 +746,21 @@ fn as_element(child: &Child) -> Option<&Node> {
     }
 }
 
+/// Only where the loader actually complains. TVP reads `<voices>` cadence not
+/// at all, and reads `<targetchange>` interval without an else-branch, so
+/// demanding either there would be MONx inventing a rule rather than reporting
+/// one.
 fn missing_interval_chance(node: &Node, name: &str, r: &mut Report) {
-    if node.attr("interval").is_none() && node.attr("speed").is_none() {
+    let (wants_interval, wants_chance) = match name {
+        "voices" => (r.profile.voices_interval, r.profile.voices_chance),
+        "targetchange" => (r.profile.warns_missing_targetchange_interval, true),
+        _ => (true, true),
+    };
+    if wants_interval && node.attr("interval").is_none() && node.attr("speed").is_none() {
         r.add(WARNING, &format!("{name}.missing-interval"), Some(&format!("{name}.interval")), true,
             format!("Missing {name} interval"));
     }
-    if node.attr("chance").is_none() {
+    if wants_chance && node.attr("chance").is_none() {
         r.add(WARNING, &format!("{name}.missing-chance"), Some(&format!("{name}.chance")), true,
             format!("Missing {name} chance"));
     }
@@ -652,7 +806,11 @@ fn spell_nodes(container: &Node, path: &str, r: &mut Report) {
             .attr("name")
             .map(|n| n.eq_ignore_ascii_case("melee"))
             .unwrap_or(false);
-        if !is_melee && node.attr("chance").is_none() {
+        // TVP accepts `delay` in place of `chance`, so only the absence of
+        // both is a finding there.
+        let has_cadence = node.attr("chance").is_some()
+            || (r.profile.has_spell_delay() && node.attr("delay").is_some());
+        if !is_melee && !has_cadence {
             r.add(WARNING, "spell.missing-chance", Some(&format!("{p}.chance")), true,
                 "Missing chance on a non-melee spell".to_string());
         }
@@ -687,7 +845,7 @@ fn spell_nodes(container: &Node, path: &str, r: &mut Report) {
                 continue;
             }
             let Some(key) = attribute.attr("key") else { continue };
-            if catalog::canonical_effect_key(key).is_none() {
+            if r.profile.canonical_effect_key(key).is_none() {
                 r.add(WARNING, "spell.unknown-effect-key", Some(&p), false,
                     format!("Effect type \"{key}\" does not exist"));
             }
@@ -703,13 +861,14 @@ fn spell_nodes(container: &Node, path: &str, r: &mut Report) {
 /// registry and the surrounding folders, so none of it can be checked while
 /// editing a single monster.
 pub fn lint_workspace(
+    profile: &'static EngineProfile,
     docs: &[MonsterDoc],
     registry: &Registry,
     spells: &SpellIndex,
     _items: &ItemIndex,
     dir: &Path,
 ) -> Vec<Lint> {
-    let mut r = Report::new(None);
+    let mut r = Report::new(profile, None);
 
     // Orphans and dangling entries are two distinct findings: one is a file the
     // server never loads, the other is a registry line pointing at nothing.
@@ -830,11 +989,16 @@ pub fn lint_workspace(
 
 /// List-view rows with their lint counts. The counts drive the severity dots in
 /// Agent 4's monster list, so they include the source-level findings too.
-pub fn summaries(docs: &[MonsterDoc], spells: &SpellIndex, items: &ItemIndex) -> Vec<MonsterSummary> {
+pub fn summaries(
+    profile: &'static EngineProfile,
+    docs: &[MonsterDoc],
+    spells: &SpellIndex,
+    items: &ItemIndex,
+) -> Vec<MonsterSummary> {
     docs.iter()
         .map(|doc| {
             let mut summary = monster::summarise(doc);
-            for l in lint_monster(doc, spells, items) {
+            for l in lint_monster(profile, doc, spells, items) {
                 match l.severity.as_str() {
                     ERROR => summary.lint_counts.error += 1,
                     WARNING => summary.lint_counts.warning += 1,

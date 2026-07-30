@@ -5,6 +5,7 @@
 //! cargo run --release --example probe_monster -- ../assets/monsters
 //! cargo run --release --example probe_monster -- ../assets/monsters --lint
 //! cargo run --release --example probe_monster -- ../assets/monsters --canonical
+//! cargo run --release --example probe_monster -- ../sources/TVP-main/data/monster --engine tvp
 //! ```
 //!
 //! The default pass is the acceptance gate for the whole format stream: read
@@ -12,10 +13,17 @@
 //! `--canonical` additionally reports how many files the from-scratch renderer
 //! reproduces exactly — a much stricter number that is *not* the gate, printed
 //! so nobody has to guess how much of the round-trip is preservation.
+//!
+//! `--engine <key>` picks the profile; without it the corpus is sniffed the same
+//! way the Landing dialog sniffs it. Running this against *each* engine's own
+//! shipped corpus is the acceptance test for multi-engine support: a profile
+//! that over-declares its known attributes drops data, and `--mutate` is what
+//! catches that.
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use monx_lib::engine::{self, EngineProfile};
 use monx_lib::lint;
 use monx_lib::monster;
 use monx_lib::registry::Registry;
@@ -25,10 +33,16 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // The only positional argument is the monsters folder; `--items <dir>`
     // takes a value, so skip whatever follows it.
+    let valued = |i: usize| {
+        matches!(
+            args.get(i.wrapping_sub(1)).map(String::as_str),
+            Some("--items") | Some("--engine") | Some("--crud")
+        )
+    };
     let dir = args
         .iter()
         .enumerate()
-        .find(|(i, a)| !a.starts_with("--") && args.get(i.wrapping_sub(1)).map(String::as_str) != Some("--items"))
+        .find(|(i, a)| !a.starts_with("--") && !valued(*i))
         .map(|(_, a)| PathBuf::from(a))
         .unwrap_or_else(|| PathBuf::from("../assets/monsters"));
     let want_lint = args.iter().any(|a| a == "--lint");
@@ -41,6 +55,33 @@ fn main() {
         std::process::exit(2);
     }
 
+    // Explicit `--engine` wins; otherwise sniff, and say what was picked so a
+    // surprising result is visible rather than silently shaping every number
+    // below it.
+    let profile: &'static EngineProfile = args
+        .iter()
+        .position(|a| a == "--engine")
+        .and_then(|i| args.get(i + 1))
+        .map(|key| {
+            engine::by_key(key).unwrap_or_else(|| {
+                eprintln!("unknown engine: {key}");
+                std::process::exit(2);
+            })
+        })
+        .unwrap_or_else(|| {
+            let mut files = monster::monster_files(&engine::TFS, &dir);
+            files.truncate(24);
+            let samples: Vec<Vec<u8>> = files.iter().filter_map(|p| std::fs::read(p).ok()).collect();
+            let d = engine::detection(engine::detect(&samples));
+            let p = engine::by_key(&d.best).unwrap_or_else(engine::default_profile);
+            println!(
+                "engine   {} ({})",
+                p.label,
+                if d.confident { "detected" } else { "low confidence" }
+            );
+            p
+        });
+
     let registry = Registry::load(&dir.join("monsters.xml"));
     let spells = SpellIndex::load(dir.parent().map(|p| p.join("spells")).as_deref());
     // Loot resolution needs an items database; default to the one beside the
@@ -52,7 +93,7 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| dir.with_file_name("items"));
     let items = monx_lib::items::ItemIndex::load(&items_dir).unwrap_or_default();
-    let files = monster::monster_files(&dir);
+    let files = monster::monster_files(profile, &dir);
     let started = Instant::now();
     let mut source_lints = Vec::new();
 
@@ -70,23 +111,23 @@ fn main() {
     let mut docs = Vec::new();
 
     for path in &files {
-        let name = file_name(path);
+        let name = monster::file_key(&dir, path);
         let registered = registry.has_file(&name);
-        match monster::read_file(path, registered) {
+        match monster::read_file_keyed(profile, path, &name, registered) {
             Err(e) => failed.push((name, e)),
             Ok(parsed) => {
                 parsed_ok += 1;
                 if want_lint {
-                    source_lints.extend(lint::lint_source(&parsed));
+                    source_lints.extend(lint::lint_source(profile, &parsed));
                 }
-                let written = monster::write_bytes(&parsed, &parsed.doc);
+                let written = monster::write_bytes(profile, &parsed, &parsed.doc);
                 if written == parsed.bytes {
                     identical += 1;
                 } else {
                     differing.push((name.clone(), first_difference(&parsed.bytes, &written)));
                 }
                 if want_canonical {
-                    let canon = monster::write_new(&parsed.doc);
+                    let canon = monster::write_new(profile, &parsed.doc);
                     if canon == parsed.bytes {
                         canonical_ok += 1;
                     }
@@ -98,10 +139,10 @@ fn main() {
                     // on a block that also sets `radius` (§8.3, §29). Those
                     // normalisations are counted separately and named, so that
                     // dropping something by accident can never hide among them.
-                    match monster::read_bytes(&name, &canon, parsed.doc.registered) {
+                    match monster::read_bytes(profile, &name, &canon, parsed.doc.registered) {
                         Err(e) => canonical_bad.push(format!("{name}: does not parse — {e}")),
                         Ok(reread) => {
-                            if monster::write_new(&reread.doc) != canon {
+                            if monster::write_new(profile, &reread.doc) != canon {
                                 canonical_bad.push(format!("{name}: renderer is not idempotent"));
                             }
                             if let Some(field) = first_doc_difference(&parsed.doc, &reread.doc) {
@@ -111,16 +152,22 @@ fn main() {
                     }
                 }
                 if want_mutate {
-                    match mutation_survives(&parsed) {
+                    match mutation_survives(profile, &parsed) {
                         Ok(changed_lines) => {
                             mutate_ok += 1;
                             mutate_lines += changed_lines;
                         }
                         Err(why) => mutate_bad.push(format!("{name}: {why}")),
                     }
-                    match voice_extras_survive(&parsed) {
-                        Ok(()) => voice_ok += 1,
-                        Err(why) => mutate_bad.push(format!("{name}: voice extras — {why}")),
+                    // Only Ironcore has the pacifist system; elsewhere those
+                    // strings are unknown attributes, and asking the model to
+                    // round-trip a field the engine does not have would be
+                    // testing MONx against a rule that does not exist.
+                    if profile.has_pacifist {
+                        match voice_extras_survive(profile, &parsed) {
+                            Ok(()) => voice_ok += 1,
+                            Err(why) => mutate_bad.push(format!("{name}: voice extras — {why}")),
+                        }
                     }
                 }
                 docs.push(parsed.doc);
@@ -185,9 +232,9 @@ fn main() {
         // All three scopes, so a regression in any one of them shows up here.
         let mut report = source_lints;
         for doc in &docs {
-            report.extend(lint::lint_monster(doc, &spells, &items));
+            report.extend(lint::lint_monster(profile, doc, &spells, &items));
         }
-        report.extend(lint::lint_workspace(&docs, &registry, &spells, &items, &dir));
+        report.extend(lint::lint_workspace(profile, &docs, &registry, &spells, &items, &dir));
         let count = |severity: &str| {
             report
                 .iter()
@@ -247,7 +294,7 @@ fn main() {
         .and_then(|i| args.get(i + 1))
         .map(PathBuf::from)
     {
-        match crud_check(&dir, &scratch) {
+        match crud_check(profile, &dir, &scratch) {
             Ok(summary) => println!("crud: {summary}"),
             Err(e) => {
                 println!("crud: FAILED — {e}");
@@ -328,30 +375,45 @@ fn first_doc_difference(a: &monster::MonsterDoc, b: &monster::MonsterDoc) -> Opt
 /// corpus: saving an untouched document must not change the file on disk, the
 /// original must land in `.monx-backup`, and create/duplicate/rename/delete
 /// must each leave the folder and `monsters.xml` consistent.
-fn crud_check(source: &Path, scratch: &Path) -> Result<String, String> {
+fn copy_tree(source: &Path, target: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(target).map_err(|e| e.to_string())?;
+    for entry in std::fs::read_dir(source).map_err(|e| e.to_string())?.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            copy_tree(&path, &target.join(entry.file_name()))?;
+        } else if path.extension().and_then(|s| s.to_str()) == Some("xml") {
+            std::fs::copy(&path, target.join(entry.file_name())).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn crud_check(
+    profile: &'static EngineProfile,
+    source: &Path,
+    scratch: &Path,
+) -> Result<String, String> {
     use monx_lib::registry::Registry;
 
     let work = scratch.join("monx-crud");
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
-    for path in std::fs::read_dir(source).map_err(|e| e.to_string())?.flatten() {
-        if path.path().extension().and_then(|s| s.to_str()) == Some("xml") {
-            std::fs::copy(path.path(), work.join(path.file_name())).map_err(|e| e.to_string())?;
-        }
-    }
+    // Mirror the tree, not just the top level: on the nested corpora every
+    // monster lives in a subfolder and a flat copy would leave nothing to test.
+    copy_tree(source, &work)?;
 
     let registry = Registry::load(&work.join("monsters.xml"));
-    let files = monster::monster_files(&work);
+    let files = monster::monster_files(profile, &work);
     let sample = files.first().cloned().ok_or("no files to work with")?;
-    let sample_name = file_name(&sample);
+    let sample_name = monster::file_key(&work, &sample);
 
     // 1. Saving an unmodified document is a no-op on disk.
     let mut unchanged = 0usize;
     for path in &files {
         let before = std::fs::read(path).map_err(|e| e.to_string())?;
-        let name = file_name(path);
-        let parsed = monster::read_file(path, registry.has_file(&name))?;
-        monster::save(&work, &registry, &parsed.doc)?;
+        let name = monster::file_key(&work, path);
+        let parsed = monster::read_file_keyed(profile, path, &name, registry.has_file(&name))?;
+        monster::save(profile, &work, &registry, &parsed.doc)?;
         let after = std::fs::read(path).map_err(|e| e.to_string())?;
         if before != after {
             return Err(format!("saving {name} unchanged rewrote the file"));
@@ -368,16 +430,16 @@ fn crud_check(source: &Path, scratch: &Path) -> Result<String, String> {
     }
 
     // 3. A real edit reaches the disk and survives a re-read.
-    let mut edited = monster::read_file(&sample, true)?.doc;
+    let mut edited = monster::read_file_keyed(profile, &sample, &sample_name, true)?.doc;
     edited.experience += 1234;
-    monster::save(&work, &registry, &edited)?;
-    if monster::read_file(&sample, true)?.doc.experience != edited.experience {
+    monster::save(profile, &work, &registry, &edited)?;
+    if monster::read_file_keyed(profile, &sample, &sample_name, true)?.doc.experience != edited.experience {
         return Err("an edited value did not survive the save".into());
     }
 
     // 4. Create, duplicate, rename, delete — each with the registry in step.
     let registry = Registry::load(&work.join("monsters.xml"));
-    monster::create(&work, &registry, "Probe Subject", "probesubject.xml", "wrecks")?;
+    monster::create(profile, &work, &registry, "Probe Subject", "probesubject.xml", "wrecks")?;
     if !work.join("probesubject.xml").is_file() {
         return Err("create did not write a file".into());
     }
@@ -386,18 +448,28 @@ fn crud_check(source: &Path, scratch: &Path) -> Result<String, String> {
         return Err("create did not register the monster".into());
     }
 
-    monster::duplicate(&work, &registry, &sample_name, "Probe Copy")?;
-    if !work.join("probecopy.xml").is_file() {
+    // On a nested corpus the copy lands beside its original, so take the key
+    // from the returned document rather than assuming the monsters root.
+    let copy_key = monster::duplicate(profile, &work, &registry, &sample_name, "Probe Copy")?.file;
+    if !work.join(&copy_key).is_file() {
         return Err("duplicate did not write a file".into());
     }
-    let copy = monster::read_file(&work.join("probecopy.xml"), true)?.doc;
+    let copy = monster::read_file_keyed(profile, &work.join(&copy_key), &copy_key, true)?.doc;
     if copy.raceid.is_some() {
         return Err("duplicate copied the raceid, which must stay unique".into());
     }
 
     let registry = Registry::load(&work.join("monsters.xml"));
-    monster::rename(&work, &registry, "probecopy.xml", "Probe Renamed", "probrenamed.xml")?;
-    if work.join("probecopy.xml").exists() || !work.join("probrenamed.xml").is_file() {
+    let renamed_key = monster::rename(
+        profile,
+        &work,
+        &registry,
+        &copy_key,
+        "Probe Renamed",
+        "probrenamed.xml",
+    )?
+    .file;
+    if work.join(&copy_key).exists() || !work.join(&renamed_key).is_file() {
         return Err("rename left the old file behind".into());
     }
     let registry = Registry::load(&work.join("monsters.xml"));
@@ -405,8 +477,8 @@ fn crud_check(source: &Path, scratch: &Path) -> Result<String, String> {
         return Err("rename did not update monsters.xml".into());
     }
 
-    monster::delete(&work, &registry, "probrenamed.xml")?;
-    if work.join("probrenamed.xml").exists() {
+    monster::delete(&work, &registry, &renamed_key)?;
+    if work.join(&renamed_key).exists() {
         return Err("delete did not remove the file".into());
     }
     let registry = Registry::load(&work.join("monsters.xml"));
@@ -435,7 +507,7 @@ fn crud_check(source: &Path, scratch: &Path) -> Result<String, String> {
 /// counts how many lines moved: a splice writer should touch only the lines it
 /// had to, so a five-field edit must not rewrite the file. Returns the number
 /// of changed lines.
-fn mutation_survives(parsed: &monster::Parsed) -> Result<usize, String> {
+fn mutation_survives(profile: &'static EngineProfile, parsed: &monster::Parsed) -> Result<usize, String> {
     let mut edited = parsed.doc.clone();
     edited.experience += 7;
     edited.health.max += 13;
@@ -458,15 +530,20 @@ fn mutation_survives(parsed: &monster::Parsed) -> Result<usize, String> {
         text.push('!');
     }
 
-    let written = monster::write_bytes(parsed, &edited);
+    let written = monster::write_bytes(profile, parsed, &edited);
     if written == parsed.bytes {
         return Err("edit produced no change — writer is ignoring the model".into());
     }
 
-    let reread = monster::read_bytes(&edited.file, &written, edited.registered)
+    let reread = monster::read_bytes(profile, &edited.file, &written, edited.registered)
         .map_err(|e| format!("re-read failed: {e}"))?;
     if reread.doc != edited {
-        return Err("re-read document differs from the one written".into());
+        // Name the field: "differs" on its own sends you back to a byte diff of
+        // a 40-line file to find out which one.
+        return Err(format!(
+            "re-read differs at {}",
+            first_doc_difference(&edited, &reread.doc).unwrap_or_else(|| "?".into())
+        ));
     }
 
     let before: Vec<&[u8]> = parsed.bytes.split(|&b| b == b'\n').collect();
@@ -489,10 +566,10 @@ fn mutation_survives(parsed: &monster::Parsed) -> Result<usize, String> {
 /// none, edited in place, and taken away when the value is cleared — and checks
 /// the document re-reads equal after each. Line counts are not a gate here:
 /// adding or removing a node moves every line under it.
-fn voice_extras_survive(parsed: &monster::Parsed) -> Result<(), String> {
+fn voice_extras_survive(profile: &'static EngineProfile, parsed: &monster::Parsed) -> Result<(), String> {
     let step = |from: &monster::Parsed, doc: monster::MonsterDoc| -> Result<monster::Parsed, String> {
-        let written = monster::write_bytes(from, &doc);
-        let reread = monster::read_bytes(&doc.file, &written, doc.registered)
+        let written = monster::write_bytes(profile, from, &doc);
+        let reread = monster::read_bytes(profile, &doc.file, &written, doc.registered)
             .map_err(|e| format!("re-read failed: {e}"))?;
         if reread.doc != doc {
             return Err("re-read document differs from the one written".into());
@@ -532,6 +609,7 @@ fn voice_extras_survive(parsed: &monster::Parsed) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|s| s.to_string_lossy().into_owned())

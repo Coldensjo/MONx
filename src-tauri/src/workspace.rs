@@ -27,6 +27,10 @@ pub struct WorkspacePaths {
     pub client: String,
     /// Optional data/spells folder; enables ### spell verification (DESIGN §6.5).
     pub spells: Option<String>,
+    /// Engine profile key. None means "detect it" — the Landing picker sends an
+    /// explicit key once the user has chosen, so a reopened workspace never
+    /// re-guesses.
+    pub engine: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -46,6 +50,9 @@ pub struct WorkspaceProbe {
     pub items: SlotStatus,
     pub client: SlotStatus,
     pub spells: SlotStatus,
+    /// Which engine the monster folder looks like, ranked. Empty when the
+    /// monsters slot did not resolve.
+    pub engine: crate::engine::EngineDetection,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -64,12 +71,19 @@ pub struct WorkspaceInfo {
     /// `/thing.png` and `/things.png` routes, which take it as a query param;
     /// the MONx routes read it from workspace state instead.
     pub transparent: bool,
+    /// The engine profile in force, and how it was arrived at. The titlebar
+    /// shows it: silently editing a TVP corpus under Ironcore's rules is the
+    /// failure mode this whole feature exists to prevent, so it must never be
+    /// possible to be unsure which mode you are in.
+    pub engine: String,
+    pub engine_label: String,
+    pub engine_detection: crate::engine::EngineDetection,
     /// Workspace-scope lints only (duplicate raceids, orphans, …).
     pub lints: Vec<Lint>,
 }
 
-#[derive(Default)]
 pub struct Workspace {
+    pub profile: &'static crate::engine::EngineProfile,
     pub paths: WorkspacePaths,
     pub items: ItemIndex,
     pub monsters: Vec<MonsterSummary>,
@@ -84,6 +98,23 @@ pub struct Workspace {
     /// every composition call must be given the same value the file was opened
     /// with, or the pixel stream decodes to garbage.
     pub transparent: bool,
+}
+
+impl Default for Workspace {
+    fn default() -> Self {
+        Workspace {
+            profile: crate::engine::default_profile(),
+            paths: WorkspacePaths::default(),
+            items: ItemIndex::default(),
+            monsters: Vec::new(),
+            docs: Vec::new(),
+            registry: Registry::default(),
+            spells: SpellIndex::default(),
+            spr_path: String::new(),
+            dat_path: String::new(),
+            transparent: false,
+        }
+    }
 }
 
 impl Workspace {
@@ -147,6 +178,7 @@ pub fn expand_data_root(dir: &Path) -> Option<WorkspacePaths> {
         spells: spells
             .is_dir()
             .then(|| spells.to_string_lossy().into_owned()),
+        engine: None,
     })
 }
 
@@ -223,6 +255,51 @@ fn slot(raw: Option<&String>, check: impl Fn(&Path) -> Result<String, String>) -
     }
 }
 
+/// Reads up to `MAX` monster files for the detector. Deliberately small: probing
+/// runs on every keystroke in the Landing dialog, and the signals it looks for
+/// are structural enough that a couple of dozen files settle it.
+const DETECT_SAMPLE: usize = 24;
+
+fn detect_engine(dir: &Path) -> crate::engine::EngineDetection {
+    // Always walk recursively here — which layout this is, is exactly what we
+    // are trying to work out.
+    let mut files = Vec::new();
+    collect_xml(dir, &mut files, 0);
+    files.sort();
+    let samples: Vec<Vec<u8>> = files
+        .iter()
+        .step_by((files.len() / DETECT_SAMPLE).max(1))
+        .take(DETECT_SAMPLE)
+        .filter_map(|p| std::fs::read(p).ok())
+        .collect();
+    crate::engine::detection(crate::engine::detect(&samples))
+}
+
+fn collect_xml(dir: &Path, out: &mut Vec<PathBuf>, depth: u32) {
+    if depth > 3 {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_xml(&path, out, depth + 1);
+        } else if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.eq_ignore_ascii_case("xml"))
+            && !path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| s.eq_ignore_ascii_case("monsters.xml"))
+        {
+            out.push(path);
+        }
+    }
+}
+
 pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
     // A data/ root dropped on any slot fills all of them.
     let expanded = resolve_folder(&paths.monsters)
@@ -230,30 +307,49 @@ pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
         .and_then(expand_data_root)
         .unwrap_or_else(|| paths.clone());
 
+    // An explicit choice always wins over detection — the user may know the
+    // corpus is mid-migration, or simply be right where the heuristics are not.
+    let engine = match paths
+        .engine
+        .as_deref()
+        .and_then(crate::engine::by_key)
+    {
+        Some(p) => crate::engine::EngineDetection {
+            candidates: Vec::new(),
+            best: p.key.to_string(),
+            confident: true,
+        },
+        None => resolve_folder(&expanded.monsters)
+            .map(|dir| detect_engine(&dir))
+            .unwrap_or_default(),
+    };
+    let profile = crate::engine::by_key(&engine.best).unwrap_or_else(crate::engine::default_profile);
+
     WorkspaceProbe {
         monsters: slot(Some(&expanded.monsters), |dir| {
             // Probing must stay cheap — it runs on every keystroke in the
             // Landing dialog — so this counts files against the registry
             // without parsing any of them.
-            let files = crate::monster::monster_files(dir);
+            let files = crate::monster::monster_files(profile, dir);
             if files.is_empty() {
                 return Err("No monster .xml files here".to_string());
             }
             let registry = Registry::load(&dir.join("monsters.xml"));
             let registered = files
                 .iter()
-                .filter(|p| {
-                    p.file_name()
-                        .map(|n| registry.has_file(&n.to_string_lossy()))
-                        .unwrap_or(false)
-                })
+                .filter(|p| registry.has_file(&crate::monster::file_key(dir, p)))
                 .count();
             let orphans = files.len() - registered;
             Ok(format!(
-                "{} files · {} registered · {} orphans",
+                "{} files · {} registered · {} orphans · {}",
                 files.len(),
                 registered,
-                orphans
+                orphans,
+                if engine.confident {
+                    profile.label.to_string()
+                } else {
+                    format!("{} (low confidence)", profile.label)
+                }
             ))
         }),
         items: slot(Some(&expanded.items), |dir| {
@@ -288,5 +384,6 @@ pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
                 Err("spells.xml not found".to_string())
             }
         }),
+        engine,
     }
 }

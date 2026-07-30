@@ -35,6 +35,7 @@ use quick_xml::Reader;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog;
+use crate::engine::{ConditionSpell, EngineProfile, MeleeKind, SpeedSpell};
 
 // ---------- Look ----------
 
@@ -131,9 +132,24 @@ pub struct MeleeCondition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MeleeBlock {
-    pub skill: i64,
-    pub attack: i64,
+    /// Optional because **presence is load-bearing**: the loader only derives
+    /// melee damage when `skill` *and* `attack` are both written, and falls back
+    /// to the block's own `min`/`max` otherwise. `skill="0" attack="0"` and no
+    /// skill/attack at all are therefore different monsters, and a model that
+    /// stored both as `0` would turn the second into the first on save —
+    /// zeroing the melee of anything that states its damage directly.
+    pub skill: Option<i64>,
+    pub attack: Option<i64>,
     pub condition: Option<MeleeCondition>,
+    /// TVP only. These sit on the melee node but write to the *monster*, not the
+    /// spell: `mType->info.skillFactorPercent` and friends (TVP
+    /// `monsters.cpp:230`). Modelled here because that is where they are
+    /// written; the editor labels them as monster-scope.
+    pub skillfactor: Option<i64>,
+    pub skillnextlevel: Option<i64>,
+    pub skilladdcount: Option<i64>,
+    /// TVP only — adds a second poison condition alongside any other (`:290`).
+    pub poisoncycles: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -141,6 +157,13 @@ pub struct MeleeBlock {
 pub struct ConditionBlock {
     pub tick: i64,
     pub start: i64,
+    /// TVP: when `cycle > 0` the loader takes a completely different branch and
+    /// ignores min/max/start/tick (`monsters.cpp:465`).
+    pub cycle: Option<i64>,
+    pub mincycle: Option<i64>,
+    /// Nostalrius: required, and the whole spell is dropped without it
+    /// (`monsters.cpp:483`).
+    pub count: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -150,6 +173,12 @@ pub struct StatusBlock {
     pub speedchange: Option<i64>,
     pub minspeedchange: Option<i64>,
     pub maxspeedchange: Option<i64>,
+    /// TVP's `speed` spell takes its delta from `speed=` — the same attribute
+    /// the loader already read as the cast cadence — plus this
+    /// (`monsters.cpp:334`). Nostalrius spells `variation` without the prefix
+    /// (`monsters.cpp:403`).
+    pub speedvariation: Option<i64>,
+    pub variation: Option<i64>,
     pub drunkenness: Option<i64>,
     pub outfit_monster: Option<String>,
     pub outfit_item: Option<i64>,
@@ -172,6 +201,9 @@ pub struct SpellBlock {
     pub script: Option<String>,
     pub interval: i64,
     pub chance: i64,
+    /// TVP's alternative to `chance`, and it is an `else if`: writing both means
+    /// `delay` is silently ignored (`monsters.cpp:128`).
+    pub delay: Option<i64>,
     pub range: i64,
     pub min: i64,
     pub max: i64,
@@ -192,6 +224,7 @@ impl Default for SpellBlock {
             script: None,
             interval: 2000,
             chance: 100,
+            delay: None,
             range: 0,
             min: 0,
             max: 0,
@@ -246,6 +279,8 @@ pub struct SummonEntry {
     pub name: String,
     pub interval: i64,
     pub chance: i64,
+    /// TVP's alternative to `chance` on a summon (`monsters.cpp:1249`).
+    pub delay: Option<i64>,
     pub max: i64,
     pub force: bool,
     pub effect: Option<String>,
@@ -297,6 +332,49 @@ pub struct Voices {
     pub leash: Option<String>,
 }
 
+/// Nostalrius keeps the monster's melee on the `<attacks>` container itself
+/// rather than in a spell block — there is no `melee` spell name in its loader
+/// at all (`monsters.cpp:762`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttacksStats {
+    pub attack: i64,
+    pub skill: i64,
+    pub poison: Option<i64>,
+}
+
+/// TFS `<bestiary>` (`monsters.cpp:987`). Invalid combinations make the loader
+/// discard the whole block, which `lint.rs` reports.
+///
+/// `occurrence` is a string even though the loader casts it to an integer: the
+/// shipped corpus writes `occurrence="common"`, which casts to 0. Keeping the
+/// text preserves the author's intent and lets the lint say what actually
+/// happens, where storing 0 would quietly rewrite it on the next edit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Bestiary {
+    pub class: Option<String>,
+    pub prowess: i64,
+    pub expertise: i64,
+    pub mastery: i64,
+    pub charm_points: i64,
+    pub difficulty: Option<String>,
+    pub occurrence: Option<String>,
+    pub locations: Option<String>,
+}
+
+/// TVP and Nostalrius `<targetstrategy>` (`monsters.cpp:961` / `:703`). Not the
+/// same node as Ironcore's `<targetstrategies>`, which spells the middle two
+/// keys `health` and `damage` and stays an unmodelled raw region.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetStrategy {
+    pub nearest: i64,
+    pub weakest: i64,
+    pub mostdamage: i64,
+    pub random: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Summons {
@@ -325,6 +403,10 @@ pub enum FlagValue {
 pub struct MonsterDoc {
     pub file: String,
     pub registered: bool,
+    /// The engine profile this document was read under. The frontend uses it to
+    /// decide which sections and enum lists to render, so it travels with the
+    /// document rather than being looked up separately and possibly disagreeing.
+    pub engine: String,
     pub name: String,
     pub name_description: Option<String>,
     pub race: Option<String>,
@@ -338,6 +420,12 @@ pub struct MonsterDoc {
     pub health: Health,
     pub look: Look,
     pub targetchange: TargetChange,
+    /// TVP / Nostalrius only.
+    pub target_strategy: Option<TargetStrategy>,
+    /// TFS only.
+    pub bestiary: Option<Bestiary>,
+    /// Nostalrius only — the monster's melee, read off `<attacks>`.
+    pub attacks_stats: Option<AttacksStats>,
     pub flags: BTreeMap<String, FlagValue>,
     pub immunities: BTreeMap<String, bool>,
     pub elements: BTreeMap<String, i64>,
@@ -363,6 +451,7 @@ impl Default for MonsterDoc {
         MonsterDoc {
             file: String::new(),
             registered: false,
+            engine: crate::engine::default_profile().key.to_string(),
             name: String::new(),
             name_description: None,
             race: None,
@@ -379,6 +468,9 @@ impl Default for MonsterDoc {
                 interval: 0,
                 chance: 0,
             },
+            target_strategy: None,
+            bestiary: None,
+            attacks_stats: None,
             flags: BTreeMap::new(),
             immunities: BTreeMap::new(),
             elements: BTreeMap::new(),
@@ -896,46 +988,60 @@ fn absorb_trailing_comment(
 // Reader — DOM to MonsterDoc
 // =====================================================================
 
-/// Attributes the model already accounts for on each node type. Anything else
-/// on the node is kept in `unknownAttributes` so it survives a save.
-fn known_attrs(node_kind: &str) -> &'static [&'static str] {
-    match node_kind {
-        "monster" => &[
+/// Attributes the model already accounts for on each node type, **for this
+/// engine**. Anything else on the node is kept in `unknownAttributes` so it
+/// survives a save.
+///
+/// This function is load-bearing twice over. It decides round-trip preservation
+/// *and* what the silent-data-loss lints can see, and the two failure modes are
+/// not symmetric: under-declaring makes MONx quiet (everything still round-trips
+/// as an unknown attribute, but no lint can reason about it), over-declaring
+/// drops data. `probe_monster --mutate` against each engine's own corpus is what
+/// catches the second.
+fn known_attrs(profile: &EngineProfile, node_kind: &str) -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = match node_kind {
+        "monster" => vec![
             "name",
             "nameDescription",
             "race",
-            "species",
             "experience",
             "speed",
             "manacost",
-            "raceid",
             "skull",
             "script",
         ],
-        "health" => &["now", "max"],
-        "look" => &[
-            "type",
-            "head",
-            "body",
-            "legs",
-            "feet",
-            "addons",
-            "mount",
-            "typeex",
-            "corpse",
-            "corpseactionid",
+        "health" => vec!["now", "max"],
+        "look" => vec!["type", "typeex", "head", "body", "legs", "feet", "corpse"],
+        "targetchange" => vec!["interval", "speed", "chance"],
+        "targetstrategy" => vec!["nearest", "weakest", "mostdamage", "random"],
+        "bestiary" => vec![
+            "class",
+            "prowess",
+            "expertise",
+            "mastery",
+            "charmPoints",
+            "difficulty",
+            "occurrence",
+            "locations",
         ],
-        "targetchange" => &["interval", "speed", "chance"],
-        "defenses" => &["armor", "defense"],
-        "voices" => &["interval", "speed", "chance"],
-        "voice" => &["sentence", "yell"],
+        "defenses" => vec!["armor", "defense"],
+        "voice" => vec!["sentence", "yell"],
         // A `<voice>` with no `sentence` carries the pacifist/leash strings,
-        // which the model names. On a node that also has a `sentence` they are
-        // not read as those fields, so they stay unknown attributes there.
-        "voice.extra" => &["pacifist", "leash"],
-        "summons" => &["maxSummons"],
-        "summon" => &["name", "interval", "speed", "chance", "max", "force"],
-        "item" => &[
+        // which the model names *where the engine has them*. On a node that
+        // also has a `sentence` they are not read as those fields, so they stay
+        // unknown attributes there — and on an engine without the pacifist
+        // system they are unknown everywhere, which is how they survive a save
+        // on a corpus the server would ignore them in.
+        "voice.extra" => {
+            if profile.has_pacifist {
+                vec!["pacifist", "leash"]
+            } else {
+                Vec::new()
+            }
+        }
+        "summons" => vec!["maxSummons"],
+        "summon" => vec!["name", "chance", "max", "force"],
+        "item" => vec![
             "id",
             "name",
             "chance",
@@ -945,11 +1051,11 @@ fn known_attrs(node_kind: &str) -> &'static [&'static str] {
             "actionId",
             "text",
         ],
-        "spell" => &[
+        "attacks" => Vec::new(),
+        "voices" => Vec::new(),
+        "spell" => vec![
             "name",
             "script",
-            "interval",
-            "speed",
             "chance",
             "range",
             "min",
@@ -959,43 +1065,111 @@ fn known_attrs(node_kind: &str) -> &'static [&'static str] {
             "length",
             "spread",
             "radius",
-            "ring",
             "skill",
             "attack",
-            "tick",
-            "start",
             "duration",
-            "speedchange",
-            "minspeedchange",
-            "maxspeedchange",
-            "drunkenness",
             "monster",
             "item",
-            "fire",
-            "poison",
-            "energy",
-            "drown",
-            "freeze",
-            "dazzle",
-            "curse",
-            "bleed",
-            "physical",
         ],
-        _ => &[],
+        _ => Vec::new(),
+    };
+
+    match node_kind {
+        "monster" => {
+            if let Some(attr) = profile.raceid_attr {
+                v.push(attr);
+            }
+            if profile.has_species {
+                v.push("species");
+            }
+        }
+        "look" => {
+            if profile.look_addons {
+                v.push("addons");
+            }
+            if profile.look_mount {
+                v.push("mount");
+            }
+            if profile.look_corpseactionid {
+                v.push("corpseactionid");
+            }
+        }
+        "voices" => {
+            if profile.voices_interval {
+                v.extend(["interval", "speed"]);
+            }
+            if profile.voices_chance {
+                v.push("chance");
+            }
+        }
+        "attacks" => {
+            if profile.melee == MeleeKind::AttacksNode {
+                v.extend(["attack", "skill", "poison"]);
+            }
+        }
+        "summon" => {
+            if profile.summon_interval {
+                v.extend(["interval", "speed"]);
+            }
+            if profile.summon_delay {
+                v.push("delay");
+            }
+        }
+        "spell" => {
+            if profile.has_spell_interval() {
+                v.extend(["interval", "speed"]);
+            }
+            if profile.has_spell_delay() {
+                v.push("delay");
+            }
+            if profile.geometry_ring {
+                v.push("ring");
+            }
+            if profile.melee == MeleeKind::SpellBlock {
+                // Melee condition attributes, in the loader's precedence order.
+                v.extend(profile.melee_conditions.iter().map(|(n, _)| *n));
+            }
+            if profile.melee_skill_progression {
+                v.extend(["skillfactor", "skillnextlevel", "skilladdcount", "poisoncycles"]);
+            }
+            match profile.condition_spell {
+                ConditionSpell::TickStart => v.extend(["tick", "start"]),
+                ConditionSpell::TickStartCycle => {
+                    v.extend(["tick", "start", "cycle", "mincycle"])
+                }
+                ConditionSpell::Count => v.push("count"),
+            }
+            match profile.speed_spell {
+                SpeedSpell::SpeedChange => {
+                    v.extend(["speedchange", "minspeedchange", "maxspeedchange"])
+                }
+                // `speed` is already known here as the cadence alias.
+                SpeedSpell::SpeedVariation => v.push("speedvariation"),
+                SpeedSpell::ChangeVariation => v.extend(["speedchange", "variation"]),
+            }
+            if profile.is_builtin_spell("drunk") {
+                v.push("drunkenness");
+            }
+        }
+        _ => {}
     }
+    v
 }
 
 struct ReadCtx {
+    profile: &'static EngineProfile,
     unknown: BTreeMap<String, BTreeMap<String, String>>,
     comments: Vec<Comment>,
 }
 
 impl ReadCtx {
     /// Records every attribute on `node` that `kind` doesn't model, under the
-    /// node's dot path. `raceId=` lands here, which is exactly how it survives
-    /// a round-trip while `lint.rs` still reports it as silent data loss.
+    /// node's dot path. Under Ironcore `raceId=` lands here, which is exactly
+    /// how it survives a round-trip while `lint.rs` still reports it as silent
+    /// data loss; under TFS it is the modelled spelling and `raceid=` lands
+    /// here instead.
     fn keep_unknown(&mut self, path: &str, node: &Node, kind: &str) {
-        let known = known_attrs(kind);
+        let known = known_attrs(self.profile, kind);
         let extras: BTreeMap<String, String> = node
             .attrs
             .iter()
@@ -1039,11 +1213,17 @@ impl ReadCtx {
 /// Reads a monster file's bytes into the model plus everything the writer
 /// needs. Never normalises: out-of-range and contradictory values are kept as
 /// written and reported by `lint.rs`.
-pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, String> {
+pub fn read_bytes(
+    profile: &'static EngineProfile,
+    file: &str,
+    bytes: &[u8],
+    registered: bool,
+) -> Result<Parsed, String> {
     let layout = detect_layout(bytes);
     let (root, root_start) = parse_dom(bytes, &layout)?;
 
     let mut ctx = ReadCtx {
+        profile,
         unknown: BTreeMap::new(),
         comments: Vec::new(),
     };
@@ -1051,6 +1231,7 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
     let mut doc = MonsterDoc {
         file: file.to_string(),
         registered,
+        engine: profile.key.to_string(),
         ..MonsterDoc::default()
     };
 
@@ -1058,12 +1239,17 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
     doc.name = root.attr("name").unwrap_or_default().to_string();
     doc.name_description = root.attr("nameDescription").map(str::to_string);
     doc.race = root.attr("race").map(str::to_string);
-    doc.species = root.attr("species").map(str::to_string);
+    doc.species = profile
+        .has_species
+        .then(|| root.attr("species").map(str::to_string))
+        .flatten();
     doc.experience = root.num("experience").unwrap_or(0);
     doc.speed = root.num("speed").unwrap_or(200);
     doc.manacost = root.num("manacost").unwrap_or(0);
-    // Case-sensitive: `raceId` is not this attribute (§3, §24).
-    doc.raceid = root.num_exact("raceid");
+    // Case-sensitive, and the spelling is the engine's: Ironcore reads `raceid`
+    // and treats `raceId` as silent data loss, TFS reads `raceId` and the
+    // polarity inverts (§3, §24).
+    doc.raceid = profile.raceid_attr.and_then(|a| root.num_exact(a));
     doc.skull = root.attr("skull").unwrap_or("none").to_string();
     doc.script = root.attr("script").map(str::to_string);
     ctx.keep_unknown("", &root, "monster");
@@ -1079,7 +1265,7 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
     }
 
     if let Some(n) = root.child("look") {
-        doc.look = read_look(n);
+        doc.look = read_look(profile, n);
         ctx.keep_unknown("look", n, "look");
     }
 
@@ -1091,12 +1277,42 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
         ctx.keep_unknown("targetchange", n, "targetchange");
     }
 
+    // TVP / Nostalrius. Ironcore's `<targetstrategies>` is a different node with
+    // different keys and stays an unmodelled raw region.
+    if let Some((node_name, _)) = profile.target_strategy {
+        if let Some(n) = root.child(node_name) {
+            doc.target_strategy = Some(TargetStrategy {
+                nearest: n.num("nearest").unwrap_or(0),
+                weakest: n.num("weakest").unwrap_or(0),
+                mostdamage: n.num("mostdamage").unwrap_or(0),
+                random: n.num("random").unwrap_or(0),
+            });
+            ctx.keep_unknown("targetStrategy", n, "targetstrategy");
+        }
+    }
+
+    if profile.has_bestiary {
+        if let Some(n) = root.child("bestiary") {
+            doc.bestiary = Some(Bestiary {
+                class: n.attr("class").map(str::to_string),
+                prowess: n.num("prowess").unwrap_or(0),
+                expertise: n.num("expertise").unwrap_or(0),
+                mastery: n.num("mastery").unwrap_or(0),
+                charm_points: n.num("charmPoints").unwrap_or(0),
+                difficulty: n.attr("difficulty").map(str::to_string),
+                occurrence: n.attr("occurrence").map(str::to_string),
+                locations: n.attr("locations").map(str::to_string),
+            });
+            ctx.keep_unknown("bestiary", n, "bestiary");
+        }
+    }
+
     if let Some(flags) = root.child("flags") {
         for (i, n) in flags.elements().enumerate() {
             // Only the first attribute on a <flag> is read by the loader (§5).
             let Some(first) = n.attrs.first() else { continue };
-            let key = catalog::canonical_flag(&first.key);
-            let value = if catalog::is_num_flag(&first.key) {
+            let key = profile.canonical_flag(&first.key);
+            let value = if profile.is_num_flag(&first.key) {
                 FlagValue::Num(parse_num(&first.value).unwrap_or(0))
             } else {
                 FlagValue::Bool(truthy(&first.value))
@@ -1113,7 +1329,7 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
             let consumed = if let Some(name) = n.attr("name") {
                 doc.immunities.insert(name.to_string(), true);
                 Some("name".to_string())
-            } else if let Some(a) = n.attrs.iter().find(|a| catalog::is_immunity_name(&a.key)) {
+            } else if let Some(a) = n.attrs.iter().find(|a| profile.is_immunity_name(&a.key)) {
                 doc.immunities
                     .insert(a.key.to_ascii_lowercase(), truthy(&a.value));
                 Some(a.key.clone())
@@ -1130,10 +1346,10 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
             let consumed = n
                 .attrs
                 .iter()
-                .find(|a| catalog::is_element_attr(&a.key))
+                .find(|a| profile.is_element_attr(&a.key))
                 .map(|a| {
                     doc.elements.insert(
-                        catalog::canonical_element_attr(&a.key),
+                        profile.canonical_element_attr(&a.key),
                         parse_num(&a.value).unwrap_or(0),
                     );
                     a.key.clone()
@@ -1144,8 +1360,26 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
     }
 
     if let Some(atk) = root.child("attacks") {
+        // Nostalrius keeps the monster's melee here rather than in a spell
+        // block. `attack`/`skill` are only read as a pair by the engine, but a
+        // file writing one alone is exactly what the lint is for, so read
+        // whatever is present.
+        if profile.melee == MeleeKind::AttacksNode {
+            let attack = atk.num("attack");
+            let skill = atk.num("skill");
+            let poison = atk.num("poison");
+            if attack.is_some() || skill.is_some() || poison.is_some() {
+                doc.attacks_stats = Some(AttacksStats {
+                    attack: attack.unwrap_or(0),
+                    skill: skill.unwrap_or(0),
+                    poison,
+                });
+            }
+            ctx.keep_unknown("attacksStats", atk, "attacks");
+        }
         for (i, n) in atk.elements().enumerate() {
-            doc.attacks.push(read_spell(n, &format!("attacks[{i}]"), &mut ctx));
+            doc.attacks
+                .push(read_spell(profile, n, &format!("attacks[{i}]"), &mut ctx));
         }
         ctx.keep_comments("attacks", atk);
     }
@@ -1158,14 +1392,21 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
         ctx.keep_unknown("defenses", def, "defenses");
         for (i, n) in def.elements().enumerate() {
             doc.defenses
-                .push(read_spell(n, &format!("defenses[{i}]"), &mut ctx));
+                .push(read_spell(profile, n, &format!("defenses[{i}]"), &mut ctx));
         }
         ctx.keep_comments("defenses", def);
     }
 
     if let Some(v) = root.child("voices") {
-        doc.voices.interval = v.interval().unwrap_or(0);
-        doc.voices.chance = v.num("chance").unwrap_or(0);
+        // TVP has both attributes commented out in its loader and Nostalrius
+        // never had them: reading them would show the editor a cadence the
+        // server does not honour.
+        if profile.voices_interval {
+            doc.voices.interval = v.interval().unwrap_or(0);
+        }
+        if profile.voices_chance {
+            doc.voices.chance = v.num("chance").unwrap_or(0);
+        }
         ctx.keep_unknown("voices", v, "voices");
         // `pacifist=` and `leash=` voices are consumed by the loader and are not
         // part of the random pool (§12). They are not lines, so they get their
@@ -1183,11 +1424,13 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
                     ctx.keep_unknown(&format!("voices.lines[{i}]"), n, "voice");
                 }
                 None => {
-                    if let Some(text) = n.attr("pacifist") {
-                        doc.voices.pacifist = Some(text.to_string());
-                    }
-                    if let Some(text) = n.attr("leash") {
-                        doc.voices.leash = Some(text.to_string());
+                    if profile.has_pacifist {
+                        if let Some(text) = n.attr("pacifist") {
+                            doc.voices.pacifist = Some(text.to_string());
+                        }
+                        if let Some(text) = n.attr("leash") {
+                            doc.voices.leash = Some(text.to_string());
+                        }
                     }
                     ctx.keep_unknown(&format!("voices.extra[{extra}]"), n, "voice.extra");
                     extra += 1;
@@ -1204,21 +1447,31 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
         for (i, n) in s.elements().enumerate() {
             let mut entry = SummonEntry {
                 name: n.attr("name").unwrap_or_default().to_string(),
-                interval: n.interval().unwrap_or(1000),
+                interval: if profile.summon_interval {
+                    n.interval().unwrap_or(1000)
+                } else {
+                    0
+                },
                 chance: n.num("chance").unwrap_or(100),
+                delay: profile.summon_delay.then(|| n.num("delay")).flatten(),
                 max: n.num("max").unwrap_or(doc.summons.max_summons),
                 force: n.bool_attr("force").unwrap_or(false),
                 effect: None,
                 master_effect: None,
             };
-            for a in n.elements().filter(|c| c.name.eq_ignore_ascii_case("attribute")) {
-                let (Some(key), Some(value)) = (a.attr("key"), a.attr("value")) else {
-                    continue;
-                };
-                if key.eq_ignore_ascii_case("effect") {
-                    entry.effect = Some(value.to_string());
-                } else if key.eq_ignore_ascii_case("masterEffect") {
-                    entry.master_effect = Some(value.to_string());
+            // TVP and Nostalrius never iterate a summon's children, so an
+            // `<attribute key="effect">` there is inert — left unread so it
+            // round-trips as raw rather than being shown as if it worked.
+            if !profile.summon_effect_keys.is_empty() {
+                for a in n.elements().filter(|c| c.name.eq_ignore_ascii_case("attribute")) {
+                    let (Some(key), Some(value)) = (a.attr("key"), a.attr("value")) else {
+                        continue;
+                    };
+                    if key.eq_ignore_ascii_case("effect") {
+                        entry.effect = Some(value.to_string());
+                    } else if key.eq_ignore_ascii_case("masterEffect") {
+                        entry.master_effect = Some(value.to_string());
+                    }
                 }
             }
             doc.summons.entries.push(entry);
@@ -1228,7 +1481,7 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
     }
 
     if let Some(loot) = root.child("loot") {
-        doc.loot = read_loot_children(loot, "loot", &mut ctx);
+        doc.loot = read_loot_children(profile, loot, "loot", &mut ctx);
         ctx.keep_comments("loot", loot);
     }
 
@@ -1252,16 +1505,31 @@ pub fn read_bytes(file: &str, bytes: &[u8], registered: bool) -> Result<Parsed, 
     })
 }
 
-pub fn read_file(path: &Path, registered: bool) -> Result<Parsed, String> {
+/// Reads a file whose key is its name relative to the monsters folder — which
+/// on the engines with a nested corpus is `monsters/demon.xml`, not `demon.xml`.
+pub fn read_file_keyed(
+    profile: &'static EngineProfile,
+    path: &Path,
+    key: &str,
+    registered: bool,
+) -> Result<Parsed, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    read_bytes(profile, key, &bytes, registered)
+}
+
+pub fn read_file(
+    profile: &'static EngineProfile,
+    path: &Path,
+    registered: bool,
+) -> Result<Parsed, String> {
     let file = path
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
-    read_bytes(&file, &bytes, registered)
+    read_file_keyed(profile, path, &file, registered)
 }
 
-fn read_look(n: &Node) -> Look {
+fn read_look(profile: &EngineProfile, n: &Node) -> Look {
     // The parser takes `type` first; `typeex` only applies when `type` is
     // absent, and then head/body/legs/feet/addons are silently ignored (§7).
     let type_ = n.num("type").map(|v| v as u32);
@@ -1278,15 +1546,34 @@ fn read_look(n: &Node) -> Look {
         body: n.num("body").unwrap_or(0) as u32,
         legs: n.num("legs").unwrap_or(0) as u32,
         feet: n.num("feet").unwrap_or(0) as u32,
-        addons: n.num("addons").unwrap_or(0) as u32,
-        mount: n.num("mount").unwrap_or(0) as u32,
+        // The 7.x engines read neither, so leaving them at zero is what the
+        // server sees; the attributes themselves survive as unknown.
+        addons: if profile.look_addons {
+            n.num("addons").unwrap_or(0) as u32
+        } else {
+            0
+        },
+        mount: if profile.look_mount {
+            n.num("mount").unwrap_or(0) as u32
+        } else {
+            0
+        },
         typeex,
         corpse: n.num("corpse").unwrap_or(0) as u32,
-        corpseactionid: n.num("corpseactionid").unwrap_or(0) as u32,
+        corpseactionid: if profile.look_corpseactionid {
+            n.num("corpseactionid").unwrap_or(0) as u32
+        } else {
+            0
+        },
     }
 }
 
-fn read_spell(n: &Node, path: &str, ctx: &mut ReadCtx) -> SpellBlock {
+fn read_spell(
+    profile: &'static EngineProfile,
+    n: &Node,
+    path: &str,
+    ctx: &mut ReadCtx,
+) -> SpellBlock {
     let name = n.attr("name").map(str::to_string);
     let script = n.attr("script").map(str::to_string);
 
@@ -1303,9 +1590,17 @@ fn read_spell(n: &Node, path: &str, ctx: &mut ReadCtx) -> SpellBlock {
         kind: kind.to_string(),
         name,
         script,
-        interval: n.interval().unwrap_or(2000),
+        // Nostalrius never reads a cadence attribute: `chance` alone gates a
+        // cast (`monsters.cpp:252`). Zero here means "this engine has none",
+        // and every derived cadence figure returns null off the back of it.
+        interval: if profile.has_spell_interval() {
+            n.interval().unwrap_or(2000)
+        } else {
+            0
+        },
         chance: n.num("chance").unwrap_or(100),
-        range: n.num("range").unwrap_or(0),
+        delay: profile.has_spell_delay().then(|| n.num("delay")).flatten(),
+        range: n.num("range").unwrap_or(profile.spell_range_default),
         min: n.num("min").unwrap_or(0),
         max: n.num("max").unwrap_or(0),
         target: n.bool_attr("target").unwrap_or(false),
@@ -1314,10 +1609,11 @@ fn read_spell(n: &Node, path: &str, ctx: &mut ReadCtx) -> SpellBlock {
     };
 
     // Geometry: last of length/radius/ring silently wins (§8.3). Kept as read,
-    // with `shape` recording which one the engine would actually use.
+    // with `shape` recording which one the engine would actually use. The 7.x
+    // engines have no ring at all.
     let length = n.num("length");
     let radius = n.num("radius");
-    let ring = n.num("ring");
+    let ring = profile.geometry_ring.then(|| n.num("ring")).flatten();
     if length.is_some() || radius.is_some() || ring.is_some() {
         let shape = if ring.is_some() {
             "ring"
@@ -1337,12 +1633,20 @@ fn read_spell(n: &Node, path: &str, ctx: &mut ReadCtx) -> SpellBlock {
 
     let lname = spell.name.as_deref().unwrap_or("").to_ascii_lowercase();
 
-    if lname == "melee" {
+    if lname == "melee" && profile.melee == MeleeKind::SpellBlock {
         let skill = n.num("skill");
         let attack = n.num("attack");
-        if skill.is_some() || attack.is_some() || n.attr("fire").is_some() {
-            // Only the first matching condition attribute applies (§9.1).
-            let condition = catalog::MELEE_CONDITIONS.iter().find_map(|(cname, tick)| {
+        // Any condition attribute counts, not just `fire`: a melee node whose
+        // only extra is `poison="10"` still has a condition to preserve, and
+        // without a melee block to hang it on the writer would drop it.
+        let has_condition = profile
+            .melee_conditions
+            .iter()
+            .any(|(name, _)| n.attr(name).is_some());
+        if skill.is_some() || attack.is_some() || has_condition {
+            // Only the first matching condition attribute applies (§9.1), and
+            // the list itself is per-engine: TVP dropped drown/freeze/dazzle/curse.
+            let condition = profile.melee_conditions.iter().find_map(|(cname, tick)| {
                 n.attr(cname).map(|v| MeleeCondition {
                     type_: (*cname).to_string(),
                     // bleed/physical are presence-only: the value is never read.
@@ -1354,27 +1658,74 @@ fn read_spell(n: &Node, path: &str, ctx: &mut ReadCtx) -> SpellBlock {
                     tick: n.num("tick").filter(|t| *t > 0).unwrap_or(*tick),
                 })
             });
+            let prog = profile.melee_skill_progression;
             spell.melee = Some(MeleeBlock {
-                skill: skill.unwrap_or(0),
-                attack: attack.unwrap_or(0),
+                skill,
+                attack,
                 condition,
+                skillfactor: prog.then(|| n.num("skillfactor")).flatten(),
+                skillnextlevel: prog.then(|| n.num("skillnextlevel")).flatten(),
+                skilladdcount: prog.then(|| n.num("skilladdcount")).flatten(),
+                poisoncycles: prog.then(|| n.num("poisoncycles")).flatten(),
             });
         }
     }
 
-    if catalog::is_condition_spell(&lname) {
-        spell.condition = Some(ConditionBlock {
-            tick: n.num("tick").unwrap_or(0),
-            start: n.num("start").unwrap_or(0),
+    if profile.is_condition_spell(&lname) {
+        spell.condition = Some(match profile.condition_spell {
+            ConditionSpell::TickStart => ConditionBlock {
+                tick: n.num("tick").unwrap_or(0),
+                start: n.num("start").unwrap_or(0),
+                cycle: None,
+                mincycle: None,
+                count: None,
+            },
+            ConditionSpell::TickStartCycle => ConditionBlock {
+                tick: n.num("tick").unwrap_or(0),
+                start: n.num("start").unwrap_or(0),
+                cycle: n.num("cycle"),
+                mincycle: n.num("mincycle"),
+                count: None,
+            },
+            // Nostalrius has neither tick nor start, and drops the whole spell
+            // when `count` is absent — so None here is a real finding, not a
+            // default.
+            ConditionSpell::Count => ConditionBlock {
+                tick: 0,
+                start: 0,
+                cycle: None,
+                mincycle: None,
+                count: n.num("count"),
+            },
         });
     }
 
-    if catalog::is_status_spell(&lname) {
+    if profile.is_status_spell(&lname) {
+        let (speedchange, minspeed, maxspeed, speedvariation, variation) =
+            match profile.speed_spell {
+                SpeedSpell::SpeedChange => (
+                    n.num("speedchange"),
+                    n.num("minspeedchange"),
+                    n.num("maxspeedchange"),
+                    None,
+                    None,
+                ),
+                // TVP takes the delta from `speed=`, the same attribute already
+                // consumed above as the cast cadence (`monsters.cpp:334`).
+                SpeedSpell::SpeedVariation => {
+                    (n.num("speed"), None, None, n.num("speedvariation"), None)
+                }
+                SpeedSpell::ChangeVariation => {
+                    (n.num("speedchange"), None, None, None, n.num("variation"))
+                }
+            };
         spell.status = Some(StatusBlock {
             duration: n.num("duration").unwrap_or(10000),
-            speedchange: n.num("speedchange"),
-            minspeedchange: n.num("minspeedchange"),
-            maxspeedchange: n.num("maxspeedchange"),
+            speedchange,
+            minspeedchange: minspeed,
+            maxspeedchange: maxspeed,
+            speedvariation,
+            variation,
             drunkenness: n.num("drunkenness"),
             outfit_monster: n.attr("monster").map(str::to_string),
             outfit_item: n.num("item"),
@@ -1385,13 +1736,17 @@ fn read_spell(n: &Node, path: &str, ctx: &mut ReadCtx) -> SpellBlock {
         let (Some(key), Some(value)) = (a.attr("key"), a.attr("value")) else {
             continue;
         };
-        // Keys are case-insensitive, values case-sensitive (§8.4).
-        if key.eq_ignore_ascii_case("shootEffect") {
-            spell.effects.shoot_effect = Some(value.to_string());
-        } else if key.eq_ignore_ascii_case("areaEffect") {
-            spell.effects.area_effect = Some(value.to_string());
-        } else if key.eq_ignore_ascii_case("aoeShootEffect") {
-            spell.effects.aoe_shoot_effect = truthy(value);
+        // Keys are case-insensitive, values case-sensitive (§8.4). Only the keys
+        // this engine implements are read — TFS logs "does not exist" for
+        // anything but the first two.
+        let Some(canon) = profile.canonical_effect_key(key) else {
+            continue;
+        };
+        match canon {
+            "shootEffect" => spell.effects.shoot_effect = Some(value.to_string()),
+            "areaEffect" => spell.effects.area_effect = Some(value.to_string()),
+            "aoeShootEffect" => spell.effects.aoe_shoot_effect = truthy(value),
+            _ => {}
         }
     }
 
@@ -1399,12 +1754,20 @@ fn read_spell(n: &Node, path: &str, ctx: &mut ReadCtx) -> SpellBlock {
     spell
 }
 
-fn read_loot_children(container: &Node, path: &str, ctx: &mut ReadCtx) -> Vec<LootEntry> {
+fn read_loot_children(
+    profile: &'static EngineProfile,
+    container: &Node,
+    path: &str,
+    ctx: &mut ReadCtx,
+) -> Vec<LootEntry> {
     let mut out = Vec::new();
     for n in container.elements() {
-        // The legacy `<inside>` wrapper is transparent (§13).
-        if n.name.eq_ignore_ascii_case("inside") {
-            let nested = read_loot_children(n, path, ctx);
+        // The legacy `<inside>` wrapper is transparent (§13). Nostalrius never
+        // had it — its container loader walks children directly — so a file
+        // using it there has the wrapper's contents read as the container's own
+        // children either way.
+        if n.name.eq_ignore_ascii_case("inside") && profile.loot_inside_wrapper {
+            let nested = read_loot_children(profile, n, path, ctx);
             if let Some(last) = out.last_mut() {
                 let last: &mut LootEntry = last;
                 last.children.extend(nested);
@@ -1432,7 +1795,7 @@ fn read_loot_children(container: &Node, path: &str, ctx: &mut ReadCtx) -> Vec<Lo
             action_id: n.num_exact("actionId"),
             text: n.attr("text").map(str::to_string),
             comment: n.trailing_comment.clone(),
-            children: read_loot_children(n, &format!("{child_path}.children"), ctx),
+            children: read_loot_children(profile, n, &format!("{child_path}.children"), ctx),
         };
         ctx.keep_unknown(&child_path, n, "item");
         out.push(entry);
@@ -1449,9 +1812,14 @@ fn read_loot_children(container: &Node, path: &str, ctx: &mut ReadCtx) -> Vec<Lo
 /// changed is re-rendered. Round-trip of an unedited document is therefore
 /// byte-identical by construction, including comments, trailing spaces and the
 /// nodes the model doesn't cover.
-pub fn write_bytes(parsed: &Parsed, doc: &MonsterDoc) -> Vec<u8> {
+pub fn write_bytes(
+    profile: &'static EngineProfile,
+    parsed: &Parsed,
+    doc: &MonsterDoc,
+) -> Vec<u8> {
     let mut out = Vec::with_capacity(parsed.bytes.len() + 256);
     let w = Writer {
+        profile,
         src: &parsed.bytes,
         layout: &parsed.layout,
         base: &parsed.doc,
@@ -1466,12 +1834,13 @@ pub fn write_bytes(parsed: &Parsed, doc: &MonsterDoc) -> Vec<u8> {
 
 /// Renders a document from nothing, for `create_monster`. Canonical form:
 /// tabs, CRLF, the §2 node order, one attribute per flag/immunity/element node.
-pub fn write_new(doc: &MonsterDoc) -> Vec<u8> {
+pub fn write_new(profile: &'static EngineProfile, doc: &MonsterDoc) -> Vec<u8> {
     let layout = Layout::default();
     let mut out = Vec::new();
     out.extend_from_slice(br#"<?xml version="1.0" encoding="utf-8"?>"#);
     out.extend_from_slice(&layout.eol);
     let w = Writer {
+        profile,
         src: &[],
         layout: &layout,
         base: &MonsterDoc::default(),
@@ -1482,6 +1851,7 @@ pub fn write_new(doc: &MonsterDoc) -> Vec<u8> {
 }
 
 struct Writer<'a> {
+    profile: &'static EngineProfile,
     src: &'a [u8],
     layout: &'a Layout,
     /// The document as it was read — the baseline every comparison is against.
@@ -1676,9 +2046,13 @@ impl<'a> Writer<'a> {
                 "experience" => d.experience.to_string(),
                 "speed" => d.speed.to_string(),
                 "manacost" => d.manacost.to_string(),
-                "raceid" => d.raceid?.to_string(),
                 "skull" => d.skull.clone(),
                 "script" => d.script.clone()?,
+                // Whichever spelling this engine reads — `raceid` on Ironcore,
+                // `raceId` on TFS. Comparing against the profile rather than a
+                // literal is what keeps the other spelling in
+                // `unknownAttributes`, where it round-trips and lints.
+                k if Some(k) == self.profile.raceid_attr => d.raceid?.to_string(),
                 _ => return None,
             })
         };
@@ -1692,14 +2066,14 @@ impl<'a> Writer<'a> {
                 emitted.push(a.key.clone());
             }
         }
-        for key in known_attrs("monster") {
+        for key in known_attrs(self.profile, "monster") {
             if emitted.iter().any(|e| e == key) {
                 continue;
             }
             if let Some(v) = value_for(key) {
                 // `skull="none"` is the default; don't add it to files that
                 // never had it.
-                if *key == "skull" && v == "none" {
+                if key == "skull" && v == "none" {
                     continue;
                 }
                 pairs.push(Pair((*key).to_string(), v));
@@ -1740,10 +2114,30 @@ impl<'a> Writer<'a> {
                 self.base.targetchange == self.doc.targetchange,
                 out,
             ),
+            // Only claimed when this engine has the node — Ironcore's
+            // `<targetstrategies>` is a different node and stays raw.
+            "targetstrategy"
+                if self.profile.target_strategy.map(|(nm, _)| nm) == Some("targetstrategy") =>
+            {
+                self.leaf(
+                    n,
+                    "targetStrategy",
+                    self.target_strategy_pairs(),
+                    self.base.target_strategy == self.doc.target_strategy,
+                    out,
+                )
+            }
+            "bestiary" if self.profile.has_bestiary => self.leaf(
+                n,
+                "bestiary",
+                self.bestiary_pairs(),
+                self.base.bestiary == self.doc.bestiary,
+                out,
+            ),
             "flags" => self.flags(n, depth, out),
             "immunities" => self.immunities(n, depth, out),
             "elements" => self.elements(n, depth, out),
-            "attacks" => self.spells(n, depth, "attacks", "attack", &self.base.attacks, &self.doc.attacks, out),
+            "attacks" => self.attacks(n, depth, out),
             "defenses" => self.defenses(n, depth, out),
             "voices" => self.voices(n, depth, out),
             "summons" => self.summons(n, depth, out),
@@ -1792,21 +2186,62 @@ impl<'a> Writer<'a> {
                 ("body", l.body),
                 ("legs", l.legs),
                 ("feet", l.feet),
-                ("addons", l.addons),
             ] {
                 if v != 0 {
                     p.push(Pair(k.into(), v.to_string()));
                 }
             }
+            if self.profile.look_addons && l.addons != 0 {
+                p.push(Pair("addons".into(), l.addons.to_string()));
+            }
         }
-        if l.mount != 0 {
+        if self.profile.look_mount && l.mount != 0 {
             p.push(Pair("mount".into(), l.mount.to_string()));
         }
         if l.corpse != 0 {
             p.push(Pair("corpse".into(), l.corpse.to_string()));
         }
-        if l.corpseactionid != 0 {
+        if self.profile.look_corpseactionid && l.corpseactionid != 0 {
             p.push(Pair("corpseactionid".into(), l.corpseactionid.to_string()));
+        }
+        p
+    }
+
+    fn target_strategy_pairs(&self) -> Vec<Pair> {
+        let s = self.doc.target_strategy.clone().unwrap_or(TargetStrategy {
+            nearest: 0,
+            weakest: 0,
+            mostdamage: 0,
+            random: 0,
+        });
+        vec![
+            Pair("nearest".into(), s.nearest.to_string()),
+            Pair("weakest".into(), s.weakest.to_string()),
+            Pair("mostdamage".into(), s.mostdamage.to_string()),
+            Pair("random".into(), s.random.to_string()),
+        ]
+    }
+
+    fn bestiary_pairs(&self) -> Vec<Pair> {
+        let Some(b) = &self.doc.bestiary else {
+            return Vec::new();
+        };
+        let mut p = Vec::new();
+        if let Some(c) = &b.class {
+            p.push(Pair("class".into(), c.clone()));
+        }
+        p.push(Pair("prowess".into(), b.prowess.to_string()));
+        p.push(Pair("expertise".into(), b.expertise.to_string()));
+        p.push(Pair("mastery".into(), b.mastery.to_string()));
+        p.push(Pair("charmPoints".into(), b.charm_points.to_string()));
+        if let Some(d) = &b.difficulty {
+            p.push(Pair("difficulty".into(), d.clone()));
+        }
+        if let Some(o) = &b.occurrence {
+            p.push(Pair("occurrence".into(), o.clone()));
+        }
+        if let Some(l) = &b.locations {
+            p.push(Pair("locations".into(), l.clone()));
         }
         p
     }
@@ -1845,7 +2280,7 @@ impl<'a> Writer<'a> {
                     FlagValue::Num(x) => Pair(key.clone(), x.to_string()),
                 })
             },
-            |_writer, node| node.attrs.first().map(|a| catalog::canonical_flag(&a.key)),
+            |writer, node| node.attrs.first().map(|a| writer.profile.canonical_flag(&a.key)),
             |writer, key| writer.base.flags.get(key) == writer.doc.flags.get(key),
             &self.doc.flags.keys().cloned().collect::<Vec<_>>(),
             out,
@@ -1871,7 +2306,7 @@ impl<'a> Writer<'a> {
                 } else {
                     node.attrs
                         .iter()
-                        .find(|a| catalog::is_immunity_name(&a.key))?
+                        .find(|a| _writer.profile.is_immunity_name(&a.key))?
                         .key
                         .to_ascii_lowercase()
                 })
@@ -2038,6 +2473,57 @@ impl<'a> Writer<'a> {
         self.spell_children(n, open_end, depth, "defenses", "defense", &self.base.defenses, &self.doc.defenses, out);
     }
 
+    /// `<attacks>`. On Nostalrius the container carries the monster's melee, so
+    /// its open tag can change independently of its children exactly as
+    /// `<defenses>` does; on every other engine it is a bare wrapper and this
+    /// falls straight through to `spells`.
+    fn attacks(&self, n: &Node, depth: usize, out: &mut Vec<u8>) {
+        if self.profile.melee != MeleeKind::AttacksNode
+            || (self.base.attacks_stats == self.doc.attacks_stats
+                && self.unknown_same("attacksStats"))
+        {
+            self.spells(n, depth, "attacks", "attack", &self.base.attacks, &self.doc.attacks, out);
+            return;
+        }
+
+        let expand = n.self_closed && !self.doc.attacks.is_empty();
+        let open_end = self.open_tag_end(n);
+        out.extend_from_slice(b"<attacks");
+        if let Some(s) = &self.doc.attacks_stats {
+            out.extend_from_slice(format!(" attack=\"{}\"", s.attack).as_bytes());
+            out.extend_from_slice(format!(" skill=\"{}\"", s.skill).as_bytes());
+            if let Some(p) = s.poison {
+                out.extend_from_slice(format!(" poison=\"{p}\"").as_bytes());
+            }
+        }
+        if let Some(extra) = self.doc.unknown_attributes.get("attacksStats") {
+            for (k, v) in extra {
+                out.extend_from_slice(format!(" {k}=\"{v}\"").as_bytes());
+            }
+        }
+        out.extend_from_slice(if n.self_closed && !expand { b" />" } else { b">" });
+
+        if n.self_closed {
+            if expand {
+                self.spell_body(depth, "attacks", "attack", &self.doc.attacks, 0, out);
+                self.eol(out);
+                self.indent(depth, out);
+                out.extend_from_slice(b"</attacks>");
+            }
+            return;
+        }
+        self.spell_children(
+            n,
+            open_end,
+            depth,
+            "attacks",
+            "attack",
+            &self.base.attacks,
+            &self.doc.attacks,
+            out,
+        );
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn spells(
         &self,
@@ -2143,31 +2629,67 @@ impl<'a> Writer<'a> {
         } else if let Some(name) = &s.name {
             p.push(Pair("name".into(), name.clone()));
         }
-        p.push(Pair("interval".into(), s.interval.to_string()));
-        p.push(Pair("chance".into(), s.chance.to_string()));
+        // TVP's speed spell reads its delta from `speed=` — the very attribute
+        // the loader checks *first* for the cast cadence. The two cannot coexist
+        // on one node, so don't invent an `interval` the engine will never look
+        // at; `spell.tvp-speed-attribute-collision` explains it in the editor.
+        let speed_collides = self.profile.speed_spell == SpeedSpell::SpeedVariation
+            && s.status.as_ref().is_some_and(|st| st.speedchange.is_some());
+        if self.profile.has_spell_interval() && !speed_collides {
+            p.push(Pair("interval".into(), s.interval.to_string()));
+        }
+        // `delay` is an *alternative* to `chance` on TVP, not an addition:
+        // writing both means the loader silently ignores `delay`.
+        match s.delay {
+            Some(d) if self.profile.has_spell_delay() => p.push(Pair("delay".into(), d.to_string())),
+            _ => p.push(Pair("chance".into(), s.chance.to_string())),
+        }
         if s.range != 0 {
             p.push(Pair("range".into(), s.range.to_string()));
         }
 
         if let Some(m) = &s.melee {
-            if m.skill != 0 || m.attack != 0 {
-                p.push(Pair("skill".into(), m.skill.to_string()));
-                p.push(Pair("attack".into(), m.attack.to_string()));
+            // Written exactly when the file wrote them — zero included. TVP's
+            // black sheep really does say `skill="0" attack="0"`, and TFS's
+            // fire_overlord really does omit both and state its damage as
+            // min/max; conflating the two breaks one or the other.
+            if let Some(v) = m.skill {
+                p.push(Pair("skill".into(), v.to_string()));
+            }
+            if let Some(v) = m.attack {
+                p.push(Pair("attack".into(), v.to_string()));
+            }
+            for (key, value) in [
+                ("skillfactor", m.skillfactor),
+                ("skillnextlevel", m.skillnextlevel),
+                ("skilladdcount", m.skilladdcount),
+                ("poisoncycles", m.poisoncycles),
+            ] {
+                if let Some(v) = value {
+                    p.push(Pair(key.into(), v.to_string()));
+                }
             }
             if let Some(c) = &m.condition {
                 p.push(Pair(c.type_.clone(), c.value.to_string()));
-                if let Some(default) = catalog::melee_condition_tick(&c.type_) {
+                if let Some(default) = self.profile.melee_condition_tick(&c.type_) {
                     if c.tick != default {
                         p.push(Pair("tick".into(), c.tick.to_string()));
                     }
                 }
             }
-        } else if s.min != 0 || s.max != 0 {
-            // Damage negative, healing positive, smaller magnitude first — the
-            // order the loader would otherwise swap into (§8.2).
-            let (min, max) = canonical_min_max(s.min, s.max);
-            p.push(Pair("min".into(), min.to_string()));
-            p.push(Pair("max".into(), max.to_string()));
+        }
+        // Not an `else` on the melee branch: a melee node that omits skill and
+        // attack states its damage here instead, and the loader reads it
+        // (TFS `monsters.cpp:235` only overwrites min/max when both are given).
+        if s.min != 0 || s.max != 0 {
+            // As authored. The loader swaps these when `|min| > |max|` (§8.2),
+            // but swapping them here would be silently rewriting a value the
+            // engine merely reinterprets — the same thing MONx refuses to do for
+            // every clamp. `spell.min-max-swapped` reports it instead, and
+            // `lintfix.ts` will apply the swap when the user asks for it.
+            // TFS's rage_squid and fire_overlord both ship this way.
+            p.push(Pair("min".into(), s.min.to_string()));
+            p.push(Pair("max".into(), s.max.to_string()));
         }
 
         if let Some(c) = &s.condition {
@@ -2177,17 +2699,39 @@ impl<'a> Writer<'a> {
             if c.start != 0 {
                 p.push(Pair("start".into(), c.start.to_string()));
             }
+            if let Some(v) = c.cycle {
+                p.push(Pair("cycle".into(), v.to_string()));
+            }
+            if let Some(v) = c.mincycle {
+                p.push(Pair("mincycle".into(), v.to_string()));
+            }
+            if let Some(v) = c.count {
+                p.push(Pair("count".into(), v.to_string()));
+            }
         }
 
         if let Some(st) = &s.status {
+            // TVP's speed spell takes its delta from `speed=`, which is also the
+            // cadence alias — so it is written as `speed`, not `speedchange`.
+            let change_key = if self.profile.speed_spell == SpeedSpell::SpeedVariation {
+                "speed"
+            } else {
+                "speedchange"
+            };
             if let Some(v) = st.speedchange {
-                p.push(Pair("speedchange".into(), v.to_string()));
+                p.push(Pair(change_key.into(), v.to_string()));
             }
             if let Some(v) = st.minspeedchange {
                 p.push(Pair("minspeedchange".into(), v.to_string()));
             }
             if let Some(v) = st.maxspeedchange {
                 p.push(Pair("maxspeedchange".into(), v.to_string()));
+            }
+            if let Some(v) = st.speedvariation {
+                p.push(Pair("speedvariation".into(), v.to_string()));
+            }
+            if let Some(v) = st.variation {
+                p.push(Pair("variation".into(), v.to_string()));
             }
             if let Some(v) = &st.outfit_monster {
                 p.push(Pair("monster".into(), v.clone()));
@@ -2223,7 +2767,11 @@ impl<'a> Writer<'a> {
             ("areaEffect", s.effects.area_effect.clone()),
             ("shootEffect", s.effects.shoot_effect.clone()),
         ];
-        let has_effects = effects.iter().any(|(_, v)| v.is_some()) || s.effects.aoe_shoot_effect;
+        // Only Ironcore implements `aoeShootEffect`; TFS and the 7.x engines log
+        // "Effect type does not exist" for anything but the other two.
+        let aoe = s.effects.aoe_shoot_effect
+            && self.profile.canonical_effect_key("aoeShootEffect").is_some();
+        let has_effects = effects.iter().any(|(_, v)| v.is_some()) || aoe;
 
         if !has_effects {
             self.tag(tag, &p, path, out);
@@ -2252,7 +2800,7 @@ impl<'a> Writer<'a> {
                 );
             }
         }
-        if s.effects.aoe_shoot_effect {
+        if aoe {
             self.eol(out);
             self.indent(depth + 1, out);
             out.extend_from_slice(br#"<attribute key="aoeShootEffect" value="1" />"#);
@@ -2283,15 +2831,27 @@ impl<'a> Writer<'a> {
             }
         } else {
             out.extend_from_slice(b"<voices");
-            out.extend_from_slice(
-                format!(
-                    " {}=\"{}\" chance=\"{}\"",
-                    self.interval_key(n),
-                    self.doc.voices.interval,
-                    self.doc.voices.chance
-                )
-                .as_bytes(),
-            );
+            // TVP has both attributes commented out in its loader and Nostalrius
+            // never read them, so writing either would be inventing a cadence
+            // the server does not honour.
+            if self.profile.voices_interval {
+                out.extend_from_slice(
+                    format!(
+                        " {}=\"{}\"",
+                        self.interval_key(n),
+                        self.doc.voices.interval
+                    )
+                    .as_bytes(),
+                );
+            }
+            if self.profile.voices_chance {
+                out.extend_from_slice(format!(" chance=\"{}\"", self.doc.voices.chance).as_bytes());
+            }
+            if let Some(extra) = self.doc.unknown_attributes.get("voices") {
+                for (k, v) in extra {
+                    out.extend_from_slice(format!(" {k}=\"{v}\"").as_bytes());
+                }
+            }
             out.extend_from_slice(if n.self_closed && !expand { b" />" } else { b">" });
         }
         if n.self_closed {
@@ -2512,19 +3072,28 @@ impl<'a> Writer<'a> {
     }
 
     fn summon_tag(&self, e: &SummonEntry, path: &str, depth: usize, out: &mut Vec<u8>) {
-        let mut p = vec![
-            Pair("name".into(), e.name.clone()),
-            Pair("interval".into(), e.interval.to_string()),
-            Pair("chance".into(), e.chance.to_string()),
-            Pair("max".into(), e.max.to_string()),
-        ];
+        let mut p = vec![Pair("name".into(), e.name.clone())];
+        if self.profile.summon_interval {
+            p.push(Pair("interval".into(), e.interval.to_string()));
+        }
+        // As on spells, TVP's `delay` replaces `chance` rather than joining it.
+        match e.delay {
+            Some(d) if self.profile.summon_delay => p.push(Pair("delay".into(), d.to_string())),
+            _ => p.push(Pair("chance".into(), e.chance.to_string())),
+        }
+        p.push(Pair("max".into(), e.max.to_string()));
         if e.force {
             p.push(Pair("force".into(), "1".into()));
         }
-        let effects: Vec<(&str, &String)> = [("effect", &e.effect), ("masterEffect", &e.master_effect)]
-            .into_iter()
-            .filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
-            .collect();
+        // TVP and Nostalrius never iterate a summon's children.
+        let effects: Vec<(&str, &String)> = if self.profile.summon_effect_keys.is_empty() {
+            Vec::new()
+        } else {
+            [("effect", &e.effect), ("masterEffect", &e.master_effect)]
+                .into_iter()
+                .filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
+                .collect()
+        };
         if effects.is_empty() {
             self.tag("summon", &p, path, out);
             return;
@@ -2630,9 +3199,14 @@ impl<'a> Writer<'a> {
 
     fn loot_tag(&self, e: &LootEntry, path: &str, depth: usize, out: &mut Vec<u8>) {
         let mut p = Vec::new();
+        // The loader takes `id` and never looks at `name` when both are there
+        // (§13), but "the engine ignores it" is not a licence to delete it —
+        // the TFS corpus writes both as a matter of course, `id` for the server
+        // and `name` for whoever reads the file next.
         if let Some(id) = e.id {
             p.push(Pair("id".into(), id.to_string()));
-        } else if let Some(name) = &e.name {
+        }
+        if let Some(name) = &e.name {
             p.push(Pair("name".into(), name.clone()));
         }
         p.push(Pair("chance".into(), e.chance.to_string()));
@@ -2748,8 +3322,10 @@ impl<'a> Writer<'a> {
         if let Some(v) = &d.name_description {
             attrs.push(Pair("nameDescription".into(), v.clone()));
         }
-        if let Some(v) = &d.species {
-            attrs.push(Pair("species".into(), v.clone()));
+        if self.profile.has_species {
+            if let Some(v) = &d.species {
+                attrs.push(Pair("species".into(), v.clone()));
+            }
         }
         if let Some(v) = &d.race {
             attrs.push(Pair("race".into(), v.clone()));
@@ -2757,8 +3333,8 @@ impl<'a> Writer<'a> {
         attrs.push(Pair("experience".into(), d.experience.to_string()));
         attrs.push(Pair("speed".into(), d.speed.to_string()));
         attrs.push(Pair("manacost".into(), d.manacost.to_string()));
-        if let Some(v) = d.raceid {
-            attrs.push(Pair("raceid".into(), v.to_string()));
+        if let (Some(key), Some(v)) = (self.profile.raceid_attr, d.raceid) {
+            attrs.push(Pair(key.into(), v.to_string()));
         }
         if d.skull != "none" {
             attrs.push(Pair("skull".into(), d.skull.clone()));
@@ -2796,6 +3372,23 @@ impl<'a> Writer<'a> {
             ),
             self,
         );
+        // TVP warns when `<targetstrategy>` is missing and Nostalrius does too,
+        // so a freshly created monster gets one rather than starting life with a
+        // guaranteed console warning.
+        if let Some((node_name, _)) = self.profile.target_strategy {
+            let mut buf = Vec::new();
+            self.tag(node_name, &self.target_strategy_pairs(), "targetStrategy", &mut buf);
+            self.eol(out);
+            self.indent(1, out);
+            out.extend_from_slice(&buf);
+        }
+        if self.profile.has_bestiary && d.bestiary.is_some() {
+            let mut buf = Vec::new();
+            self.tag("bestiary", &self.bestiary_pairs(), "bestiary", &mut buf);
+            self.eol(out);
+            self.indent(1, out);
+            out.extend_from_slice(&buf);
+        }
 
         for name in SECTIONS {
             self.section(name, true, out);
@@ -2844,10 +3437,25 @@ impl<'a> Writer<'a> {
                 }
                 line(out, 1, "</elements>", self);
             }
-            "attacks" if !d.attacks.is_empty() => {
-                line(out, 1, "<attacks>", self);
-                self.spell_body(1, "attacks", "attack", &d.attacks, 0, out);
-                line(out, 1, "</attacks>", self);
+            "attacks" if !d.attacks.is_empty() || d.attacks_stats.is_some() => {
+                // On Nostalrius the container carries the monster's melee.
+                let head = match &d.attacks_stats {
+                    Some(s) if self.profile.melee == MeleeKind::AttacksNode => {
+                        let poison = s
+                            .poison
+                            .map(|p| format!(r#" poison="{p}""#))
+                            .unwrap_or_default();
+                        format!(r#"<attacks attack="{}" skill="{}"{poison}"#, s.attack, s.skill)
+                    }
+                    _ => "<attacks".to_string(),
+                };
+                if d.attacks.is_empty() {
+                    line(out, 1, &format!("{head} />"), self);
+                } else {
+                    line(out, 1, &format!("{head}>"), self);
+                    self.spell_body(1, "attacks", "attack", &d.attacks, 0, out);
+                    line(out, 1, "</attacks>", self);
+                }
             }
             "defenses"
                 if canonical
@@ -2871,7 +3479,13 @@ impl<'a> Writer<'a> {
                     || d.voices.interval != 0
                     || d.voices.chance != 0 =>
             {
-                let head = format!(r#"<voices interval="{}" chance="{}""#, d.voices.interval, d.voices.chance);
+                let mut head = "<voices".to_string();
+                if self.profile.voices_interval {
+                    head.push_str(&format!(r#" interval="{}""#, d.voices.interval));
+                }
+                if self.profile.voices_chance {
+                    head.push_str(&format!(r#" chance="{}""#, d.voices.chance));
+                }
                 // Pacifist and leash lead the block, as the corpus writes them.
                 let extras = self.voice_extras(0, true, true);
                 if d.voices.lines.is_empty() && extras.is_empty() {
@@ -2927,6 +3541,7 @@ const SECTIONS: [&str; 9] = [
 
 /// Damage negative and healing positive, with the smaller magnitude in `min` —
 /// the order the loader would otherwise swap into (§8.2).
+#[allow(dead_code)]
 pub fn canonical_min_max(min: i64, max: i64) -> (i64, i64) {
     if min.abs() > max.abs() {
         (max, min)
@@ -2944,22 +3559,20 @@ pub fn canonical_min_max(min: i64, max: i64) -> (i64, i64) {
 /// than vanishing — an unreadable monster is a problem to show, not a monster
 /// that doesn't exist.
 pub fn read_corpus(
+    profile: &'static EngineProfile,
     dir: &Path,
     registry: &crate::registry::Registry,
     spells: &crate::spells::SpellIndex,
 ) -> (Vec<MonsterDoc>, Vec<Lint>) {
     let mut docs = Vec::new();
     let mut lints = Vec::new();
-    for path in monster_files(dir) {
-        let name = path
-            .file_name()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        match read_file(&path, registry.has_file(&name)) {
+    for path in monster_files(profile, dir) {
+        let name = file_key(dir, &path);
+        match read_file_keyed(profile, &path, &name, registry.has_file(&name)) {
             Ok(mut parsed) => {
                 // The presence-based §24 rules can only be seen here, while the
                 // original nodes are still around.
-                lints.extend(crate::lint::lint_source(&parsed));
+                lints.extend(crate::lint::lint_source(profile, &parsed));
                 spells.classify_doc(&mut parsed.doc);
                 docs.push(parsed.doc);
             }
@@ -2976,24 +3589,51 @@ pub fn read_corpus(
     (docs, lints)
 }
 
-pub fn monster_files(dir: &Path) -> Vec<std::path::PathBuf> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut files: Vec<std::path::PathBuf> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            p.extension().and_then(|s| s.to_str()) == Some("xml")
-                && !p
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .map(|s| s.eq_ignore_ascii_case("monsters.xml"))
-                    .unwrap_or(false)
-        })
-        .collect();
+/// A monster's key: its path relative to the monsters folder, with forward
+/// slashes. Flat on Ironcore (`demon.xml`); on the engines whose `monsters.xml`
+/// points into subfolders it is `monsters/demon.xml`, matching the registry's
+/// own `file=` so the two can be compared directly.
+pub fn file_key(dir: &Path, path: &Path) -> String {
+    path.strip_prefix(dir)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+/// Every monster file under `dir`. Recurses only where the engine's registry
+/// actually names subfolders — walking a tree on a flat corpus would sweep in
+/// whatever else happens to live nearby.
+pub fn monster_files(profile: &EngineProfile, dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut files = Vec::new();
+    collect_monster_files(dir, profile.recursive_corpus, &mut files);
     files.sort();
     files
+}
+
+fn collect_monster_files(dir: &Path, recursive: bool, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if recursive {
+                collect_monster_files(&path, recursive, out);
+            }
+            continue;
+        }
+        let is_xml = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.eq_ignore_ascii_case("xml"));
+        let is_registry = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.eq_ignore_ascii_case("monsters.xml"));
+        if is_xml && !is_registry {
+            out.push(path);
+        }
+    }
 }
 
 /// The list-view projection of a document (README §5). Lint counts are filled
@@ -3036,6 +3676,7 @@ const BACKUP_DIR: &str = ".monx-backup";
 /// is updated in the same operation — a renamed monster that isn't re-registered
 /// is invisible to the server.
 pub fn save(
+    profile: &'static EngineProfile,
     dir: &Path,
     registry: &crate::registry::Registry,
     doc: &MonsterDoc,
@@ -3043,12 +3684,12 @@ pub fn save(
     let path = dir.join(&doc.file);
     let bytes = match std::fs::read(&path) {
         Ok(original) => {
-            let parsed = read_bytes(&doc.file, &original, doc.registered)?;
+            let parsed = read_bytes(profile, &doc.file, &original, doc.registered)?;
             backup_once(dir, &doc.file, &original)?;
-            write_bytes(&parsed, doc)
+            write_bytes(profile, &parsed, doc)
         }
         // No file on disk yet — a document created but never saved.
-        Err(_) => write_new(doc),
+        Err(_) => write_new(profile, doc),
     };
 
     write_atomic(&path, &bytes)?;
@@ -3079,7 +3720,11 @@ pub fn save(
 fn backup_once(dir: &Path, file: &str, original: &[u8]) -> Result<(), String> {
     let backup_dir = dir.join(BACKUP_DIR);
     let stamp = session_stamp();
-    let target = backup_dir.join(format!("{file}.{stamp}.xml"));
+    // The key can carry a subfolder on the nested corpora; flatten it so the
+    // backup folder stays one level deep and two `monsters/x.xml` from
+    // different subtrees can't collide.
+    let flat = file.replace(['/', '\\'], "__");
+    let target = backup_dir.join(format!("{flat}.{stamp}.xml"));
     if target.exists() {
         return Ok(());
     }
@@ -3137,10 +3782,11 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
 /// A new monster from the corpus defaults (§26): `staticattack="90"`,
 /// `targetdistance="1"` and the near-universal immunity set, which is what
 /// ~90% of the corpus carries.
-pub fn template(name: &str, file: &str) -> MonsterDoc {
+pub fn template(profile: &'static EngineProfile, name: &str, file: &str) -> MonsterDoc {
     let mut doc = MonsterDoc {
         file: file.to_string(),
         registered: true,
+        engine: profile.key.to_string(),
         name: name.to_string(),
         name_description: Some(format!("a {}", name.to_lowercase())),
         race: Some("blood".to_string()),
@@ -3161,6 +3807,8 @@ pub fn template(name: &str, file: &str) -> MonsterDoc {
         ..MonsterDoc::default()
     };
 
+    // A flag this engine doesn't implement would be a console warning on the
+    // very first load, so the skeleton only carries what it actually reads.
     for (k, v) in [
         ("attackable", true),
         ("hostile", true),
@@ -3172,33 +3820,64 @@ pub fn template(name: &str, file: &str) -> MonsterDoc {
         ("canpushcreatures", false),
         ("hidehealth", false),
     ] {
-        doc.flags.insert(k.to_string(), FlagValue::Bool(v));
+        if profile.is_bool_flag(k) {
+            doc.flags.insert(k.to_string(), FlagValue::Bool(v));
+        }
     }
-    doc.flags
-        .insert("staticattack".to_string(), FlagValue::Num(90));
-    doc.flags
-        .insert("targetdistance".to_string(), FlagValue::Num(1));
+    for (k, v) in [("staticattack", 90), ("targetdistance", 1)] {
+        if profile.is_num_flag(k) {
+            doc.flags.insert(k.to_string(), FlagValue::Num(v));
+        }
+    }
 
     for k in ["paralyze", "drunk", "outfit", "invisible", "bleed"] {
-        doc.immunities.insert(k.to_string(), true);
+        if profile.is_immunity_name(k) {
+            doc.immunities.insert(k.to_string(), true);
+        }
     }
 
-    doc.attacks.push(SpellBlock {
-        name: Some("melee".to_string()),
-        interval: 2000,
-        chance: 100,
-        melee: Some(MeleeBlock {
-            skill: 20,
-            attack: 20,
-            condition: None,
+    // Both 7.x engines warn when `<targetstrategy>` is missing, so a new
+    // monster gets the all-nearest weighting rather than a guaranteed warning.
+    if profile.target_strategy.is_some() {
+        doc.target_strategy = Some(TargetStrategy {
+            nearest: 100,
+            weakest: 0,
+            mostdamage: 0,
+            random: 0,
+        });
+    }
+
+    match profile.melee {
+        // Nostalrius has no melee spell at all — the container is the melee.
+        MeleeKind::AttacksNode => {
+            doc.attacks_stats = Some(AttacksStats {
+                attack: 20,
+                skill: 20,
+                poison: None,
+            })
+        }
+        MeleeKind::SpellBlock => doc.attacks.push(SpellBlock {
+            name: Some("melee".to_string()),
+            interval: if profile.has_spell_interval() { 2000 } else { 0 },
+            chance: 100,
+            melee: Some(MeleeBlock {
+                skill: Some(20),
+                attack: Some(20),
+                condition: None,
+                skillfactor: None,
+                skillnextlevel: None,
+                skilladdcount: None,
+                poisoncycles: None,
+            }),
+            ..SpellBlock::default()
         }),
-        ..SpellBlock::default()
-    });
+    }
 
     doc
 }
 
 pub fn create(
+    profile: &'static EngineProfile,
     dir: &Path,
     registry: &crate::registry::Registry,
     name: &str,
@@ -3214,19 +3893,25 @@ pub fn create(
         return Err(format!("A monster named \"{name}\" is already registered"));
     }
 
-    let doc = template(name, &file);
-    write_atomic(&path, &write_new(&doc))?;
+    let doc = template(profile, name, &file);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    }
+    write_atomic(&path, &write_new(profile, &doc))?;
     register(dir, registry, name, &file, group)?;
     Ok(doc)
 }
 
 pub fn duplicate(
+    profile: &'static EngineProfile,
     dir: &Path,
     registry: &crate::registry::Registry,
     file: &str,
     new_name: &str,
 ) -> Result<MonsterDoc, String> {
-    let new_file = normalise_file_name("", new_name);
+    // Keep the copy beside its original: on a nested corpus a bare name would
+    // land in the monsters root, outside the folder the registry points at.
+    let new_file = sibling_file_name(file, &normalise_file_name("", new_name));
     let target = dir.join(&new_file);
     if target.exists() {
         return Err(format!("{new_file} already exists"));
@@ -3235,7 +3920,7 @@ pub fn duplicate(
     // Duplicating splices the source file, so the copy keeps its comments,
     // formatting and unknown attributes — only identity changes.
     let original = std::fs::read(dir.join(file)).map_err(|e| format!("{file}: {e}"))?;
-    let parsed = read_bytes(file, &original, registry.has_file(file))?;
+    let parsed = read_bytes(profile, file, &original, registry.has_file(file))?;
     let mut doc = parsed.doc.clone();
     doc.file = new_file.clone();
     doc.name = new_name.to_string();
@@ -3244,7 +3929,10 @@ pub fn duplicate(
     doc.raceid = None;
     doc.registered = true;
 
-    write_atomic(&target, &write_bytes(&parsed, &doc))?;
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    }
+    write_atomic(&target, &write_bytes(profile, &parsed, &doc))?;
     let group = registry.entry_for_file(file).and_then(|e| e.group.clone());
     register(dir, registry, new_name, &new_file, group.as_deref().unwrap_or(""))?;
     Ok(doc)
@@ -3267,25 +3955,26 @@ pub fn delete(
 }
 
 pub fn rename(
+    profile: &'static EngineProfile,
     dir: &Path,
     registry: &crate::registry::Registry,
     file: &str,
     new_name: &str,
     new_file: &str,
 ) -> Result<MonsterDoc, String> {
-    let new_file = normalise_file_name(new_file, new_name);
+    let new_file = sibling_file_name(file, &normalise_file_name(new_file, new_name));
     if new_file != file && dir.join(&new_file).exists() {
         return Err(format!("{new_file} already exists"));
     }
 
     let original = std::fs::read(dir.join(file)).map_err(|e| format!("{file}: {e}"))?;
     backup_once(dir, file, &original)?;
-    let parsed = read_bytes(file, &original, registry.has_file(file))?;
+    let parsed = read_bytes(profile, file, &original, registry.has_file(file))?;
     let mut doc = parsed.doc.clone();
     doc.name = new_name.to_string();
     doc.file = new_file.clone();
 
-    write_atomic(&dir.join(&new_file), &write_bytes(&parsed, &doc))?;
+    write_atomic(&dir.join(&new_file), &write_bytes(profile, &parsed, &doc))?;
     if new_file != file {
         let _ = std::fs::remove_file(dir.join(file));
     }
@@ -3309,6 +3998,16 @@ fn register(
     let group = (!group.trim().is_empty()).then_some(group);
     let updated = registry.with_added(name, file, group);
     write_atomic(&dir.join("monsters.xml"), &updated)
+}
+
+/// Puts `name` in the same folder as `reference`. A no-op on a flat corpus; on
+/// a nested one it is what keeps a rename or a duplicate inside the subfolder
+/// the registry's `file=` points at.
+fn sibling_file_name(reference: &str, name: &str) -> String {
+    match reference.rfind('/') {
+        Some(i) if !name.contains('/') => format!("{}/{name}", &reference[..i]),
+        _ => name.to_string(),
+    }
 }
 
 /// The corpus convention: lower-case, no spaces, `.xml`. Falls back to the
@@ -3392,6 +4091,7 @@ pub struct PinReport {
 /// per-row "pin id" button resolves to. Run with `apply = false` first: the
 /// report is the preview, and the same call with `apply = true` writes it.
 pub fn pin_loot_ids(
+    profile: &'static EngineProfile,
     dir: &Path,
     registry: &crate::registry::Registry,
     items: &crate::items::ItemIndex,
@@ -3414,7 +4114,7 @@ pub fn pin_loot_ids(
         }
         report.files += 1;
         if apply {
-            save(dir, registry, &next)?;
+            save(profile, dir, registry, &next)?;
         }
     }
 
