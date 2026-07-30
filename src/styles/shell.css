@@ -913,33 +913,57 @@
 	color: var(--ss-warn, #b58900);
 }
 
-.mx-engine-pick {
-	display: flex;
+/* The engine reads as one word, so it takes one word's worth of room: a chip
+   that shrinks to its own name instead of the full-width bar it used to be.
+   The <select> is the chip — borderless until hovered, sized by its content. */
+.mx-engine-chip {
+	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	width: 100%;
-	margin: 4px 0 2px;
+	gap: 6px;
+	align-self: center;
+	padding: 3px 8px 3px 7px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--surface);
 	font-size: 12px;
+	color: var(--text-muted);
 }
 
-.mx-engine-pick-label {
-	flex: 0 0 auto;
-	color: var(--ss-text-dim);
+.mx-engine-chip > svg {
+	color: var(--accent);
 }
 
-.mx-engine-pick select {
-	flex: 1 1 auto;
-	min-width: 0;
+.mx-engine-chip select {
+	min-height: 0;
+	padding: 0 2px;
+	border: none;
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
 }
 
-.mx-engine-pick-note {
-	flex: 0 0 auto;
+.mx-engine-chip select:hover {
+	color: var(--accent);
+}
+
+.mx-engine-chip-note {
+	color: var(--text-muted);
 	font-size: 11px;
-	color: var(--ss-text-dim);
 }
 
-.mx-engine-pick-note[data-weak='true'] {
-	color: var(--ss-warn, #b58900);
+/* The note reads as a footnote to the name, so it is set off by a hairline
+   rather than by a colour it would have to earn. */
+.mx-engine-chip-note + .mx-engine-chip-note {
+	padding-left: 6px;
+	border-left: 1px solid var(--border);
+}
+
+/* A guess that was close deserves to look like one. */
+.mx-engine-chip-note[data-weak='true'] {
+	color: var(--warn);
 }
 
 /* The language picker sits at the top of the landing column, before anything
@@ -1070,6 +1094,65 @@
 	align-items: center;
 	gap: 8px;
 	width: 100%;
-	max-width: 560px;
 	justify-content: center;
+}
+
+/* ---------- Landing: the two columns ---------- */
+
+/* Folders on the left, the workspaces you already have on the right. Without a
+   right column the grid collapses to the single centred column of before, so a
+   first run looks untouched. */
+.mx-landing-cols {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 24px;
+	width: 100%;
+}
+
+.mx-landing-col {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 14px;
+	width: 100%;
+	max-width: 560px;
+	flex: 0 1 560px;
+}
+
+.mx-landing-side {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	flex: 0 1 340px;
+	min-width: 240px;
+	padding-left: 24px;
+	border-left: 1px solid var(--border);
+	align-self: stretch;
+}
+
+.mx-landing-side .mx-saved,
+.mx-landing-side .ss-recent {
+	width: 100%;
+	max-width: none;
+	border-top: none;
+	padding-top: 0;
+}
+
+/* Narrow windows: the side column drops under the folders rather than squeezing
+   both into unreadability. */
+@media (max-width: 900px) {
+	.mx-landing-cols {
+		flex-direction: column;
+		align-items: center;
+	}
+
+	.mx-landing-side {
+		width: 100%;
+		max-width: 560px;
+		padding-left: 0;
+		border-left: none;
+		border-top: 1px solid var(--border);
+		padding-top: 16px;
+	}
 }

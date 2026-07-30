@@ -252,7 +252,9 @@ const pt: Record<string, string> = {
 	chosen: 'escolhido',
 	'detected from {{evidence}}': 'detectado a partir de {{evidence}}',
 	'the corpus': 'do corpus',
-	'could not tell confidently — check this': 'não foi possível determinar com certeza — verifique',
+	detected: 'detectado',
+	'uncertain — check this': 'incerto — verifique',
+	'no previews': 'sem prévias',
 	'No item database or client files — monsters open and save normally, but nothing is drawn and loot ids stay numbers.':
 		'Sem base de itens nem arquivos do cliente — os monstros abrem e salvam normalmente, mas nada é desenhado e os ids de loot continuam como números.',
 	'Opening…': 'Abrindo…',

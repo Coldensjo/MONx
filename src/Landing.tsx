@@ -5,6 +5,7 @@ import {
 	AlertCircle,
 	Bookmark,
 	Check,
+	Cpu,
 	FolderOpen,
 	History,
 	Image,
@@ -198,181 +199,209 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 
 			{error && <div className="ss-landing-error">{error}</div>}
 
-			{saved.length > 0 && (
-				<div className="mx-saved">
-					<div className="mx-saved-label">{t('Saved workspaces')}</div>
-					{saved.map(entry => (
-						<div key={entry.id} className="mx-saved-row">
-							{naming === entry.id ? (
-								<input
-									className="mx-saved-input"
-									autoFocus
-									value={nameDraft}
-									onChange={e => setNameDraft(e.target.value)}
-									onBlur={commitName}
-									onKeyDown={e => {
-										if (e.key === 'Enter') commitName();
-										if (e.key === 'Escape') setNaming(null);
-									}}
-								/>
-							) : (
+			{/* Two columns: picking folders on the left, workspaces you already have
+			    on the right. The right one is only there when there is something in
+			    it, so a first run is the single centred column it always was. */}
+			<div className="mx-landing-cols" data-side={saved.length || recent.length ? 'true' : undefined}>
+				<div className="mx-landing-col">
+					<div className="mx-slots">
+						{SLOTS.map(slot => {
+							const status = slotOf(probe, slot.key);
+							const path = slot.key === 'spells' ? paths.spells : paths[slot.key];
+							const state = !path ? 'empty' : status?.ok ? 'ok' : 'bad';
+							return (
 								<button
-									className="mx-saved-open"
-									disabled={opening}
-									onClick={() => onOpen(entry.paths)}
-									title={entry.paths.monsters}
+									key={slot.key}
+									className="mx-slot"
+									data-state={state}
+									data-hover={hoverSlot === slot.key ? 'true' : undefined}
+									onClick={() => void pick(slot.key)}
+									onMouseEnter={() => setHoverSlot(slot.key)}
+									onMouseLeave={() => setHoverSlot(s => (s === slot.key ? null : s))}
 								>
-									<Star size={14} />
-									<span className="mx-saved-body">
-										<span className="mx-saved-name">{entry.name}</span>
-										<span className="mx-saved-path mono">{entry.paths.monsters}</span>
+									<span className="mx-slot-icon">{slot.icon}</span>
+									<span className="mx-slot-body">
+										<span className="mx-slot-label">
+											{t(slot.label)}
+											{slot.optional && <span className="mx-slot-optional">{t('optional')}</span>}
+										</span>
+										<span className="mx-slot-path mono">{path || t(slot.hint)}</span>
+										{status && (status.summary || status.error) && (
+											<span className="mx-slot-status" data-ok={status.ok ? 'true' : 'false'}>
+												{status.ok ? <Check size={12} /> : <AlertCircle size={12} />}
+												{status.summary ?? status.error}
+											</span>
+										)}
 									</span>
-									<span className="mx-saved-engine">{engineLabel(entry.paths.engine)}</span>
 								</button>
+							);
+						})}
+					</div>
+		
+					{/* The engine is one word once it is known, so it reads as one: a chip
+					    the width of its own name. The select is the chip — no label, no
+					    blurb on screen (it lives in each option's tooltip), and the note
+					    beside it says only whether the word was guessed or picked. */}
+					{probe?.monsters.ok && (
+						<div className="mx-engine-chip">
+							<Cpu size={13} />
+							<select
+								value={paths.engine ?? probe.engine.best}
+								onChange={e => setPaths(p => ({ ...p, engine: e.target.value }))}
+							>
+								{ENGINES.map(e => (
+									<option key={e.key} value={e.key} title={t(e.blurb)}>
+										{t(e.label)}
+									</option>
+								))}
+							</select>
+							{/* Say when the guess was a guess. Getting this wrong mislabels
+							    every lint at once, so a close call is worth flagging. */}
+							<span
+								className="mx-engine-chip-note"
+								data-weak={paths.engine || probe.engine.confident ? undefined : 'true'}
+								title={
+									paths.engine
+										? undefined
+										: t('detected from {{evidence}}', {
+												evidence:
+													probe.engine.candidates.find(c => c.key === probe.engine.best)?.evidence[0] ??
+													t('the corpus')
+											})
+								}
+							>
+								{paths.engine
+									? t('chosen')
+									: probe.engine.confident
+										? t('detected')
+										: t('uncertain — check this')}
+							</span>
+							{degraded && (
+								<span
+									className="mx-engine-chip-note"
+									data-weak="true"
+									title={t(
+										'No item database or client files — monsters open and save normally, but nothing is drawn and loot ids stay numbers.'
+									)}
+								>
+									{t('no previews')}
+								</span>
 							)}
+						</div>
+					)}
+		
+					<div className="mx-landing-actions">
+						<button className="ss-btn ss-btn-primary" disabled={!ready} onClick={() => onOpen(paths)}>
+							{opening || probing ? <Loader2 size={15} className="ss-spin" /> : <FolderOpen size={15} />}
+							{opening ? t('Opening…') : probing ? t('Checking…') : t('Open workspace')}
+						</button>
+						{naming === 'new' ? (
+							<input
+								className="mx-saved-input"
+								autoFocus
+								placeholder={t('Workspace name')}
+								value={nameDraft}
+								onChange={e => setNameDraft(e.target.value)}
+								onBlur={commitName}
+								onKeyDown={e => {
+									if (e.key === 'Enter') commitName();
+									if (e.key === 'Escape') setNaming(null);
+								}}
+							/>
+						) : (
 							<button
-								className="mx-saved-act"
-								title={t('Rename')}
+								className="ss-btn"
+								disabled={!ready}
+								title={t('Save these folders under a name, to open in one click')}
 								onClick={() => {
-									setNameDraft(entry.name);
-									setNaming(entry.id);
+									setNameDraft(workspaceLabel(paths.monsters));
+									setNaming('new');
 								}}
 							>
-								<Pencil size={13} />
+								<Bookmark size={15} />
+								{t('Save workspace')}
 							</button>
-							<button
-								className="mx-saved-act"
-								title={t('Forget this workspace')}
-								onClick={() => setSaved(removeSavedWorkspace(entry.id))}
-							>
-								<Trash2 size={13} />
-							</button>
-						</div>
-					))}
+						)}
+					</div>
 				</div>
-			)}
 
-			<div className="mx-slots">
-				{SLOTS.map(slot => {
-					const status = slotOf(probe, slot.key);
-					const path = slot.key === 'spells' ? paths.spells : paths[slot.key];
-					const state = !path ? 'empty' : status?.ok ? 'ok' : 'bad';
-					return (
-						<button
-							key={slot.key}
-							className="mx-slot"
-							data-state={state}
-							data-hover={hoverSlot === slot.key ? 'true' : undefined}
-							onClick={() => void pick(slot.key)}
-							onMouseEnter={() => setHoverSlot(slot.key)}
-							onMouseLeave={() => setHoverSlot(s => (s === slot.key ? null : s))}
-						>
-							<span className="mx-slot-icon">{slot.icon}</span>
-							<span className="mx-slot-body">
-								<span className="mx-slot-label">
-									{t(slot.label)}
-									{slot.optional && <span className="mx-slot-optional">{t('optional')}</span>}
-								</span>
-								<span className="mx-slot-path mono">{path || t(slot.hint)}</span>
-								{status && (status.summary || status.error) && (
-									<span className="mx-slot-status" data-ok={status.ok ? 'true' : 'false'}>
-										{status.ok ? <Check size={12} /> : <AlertCircle size={12} />}
-										{status.summary ?? status.error}
-									</span>
-								)}
-							</span>
-						</button>
-					);
-				})}
-			</div>
-
-			{probe?.monsters.ok && (
-				<label className="mx-engine-pick">
-					<span className="mx-engine-pick-label">{t('Engine')}</span>
-					<select
-						value={paths.engine ?? probe.engine.best}
-						onChange={e => setPaths(p => ({ ...p, engine: e.target.value }))}
-					>
-						{ENGINES.map(e => (
-							<option key={e.key} value={e.key}>
-								{t(e.label)} — {t(e.blurb)}
-							</option>
-						))}
-					</select>
-					{/* Say when the guess was a guess. Getting this wrong mislabels
-					    every lint at once, so a close call is worth a sentence. */}
-					<span className="mx-engine-pick-note" data-weak={probe.engine.confident ? undefined : 'true'}>
-						{paths.engine
-							? t('chosen')
-							: probe.engine.confident
-								? t('detected from {{evidence}}', {
-										evidence:
-											probe.engine.candidates.find(c => c.key === probe.engine.best)?.evidence[0] ??
-											t('the corpus')
-									})
-								: t('could not tell confidently — check this')}
-					</span>
-				</label>
-			)}
-
-			{degraded && (
-				<div className="mx-engine-pick-note" data-weak="true">
-					{t('No item database or client files — monsters open and save normally, but nothing is drawn and loot ids stay numbers.')}
-				</div>
-			)}
-
-			<div className="mx-landing-actions">
-				<button className="ss-btn ss-btn-primary" disabled={!ready} onClick={() => onOpen(paths)}>
-					{opening || probing ? <Loader2 size={15} className="ss-spin" /> : <FolderOpen size={15} />}
-					{opening ? t('Opening…') : probing ? t('Checking…') : t('Open workspace')}
-				</button>
-				{naming === 'new' ? (
-					<input
-						className="mx-saved-input"
-						autoFocus
-						placeholder={t('Workspace name')}
-						value={nameDraft}
-						onChange={e => setNameDraft(e.target.value)}
-						onBlur={commitName}
-						onKeyDown={e => {
-							if (e.key === 'Enter') commitName();
-							if (e.key === 'Escape') setNaming(null);
-						}}
-					/>
-				) : (
-					<button
-						className="ss-btn"
-						disabled={!ready}
-						title={t('Save these folders under a name, to open in one click')}
-						onClick={() => {
-							setNameDraft(workspaceLabel(paths.monsters));
-							setNaming('new');
-						}}
-					>
-						<Bookmark size={15} />
-						{t('Save workspace')}
-					</button>
+				{(saved.length > 0 || recent.length > 0) && (
+					<div className="mx-landing-side">
+						{saved.length > 0 && (
+							<div className="mx-saved">
+								<div className="mx-saved-label">{t('Saved workspaces')}</div>
+								{saved.map(entry => (
+									<div key={entry.id} className="mx-saved-row">
+										{naming === entry.id ? (
+											<input
+												className="mx-saved-input"
+												autoFocus
+												value={nameDraft}
+												onChange={e => setNameDraft(e.target.value)}
+												onBlur={commitName}
+												onKeyDown={e => {
+													if (e.key === 'Enter') commitName();
+													if (e.key === 'Escape') setNaming(null);
+												}}
+											/>
+										) : (
+											<button
+												className="mx-saved-open"
+												disabled={opening}
+												onClick={() => onOpen(entry.paths)}
+												title={entry.paths.monsters}
+											>
+												<Star size={14} />
+												<span className="mx-saved-body">
+													<span className="mx-saved-name">{entry.name}</span>
+													<span className="mx-saved-path mono">{entry.paths.monsters}</span>
+												</span>
+												<span className="mx-saved-engine">{engineLabel(entry.paths.engine)}</span>
+											</button>
+										)}
+										<button
+											className="mx-saved-act"
+											title={t('Rename')}
+											onClick={() => {
+												setNameDraft(entry.name);
+												setNaming(entry.id);
+											}}
+										>
+											<Pencil size={13} />
+										</button>
+										<button
+											className="mx-saved-act"
+											title={t('Forget this workspace')}
+											onClick={() => setSaved(removeSavedWorkspace(entry.id))}
+										>
+											<Trash2 size={13} />
+										</button>
+									</div>
+								))}
+							</div>
+						)}
+			
+						{recent.length > 0 && (
+							<div className="ss-recent">
+								<div className="ss-recent-label">{t('Recent')}</div>
+								{recent.map(entry => (
+									<button
+										key={entry.paths.monsters}
+										className="ss-recent-row"
+										onClick={() => onOpenRecent(entry)}
+										disabled={opening}
+									>
+										<History size={14} />
+										<span className="ss-recent-path">
+											{entry.label} — {entry.paths.monsters}
+										</span>
+									</button>
+								))}
+							</div>
+						)}
+					</div>
 				)}
 			</div>
-
-			{recent.length > 0 && (
-				<div className="ss-recent">
-					<div className="ss-recent-label">{t('Recent')}</div>
-					{recent.map(entry => (
-						<button
-							key={entry.paths.monsters}
-							className="ss-recent-row"
-							onClick={() => onOpenRecent(entry)}
-							disabled={opening}
-						>
-							<History size={14} />
-							<span className="ss-recent-path">
-								{entry.label} — {entry.paths.monsters}
-							</span>
-						</button>
-					))}
-				</div>
-			)}
 		</div>
 	);
 }

@@ -327,7 +327,9 @@ const pl: Record<string, string> = {
 	chosen: 'wybrany',
 	'detected from {{evidence}}': 'wykryto na podstawie: {{evidence}}',
 	'the corpus': 'korpusu',
-	'could not tell confidently — check this': 'nie udało się ustalić pewnie — sprawdź to',
+	detected: 'wykryto',
+	'uncertain — check this': 'niepewne — sprawdź to',
+	'no previews': 'bez podglądów',
 	'No item database or client files — monsters open and save normally, but nothing is drawn and loot ids stay numbers.':
 		'Brak bazy przedmiotów i plików klienta — potwory otwierają się i zapisują normalnie, ale nic nie jest rysowane, a id łupu pozostają liczbami.',
 	'Opening…': 'Otwieranie…',
