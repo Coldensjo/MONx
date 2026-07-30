@@ -873,3 +873,24 @@
 	white-space: pre;
 	user-select: text;
 }
+
+/* ---------- Loot presets ---------- */
+
+.mx-preset-pick {
+	max-width: 150px;
+}
+
+.mx-preset-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 0;
+	font-size: 12px;
+}
+
+.mx-preset-name {
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

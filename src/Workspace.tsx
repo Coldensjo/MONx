@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirm, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { Package, Percent, PersonStanding, Plus, Save, Skull, Sparkles, Star, Trash2, Users, Wand2, X } from 'lucide-react';
+import { Bookmark, Package, Percent, PersonStanding, Plus, Save, Skull, Sparkles, Star, Trash2, Users, Wand2, X } from 'lucide-react';
 import {
 	getItem,
 	allLints as fetchAllLints,
@@ -64,6 +64,7 @@ import CompareDialog from './CompareDialog';
 import PatchNotesDialog from './PatchNotesDialog';
 import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
 import { loadFavourites, saveFavourites } from './favourites';
+import { loadPresets, savePresets, upsertPreset, type LootPreset } from './lootpresets';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
@@ -166,6 +167,11 @@ export default function Workspace({
 	const [dropped, setDropped] = useState<Set<number>>(new Set());
 	/** Starred items, by server id. Persisted in `monx.favourites`. */
 	const [favourites, setFavourites] = useState<Set<number>>(loadFavourites);
+	/** Named loot sets (`monx.lootPresets`), and the two little dialogs over them:
+	 *  a name being typed, and the delete list. */
+	const [presets, setPresets] = useState<LootPreset[]>(loadPresets);
+	const [presetName, setPresetName] = useState<string | null>(null);
+	const [presetManage, setPresetManage] = useState(false);
 	/** Filter keys the Items browser opens with. Pickupable is the standing default
 	 *  (the view exists to feed loot); Select corpse / Select item override it. */
 	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>(['pickupable']);
@@ -1120,6 +1126,48 @@ export default function Workspace({
 		[doc, editDoc, showToast]
 	);
 
+	/** Saves the tray under a name, replacing a preset of the same name. */
+	const savePreset = useCallback(
+		(name: string) => {
+			const trimmed = name.trim();
+			if (!trimmed || lootTray.length === 0) return;
+			const next = upsertPreset(presets, { name: trimmed, ids: lootTray.map(i => i.serverId) });
+			setPresets(next);
+			savePresets(next);
+			setPresetName(null);
+			showToast('ok', `Saved “${trimmed}” — ${lootTray.length} items`);
+		},
+		[lootTray, presets, showToast]
+	);
+
+	/** A preset back into the tray. Ids are resolved against the item index now,
+	 *  not when it was saved, so an id the workspace no longer knows is dropped
+	 *  rather than carried as a phantom — MONx never invents item ids (§24). */
+	const loadPresetToTray = useCallback(
+		(preset: LootPreset) => {
+			const byId = new Map(itemList.map(i => [i.serverId, i]));
+			const found = preset.ids.map(id => byId.get(id)).filter((i): i is ItemInfo => !!i);
+			setLootTray(found);
+			const missing = preset.ids.length - found.length;
+			showToast(
+				'ok',
+				`Loaded “${preset.name}” — ${found.length} items${
+					missing > 0 ? `, ${missing} not in this workspace` : ''
+				}`
+			);
+		},
+		[itemList, showToast]
+	);
+
+	const deletePreset = useCallback(
+		(name: string) => {
+			const next = presets.filter(p => p.name !== name);
+			setPresets(next);
+			savePresets(next);
+		},
+		[presets]
+	);
+
 	const addTrayToMonster = useCallback(() => {
 		if (!doc || lootTray.length === 0) return;
 		editDoc({
@@ -1662,6 +1710,45 @@ export default function Workspace({
 										<Trash2 size={14} />
 										Clear
 									</button>
+									{/* Presets sit beside the tray because they are the tray:
+									    saving one is naming what is already collected. */}
+									<button
+										className="ss-btn"
+										disabled={lootTray.length === 0}
+										title="Save this tray under a name"
+										onClick={() => setPresetName(`Preset ${presets.length + 1}`)}
+									>
+										<Bookmark size={14} />
+										Save preset
+									</button>
+									<select
+										className="ss-ed-input mx-preset-pick"
+										value=""
+										disabled={presets.length === 0}
+										title={presets.length === 0 ? 'No presets saved yet' : 'Load a preset into the tray'}
+										onChange={e => {
+											const p = presets.find(x => x.name === e.target.value);
+											if (p) loadPresetToTray(p);
+										}}
+									>
+										<option value="">
+											{presets.length === 0 ? 'No presets' : `Presets (${presets.length})`}
+										</option>
+										{presets.map(p => (
+											<option key={p.name} value={p.name}>
+												{p.name} · {p.ids.length}
+											</option>
+										))}
+									</select>
+									{presets.length > 0 && (
+										<button
+											className="ss-btn ss-btn-ghost"
+											title="Delete a preset"
+											onClick={() => setPresetManage(true)}
+										>
+											<Trash2 size={14} />
+										</button>
+									)}
 								</div>
 							</div>
 							{itemMenu && (
@@ -1966,6 +2053,85 @@ export default function Workspace({
 						<div className="ss-modal-buttons">
 							<button className="ss-btn ss-btn-ghost" onClick={() => setUsageDialog(null)}>
 								Close
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{presetName !== null && (
+				<div className="ss-backdrop" onMouseDown={() => setPresetName(null)}>
+					<div className="ss-modal" onMouseDown={e => e.stopPropagation()}>
+						<div className="ss-modal-title">Save loot preset</div>
+						<div className="ss-modal-desc">
+							{lootTray.length} {lootTray.length === 1 ? 'item' : 'items'} in the tray. An existing name is
+							overwritten.
+						</div>
+						<div className="ss-field-row">
+							<label className="ss-field-label">Name</label>
+							<input
+								className="ss-field"
+								autoFocus
+								value={presetName}
+								spellCheck={false}
+								onChange={e => setPresetName(e.target.value)}
+								onKeyDown={e => {
+									if (e.key === 'Enter') savePreset(presetName);
+									if (e.key === 'Escape') setPresetName(null);
+								}}
+							/>
+						</div>
+						<div className="ss-modal-buttons">
+							<button className="ss-btn ss-btn-ghost" onClick={() => setPresetName(null)}>
+								Cancel
+							</button>
+							<div className="ss-modal-buttons-spacer" />
+							<button
+								className="ss-btn ss-btn-primary"
+								disabled={!presetName.trim()}
+								onClick={() => savePreset(presetName)}
+							>
+								Save
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{presetManage && (
+				<div className="ss-backdrop" onMouseDown={() => setPresetManage(false)}>
+					<div className="ss-modal mx-pin-modal" onMouseDown={e => e.stopPropagation()}>
+						<div className="ss-modal-title">Loot presets</div>
+						<div className="mx-pin-list">
+							{presets.map(p => (
+								<div className="mx-preset-row" key={p.name}>
+									<span className="mx-preset-name">{p.name}</span>
+									<span className="ss-ed-field-note">{p.ids.length} items</span>
+									<button
+										className="ss-btn ss-btn-ghost ss-ed-mini"
+										title="Load into the tray"
+										onClick={() => {
+											loadPresetToTray(p);
+											setPresetManage(false);
+										}}
+									>
+										Load
+									</button>
+									<button
+										className="ss-btn ss-btn-ghost ss-ed-mini"
+										title={`Delete “${p.name}”`}
+										onClick={() => deletePreset(p.name)}
+									>
+										<Trash2 size={13} />
+									</button>
+								</div>
+							))}
+							{presets.length === 0 && <div className="ss-ed-empty">No presets left.</div>}
+						</div>
+						<div className="ss-modal-buttons">
+							<div className="ss-modal-buttons-spacer" />
+							<button className="ss-btn ss-btn-primary" onClick={() => setPresetManage(false)}>
+								Done
 							</button>
 						</div>
 					</div>
