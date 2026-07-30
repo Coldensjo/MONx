@@ -123,16 +123,8 @@ export default function App() {
 		};
 	}, []);
 
-	useEffect(() => {
-		const handler = (e: KeyboardEvent) => {
-			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
-				e.preventDefault();
-				if (info) void close();
-			}
-		};
-		window.addEventListener('keydown', handler);
-		return () => window.removeEventListener('keydown', handler);
-	}, [info, close]);
+	// Closing the workspace is a command now, bound in the hotkey manager and
+	// dispatched by the shell — App no longer keeps a listener of its own.
 
 	// Remember the window's size and position across launches — restored once at
 	// startup, saved (debounced) on every resize/move. tauri.conf.json's size

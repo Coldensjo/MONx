@@ -131,6 +131,9 @@ src/
   PreviewPanel.tsx     Right-hand preview + derived math
   LintPanel.tsx        Lint drawer
   PinLootDialog.tsx    Corpus-wide loot id pinning (Tools menu)
+  ScaleLootDialog.tsx  Corpus-wide loot chance scaling, per item or corpus-wide
+  PatchNotesDialog.tsx Patch notes since the user's cut-off point (Tools menu)
+  HotkeysDialog.tsx    The hotkey manager (Preferences menu)
   PreferencesDialog.tsx  Editor tab visibility + default tab (Preferences menu)
   UiInspector.tsx      Hold-F2 element inspector overlay
   monster.ts           Monster/workspace types, invoke wrappers, protocol URL builders
@@ -138,6 +141,8 @@ src/
   settings.ts          localStorage (monx.* keys)
   prefs.ts             Editor tab preferences (monx.prefs) + linter display
                        and ignored codes (monx.lint)
+  hotkeys.ts           Command type, chord parsing, defaults, dispatch hook (monx.hotkeys)
+  patchnotes.ts        Cut-off storage + the mark diff (monx.patchCutoff.*)
   fixtures.ts          Fixture data for component development
   catalog.ts  derive.ts  dnd.ts  spellsim.ts
   index.css            SPRx base stylesheet — frozen
@@ -208,7 +213,8 @@ Four rules that come up constantly:
 
 - Frameless window with custom titlebar (`data-tauri-drag-region`); dirty state shows as `•`.
 - Drag-and-drop is two unrelated mechanisms: `getCurrentWebview().onDragDropEvent` for folder drops from the OS, and `dnd.ts` for sprite → field. `dnd.ts` is built on **pointer events, not the HTML5 drag API** — see the comment at the top of that file for why.
-- `Ctrl/Cmd+O` opens the workspace picker.
+- **Every shell action is a `Command`** in the table at the bottom of `Workspace.tsx`: an id, a label, a group, a `run`, and an `enabled`. The menus are built from it and `useHotkeys` dispatches through it, so a new action gets a menu row, a binding and a manager entry at once — never add a bare `window.addEventListener('keydown', …)` for one. Defaults live in `hotkeys.ts`; the user's overrides are `monx.hotkeys`, each command holding a primary and a secondary chord. The dispatcher stands down while any `.ss-backdrop` is on screen, and `notWhileTyping` is how undo/redo stay out of text fields.
+- `Ctrl/Cmd+O` closes the workspace, back to the picker.
 - Hold `F2` for the UI inspector (`UiInspector.tsx`): outlines whatever is under the cursor and names it — React component path, `ss-`/`mx-` classes, accessible name. Click while held to copy. Names come from React fibers, so nothing needs annotating; `esbuild.keepNames` in `vite.config.ts` keeps them readable in release builds.
 - Lists virtualize rows and fetch one row-atlas image per visible row, not one per cell.
 

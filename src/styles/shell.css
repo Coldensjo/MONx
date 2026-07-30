@@ -357,6 +357,95 @@
 	color: var(--text-muted);
 }
 
+/* ---------- Hotkey manager ---------- */
+
+.mx-hk-modal {
+	width: 720px;
+	max-width: calc(100vw - 64px);
+}
+
+.mx-hk-search {
+	margin-bottom: 4px;
+}
+
+.mx-hk-list {
+	max-height: 420px;
+	overflow: auto;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface-2);
+}
+
+.mx-hk-row {
+	display: grid;
+	grid-template-columns: 1fr 148px 148px 28px;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 0;
+}
+
+.mx-hk-head {
+	position: sticky;
+	top: -6px;
+	z-index: 1;
+	padding-bottom: 4px;
+	background: var(--surface-2);
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
+.mx-hk-group {
+	margin: 8px 0 2px;
+	color: var(--text-muted);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.mx-hk-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+}
+
+/* A binding slot: reads as the key it holds, and as a target when it is empty. */
+.mx-hk-chip {
+	padding: 3px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font-family: 'JetBrains Mono', 'Consolas', monospace;
+	font-size: 11px;
+	text-align: center;
+	cursor: pointer;
+}
+
+.mx-hk-chip:hover {
+	border-color: var(--accent);
+}
+
+.mx-hk-chip-empty {
+	color: var(--text-muted);
+}
+
+.mx-hk-chip-armed {
+	border-color: var(--accent);
+	background: var(--accent-dim);
+	color: var(--accent);
+}
+
+.mx-hk-chip-clash {
+	border-color: var(--warn);
+	color: var(--warn);
+}
+
+.mx-hk-note {
+	color: var(--accent);
+}
+
 /* ---------- Landing: the three workspace slots ---------- */
 
 .mx-slots {

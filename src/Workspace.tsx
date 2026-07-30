@@ -31,9 +31,18 @@ import {
 	type MonsterSummary,
 	type WorkspaceInfo
 } from './monster';
-import Menubar, { type Menu } from './Menubar';
+import Menubar, { type Menu, type MenuItem } from './Menubar';
 import { newLootEntry } from './sections/Loot';
-import { SECTION_IDS, type SectionId } from './sections/section';
+import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
+import HotkeysDialog from './HotkeysDialog';
+import {
+	loadBindings,
+	saveBindings,
+	shortcutFor,
+	useHotkeys,
+	type Bindings,
+	type Command
+} from './hotkeys';
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 import { applyLintFix } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
@@ -54,7 +63,7 @@ import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
-import MonsterList from './MonsterList';
+import MonsterList, { type ListActions } from './MonsterList';
 import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
@@ -117,6 +126,11 @@ export default function Workspace({
 	const [jumpRequest, setJumpRequest] = useState<SectionId | null>(null);
 	/** Which severities the drawer shows, and which lint codes are ignored. */
 	const [lintPrefs, setLintPrefs] = useState<LintPrefs>(loadLintPrefs);
+	/** Command id → chords. Defaults merged with the user's overrides. */
+	const [bindings, setBindings] = useState<Bindings>(loadBindings);
+	const [hotkeysOpen, setHotkeysOpen] = useState(false);
+	/** The monster list's own actions, so a hotkey can reach its dialogs. */
+	const listActions = useRef<ListActions | null>(null);
 	const [selected, setSelected] = useState<string | null>(() =>
 		loadSetting('monx.lastMonster', null)
 	);
@@ -346,6 +360,17 @@ export default function Workspace({
 	);
 
 	const closeTab = useCallback((file: string) => closeTabs([file]), [closeTabs]);
+
+	/** Cycles the open tabs, wrapping at both ends. */
+	const stepTab = useCallback(
+		(delta: number) => {
+			if (tabs.length === 0) return;
+			const at = selected ? tabs.indexOf(selected) : -1;
+			const from = at === -1 ? 0 : at;
+			setSelected(tabs[(((from + delta) % tabs.length) + tabs.length) % tabs.length]);
+		},
+		[tabs, selected]
+	);
 
 	/** Right-clicked tab, for the Close-others / left / right menu. */
 	const [tabMenu, setTabMenu] = useState<{ x: number; y: number; file: string } | null>(null);
@@ -649,19 +674,10 @@ export default function Workspace({
 		showToast('ok', `Fixed ${fixed} ${fixed === 1 ? 'lint' : 'lints'}${manual > 0 ? ` — ${manual} need a manual fix` : ''}`);
 	}, [doc, visibleMonsterLints, editDoc, nextRaceid, showToast]);
 
-	useEffect(() => {
-		const onKey = (e: KeyboardEvent) => {
-			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' && e.key.toLowerCase() !== 'y') return;
-			// Text fields keep their native undo; the doc stack takes over elsewhere.
-			const tag = (document.activeElement?.tagName || '').toLowerCase();
-			if (tag === 'input' || tag === 'textarea') return;
-			e.preventDefault();
-			if (e.key.toLowerCase() === 'y' || e.shiftKey) redoEdit();
-			else undoEdit();
-		};
-		window.addEventListener('keydown', onKey);
-		return () => window.removeEventListener('keydown', onKey);
-	}, [undoEdit, redoEdit]);
+	// Undo/redo used to have their own listener here. They are commands now, like
+	// everything else — see the command table below — and they carry
+	// `notWhileTyping`, which is what used to be the tag check: inside a text
+	// field Ctrl+Z is the field's, not the document's.
 
 	// Right-clicking an outfit adopts it as the monster's look — the same mutation
 	// as dropping it on the Look section. Asked for explicitly from a menu, so
@@ -767,17 +783,6 @@ export default function Workspace({
 		}
 	}, [doc, showToast, refreshDropped]);
 
-	useEffect(() => {
-		const handler = (e: KeyboardEvent) => {
-			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-				e.preventDefault();
-				void save();
-			}
-		};
-		window.addEventListener('keydown', handler);
-		return () => window.removeEventListener('keydown', handler);
-	}, [save]);
-
 	const refreshMonsters = useCallback(
 		(focusFile: string | null) => {
 			onMonstersChanged(focusFile);
@@ -804,100 +809,6 @@ export default function Workspace({
 		const c = loadCutoff(info.paths.monsters);
 		return c ? ` — last set ${relativeWhen(c.at)}` : '';
 	}, [info.paths.monsters, patchOpen]);
-	const menus: Menu[] = [
-		{
-			label: 'File',
-			items: [
-				{ label: 'Save monster', shortcut: 'Ctrl+S', disabled: !doc || saving, onSelect: () => void save() },
-				{ label: 'Close workspace', shortcut: 'Ctrl+O', separated: true, onSelect: onCloseWorkspace }
-			]
-		},
-		{
-			label: 'Edit',
-			items: [
-				{ label: 'Undo', shortcut: 'Ctrl+Z', disabled: undoRef.current.length === 0, onSelect: undoEdit },
-				{ label: 'Redo', shortcut: 'Ctrl+Shift+Z', disabled: redoRef.current.length === 0, onSelect: redoEdit }
-			]
-		},
-		{
-			label: 'Tools',
-			items: [
-				{
-					label: `Pin ambiguous loot ids…${toolsBlocked}`,
-					disabled: dirty,
-					onSelect: () => setTool('ambiguous')
-				},
-				{
-					label: `Pin all loot ids…${toolsBlocked}`,
-					disabled: dirty,
-					onSelect: () => setTool('all')
-				},
-				{
-					label: `Scale loot chances…${toolsBlocked}`,
-					disabled: dirty,
-					onSelect: () => setScaling({ itemId: null })
-				},
-				{
-					label: 'Export lint report…',
-					separated: true,
-					onSelect: () => void exportLints()
-				},
-				{
-					label: 'Export patch notes…',
-					onSelect: () => setPatchOpen(true)
-				},
-				{
-					label: `Set patch notes cut-off point${patchCutoffAge}`,
-					onSelect: () => void setPatchCutoff()
-				}
-			]
-		},
-		{
-			// Severities first (what the drawer shows at all), then the ignore list,
-			// which is where a right-clicked lint ends up and the only place it can be
-			// taken back.
-			label: 'Linter',
-			items: [
-				...LINT_SEVERITIES.map(s => ({
-					label: `${lintPrefs.severities.includes(s) ? '✓' : '　'} Show ${LINT_SEVERITY_LABEL[s]}`,
-					onSelect: () => toggleLintSeverity(s)
-				})),
-				...(lintPrefs.muted.length === 0
-					? [{ label: 'Nothing ignored', separated: true, disabled: true, onSelect: () => undefined }]
-					: [
-							{
-								label: `Ignored (${lintPrefs.muted.length}) — pick one to restore`,
-								separated: true,
-								disabled: true,
-								onSelect: () => undefined
-							},
-							...lintPrefs.muted.map(code => ({
-								label: `✕ ${code}`,
-								onSelect: () =>
-									updateLintPrefs({ ...lintPrefs, muted: lintPrefs.muted.filter(c => c !== code) })
-							})),
-							{
-								label: 'Stop ignoring everything',
-								separated: true,
-								onSelect: () => updateLintPrefs({ ...lintPrefs, muted: [] })
-							}
-						])
-			]
-		},
-		{
-			label: 'Preferences',
-			items: [
-				{ label: 'Editor tabs…', onSelect: () => setPrefsOpen(true) },
-				{
-					label: 'Show every tab',
-					separated: true,
-					disabled: prefs.visibleSections.length === SECTION_IDS.length,
-					onSelect: () => updatePrefs({ ...prefs, visibleSections: [...SECTION_IDS] })
-				}
-			]
-		}
-	];
-
 	const nav: { key: View; label: string; icon: JSX.Element; count: number }[] = [
 		{ key: 'monsters', label: 'Monsters', icon: <Skull size={16} />, count: info.monsterCount },
 		{ key: 'items', label: 'Items', icon: <Package size={16} />, count: itemList.length },
@@ -1173,6 +1084,246 @@ export default function Workspace({
 		showToast('ok', `Added ${n} loot ${n === 1 ? 'entry' : 'entries'} to ${doc.name}`);
 	}, [doc, lootTray, editDoc, showToast]);
 
+	// ---- Commands ----
+	// One table of everything the shell can do. The menus are built from it and
+	// the keyboard dispatches through it, so a command cannot exist in one place
+	// and be missing from the other, and the manager lists them all by
+	// construction.
+	const commands: Command[] = [
+		{ id: 'save-monster', label: 'Save monster', group: 'Monsters', enabled: !!doc && !saving, run: () => void save() },
+		{ id: 'new-monster', label: 'New monster…', group: 'Monsters', run: () => listActions.current?.newMonster() },
+		{
+			id: 'duplicate-monster',
+			label: 'Duplicate monster',
+			group: 'Monsters',
+			enabled: !!selected,
+			run: () => listActions.current?.duplicateSelected()
+		},
+		{
+			id: 'rename-monster',
+			label: 'Rename monster…',
+			group: 'Monsters',
+			enabled: !!selected,
+			run: () => listActions.current?.renameSelected()
+		},
+		{
+			id: 'delete-monster',
+			label: 'Delete monster…',
+			group: 'Monsters',
+			enabled: !!selected,
+			run: () => listActions.current?.deleteSelected()
+		},
+		{
+			id: 'reveal-monster',
+			label: 'Show monster in folder',
+			group: 'Monsters',
+			enabled: !!selected,
+			run: () => selected && reveal(selected)
+		},
+		{ id: 'close-workspace', label: 'Close workspace', group: 'Monsters', run: onCloseWorkspace },
+
+		{
+			id: 'undo',
+			label: 'Undo',
+			group: 'Edit',
+			enabled: undoRef.current.length > 0,
+			notWhileTyping: true,
+			run: undoEdit
+		},
+		{
+			id: 'redo',
+			label: 'Redo',
+			group: 'Edit',
+			enabled: redoRef.current.length > 0,
+			notWhileTyping: true,
+			run: redoEdit
+		},
+		{
+			id: 'fix-all-lints',
+			label: 'Fix every fixable lint',
+			group: 'Edit',
+			enabled: !!doc,
+			run: fixAllLints
+		},
+		{
+			id: 'add-tray-loot',
+			label: 'Add the loot tray to this monster',
+			group: 'Edit',
+			enabled: !!doc && lootTray.length > 0,
+			run: addTrayToMonster
+		},
+
+		{ id: 'view-monsters', label: 'Go to Monsters', group: 'View', run: () => setView('monsters') },
+		{ id: 'view-items', label: 'Go to Items', group: 'View', run: () => setView('items') },
+		{ id: 'view-outfits', label: 'Go to Outfits', group: 'View', run: () => setView('outfits') },
+		{ id: 'view-effects', label: 'Go to Effects', group: 'View', run: () => setView('effects') },
+		{ id: 'view-missiles', label: 'Go to Missiles', group: 'View', run: () => setView('missiles') },
+		{
+			id: 'focus-search',
+			label: 'Search monsters',
+			group: 'View',
+			run: () => {
+				setView('monsters');
+				listActions.current?.focusSearch();
+			}
+		},
+		{ id: 'toggle-lints', label: 'Toggle the lint drawer', group: 'View', run: () => setLintsOpen(o => !o) },
+		{
+			id: 'next-monster',
+			label: 'Next monster in the list',
+			group: 'View',
+			run: () => listActions.current?.step(1)
+		},
+		{
+			id: 'prev-monster',
+			label: 'Previous monster in the list',
+			group: 'View',
+			run: () => listActions.current?.step(-1)
+		},
+		{ id: 'next-tab', label: 'Next editor tab', group: 'View', enabled: tabs.length > 1, run: () => stepTab(1) },
+		{ id: 'prev-tab', label: 'Previous editor tab', group: 'View', enabled: tabs.length > 1, run: () => stepTab(-1) },
+		{
+			id: 'close-tab',
+			label: 'Close editor tab',
+			group: 'View',
+			enabled: !!selected,
+			run: () => selected && void closeTab(selected)
+		},
+
+		...SECTION_IDS.map(id => ({
+			id: `goto-${id}`,
+			label: `Jump to ${SECTION_LABEL[id]}`,
+			group: 'Editor tabs',
+			enabled: !!doc && prefs.visibleSections.includes(id),
+			run: () => {
+				setView('monsters');
+				setJumpRequest(id);
+			}
+		})),
+
+		{
+			id: 'pin-ambiguous',
+			label: 'Pin ambiguous loot ids…',
+			group: 'Tools',
+			enabled: !dirty,
+			run: () => setTool('ambiguous')
+		},
+		{ id: 'pin-all', label: 'Pin all loot ids…', group: 'Tools', enabled: !dirty, run: () => setTool('all') },
+		{
+			id: 'scale-loot',
+			label: 'Scale loot chances…',
+			group: 'Tools',
+			enabled: !dirty,
+			run: () => setScaling({ itemId: null })
+		},
+		{ id: 'export-lints', label: 'Export lint report…', group: 'Tools', run: () => void exportLints() },
+		{ id: 'export-patch-notes', label: 'Export patch notes…', group: 'Tools', run: () => setPatchOpen(true) },
+		{
+			id: 'set-patch-cutoff',
+			label: 'Set patch notes cut-off point',
+			group: 'Tools',
+			run: () => void setPatchCutoff()
+		},
+
+		...LINT_SEVERITIES.map(s => ({
+			id: `toggle-severity-${s}`,
+			label: `Show ${LINT_SEVERITY_LABEL[s]} lints`,
+			group: 'Linter',
+			run: () => toggleLintSeverity(s)
+		})),
+
+		{ id: 'open-prefs', label: 'Editor tabs…', group: 'Preferences', run: () => setPrefsOpen(true) },
+		{ id: 'open-hotkeys', label: 'Hotkeys…', group: 'Preferences', run: () => setHotkeysOpen(true) },
+		{
+			id: 'show-all-tabs',
+			label: 'Show every editor tab',
+			group: 'Preferences',
+			enabled: prefs.visibleSections.length !== SECTION_IDS.length,
+			run: () => updatePrefs({ ...prefs, visibleSections: [...SECTION_IDS] })
+		}
+	];
+
+	useHotkeys(commands, bindings);
+
+	/** A command as a menu row: one label, one binding, one enabled state. */
+	const item = (id: string, extra?: Partial<MenuItem>): MenuItem => {
+		const c = commands.find(x => x.id === id);
+		return {
+			label: c?.label ?? id,
+			shortcut: shortcutFor(bindings, id),
+			disabled: c?.enabled === false,
+			onSelect: c?.run ?? (() => undefined),
+			...extra
+		};
+	};
+
+	const menus: Menu[] = [
+		{
+			label: 'File',
+			items: [
+				item('save-monster'),
+				item('new-monster'),
+				item('duplicate-monster'),
+				item('rename-monster'),
+				item('delete-monster'),
+				item('reveal-monster'),
+				item('close-workspace', { separated: true })
+			]
+		},
+		{
+			label: 'Edit',
+			items: [item('undo'), item('redo'), item('fix-all-lints', { separated: true }), item('add-tray-loot')]
+		},
+		{
+			label: 'Tools',
+			items: [
+				item('pin-ambiguous', { label: `Pin ambiguous loot ids…${toolsBlocked}` }),
+				item('pin-all', { label: `Pin all loot ids…${toolsBlocked}` }),
+				item('scale-loot', { label: `Scale loot chances…${toolsBlocked}` }),
+				item('export-lints', { separated: true }),
+				item('export-patch-notes'),
+				item('set-patch-cutoff', { label: `Set patch notes cut-off point${patchCutoffAge}` })
+			]
+		},
+		{
+			// Severities first (what the drawer shows at all), then the ignore list,
+			// which is where a right-clicked lint ends up and the only place it can be
+			// taken back.
+			label: 'Linter',
+			items: [
+				...LINT_SEVERITIES.map(s =>
+					item(`toggle-severity-${s}`, {
+						label: `${lintPrefs.severities.includes(s) ? '✓' : '　'} Show ${LINT_SEVERITY_LABEL[s]}`
+					})
+				),
+				...(lintPrefs.muted.length === 0
+					? [{ label: 'Nothing ignored', separated: true, disabled: true, onSelect: () => undefined }]
+					: [
+							{
+								label: `Ignored (${lintPrefs.muted.length}) — pick one to restore`,
+								separated: true,
+								disabled: true,
+								onSelect: () => undefined
+							},
+							...lintPrefs.muted.map(code => ({
+								label: `✕ ${code}`,
+								onSelect: () =>
+									updateLintPrefs({ ...lintPrefs, muted: lintPrefs.muted.filter(c => c !== code) })
+							})),
+							{
+								label: 'Stop ignoring everything',
+								separated: true,
+								onSelect: () => updateLintPrefs({ ...lintPrefs, muted: [] })
+							}
+						])
+			]
+		},
+		{
+			label: 'Preferences',
+			items: [item('open-prefs'), item('open-hotkeys'), item('show-all-tabs', { separated: true })]
+		}
+	];
+
 	// Dismiss the context menus on any outside press or Escape, as MonsterList does.
 	useEffect(() => {
 		if (!itemMenu && !thingMenu && !tabMenu && !outfitMenu) return;
@@ -1235,6 +1386,7 @@ export default function Workspace({
 					<MonsterList
 						monsters={monsters}
 						selectedFile={selected}
+						actionsRef={listActions}
 						onSelect={setSelected}
 						onOpen={file => {
 							setSelected(file);
@@ -1740,6 +1892,18 @@ export default function Workspace({
 						</div>
 					</div>
 				</div>
+			)}
+
+			{hotkeysOpen && (
+				<HotkeysDialog
+					commands={commands}
+					bindings={bindings}
+					onChange={next => {
+						setBindings(next);
+						saveBindings(next);
+					}}
+					onClose={() => setHotkeysOpen(false)}
+				/>
 			)}
 
 			{patchOpen && (

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { Check, Filter, Plus, Search, X } from 'lucide-react';
 import {
 	createMonster,
@@ -25,9 +25,26 @@ const OVERSCAN = 6;
 
 const LAST_MONSTER_KEY = 'monx.lastMonster';
 
+/**
+ * What the shell's hotkeys can ask of the list. The list owns the new / rename /
+ * delete dialogs, the search box and the filtered order, so a binding for any of
+ * them has to come back in here rather than be re-implemented outside.
+ */
+export interface ListActions {
+	newMonster: () => void;
+	renameSelected: () => void;
+	duplicateSelected: () => void;
+	deleteSelected: () => void;
+	focusSearch: () => void;
+	/** Moves the selection through the list as it is currently filtered. */
+	step: (delta: number) => void;
+}
+
 interface Props {
 	monsters: MonsterSummary[];
 	selectedFile: string | null;
+	/** Filled in by the list so the shell can drive it from a hotkey. */
+	actionsRef?: MutableRefObject<ListActions | null>;
 	onSelect: (file: string) => void;
 	/** Fired after the folder changes on disk, with the file that should take focus. */
 	onMutated: (focusFile: string | null) => void;
@@ -145,6 +162,7 @@ const MonsterRow = memo(function MonsterRow({
 export default function MonsterList({
 	monsters,
 	selectedFile,
+	actionsRef,
 	onSelect,
 	onMutated,
 	onOpen,
@@ -416,6 +434,46 @@ export default function MonsterList({
 		}
 	}, [selected, showToast, onMutated]);
 
+	// The shell's hotkeys reach the list through here. Rebuilt whenever one of
+	// the actions changes identity, so a binding never fires a stale closure —
+	// `step` in particular has to see the current filtered order.
+	const searchRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		if (!actionsRef) return;
+		actionsRef.current = {
+			newMonster: openNew,
+			renameSelected: openRename,
+			duplicateSelected: () => void runDuplicate(),
+			deleteSelected: () => selected && setDialog('delete'),
+			focusSearch: () => {
+				searchRef.current?.focus();
+				searchRef.current?.select();
+			},
+			step: delta => {
+				if (shown.length === 0) return;
+				const at = shown.findIndex(m => m.file === selectedFile);
+				const next = shown[Math.min(shown.length - 1, Math.max(0, (at === -1 ? 0 : at) + delta))];
+				if (next && next.file !== selectedFile) {
+					select(next.file);
+					// The list is virtualized, so the row has to be scrolled to before
+					// it can exist to be scrolled into view.
+					const idx = shown.indexOf(next);
+					const el = scrollRef.current;
+					if (el) {
+						const top = idx * ROW_H;
+						if (top < el.scrollTop) el.scrollTop = top;
+						else if (top + ROW_H > el.scrollTop + el.clientHeight) {
+							el.scrollTop = top + ROW_H - el.clientHeight;
+						}
+					}
+				}
+			}
+		};
+		return () => {
+			actionsRef.current = null;
+		};
+	}, [actionsRef, openNew, openRename, runDuplicate, selected, shown, selectedFile, select]);
+
 	const cycleFilter = useCallback((key: string) => {
 		setActiveFilters(prev => {
 			const next = new Map(prev);
@@ -456,6 +514,7 @@ export default function MonsterList({
 				<div className="ss-search">
 					<Search size={13} />
 					<input
+						ref={searchRef}
 						placeholder="Search name, file, species, raceid"
 						value={search}
 						onChange={e => setSearch(e.target.value)}

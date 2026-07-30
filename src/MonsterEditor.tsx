@@ -49,7 +49,6 @@ export interface MonsterEditorProps {
 	/** Registered monster names, for summon validation. */
 	monsterNames?: string[];
 	nextRaceid?: number | null;
-	onSave?: () => void;
 	onBrowseOutfits?: () => void;
 	/** Opens the Items browser pre-filtered to corpses. */
 	onBrowseCorpses?: () => void;
@@ -79,7 +78,6 @@ export function MonsterEditor({
 	scripts = [],
 	monsterNames = [],
 	nextRaceid = null,
-	onSave,
 	onBrowseOutfits,
 	onBrowseCorpses,
 	onBrowseItems,
@@ -99,17 +97,9 @@ export function MonsterEditor({
 		saveSetting(STATE_KEY, JSON.stringify({ collapsed: [...collapsed] } satisfies EditorState));
 	}, [collapsed]);
 
-	useEffect(() => {
-		if (!onSave) return;
-		const onKey = (e: KeyboardEvent) => {
-			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-				e.preventDefault();
-				onSave();
-			}
-		};
-		window.addEventListener('keydown', onKey);
-		return () => window.removeEventListener('keydown', onKey);
-	}, [onSave]);
+	// Save had a listener of its own here, which fired alongside the shell's and
+	// saved twice. It is the `save-monster` command now — bound wherever the user
+	// wants it, dispatched by the shell.
 
 	// Lints arrive as a flat list keyed by dot path; every field asks for its own.
 	const byPath = useMemo(() => {
