@@ -76,7 +76,12 @@ import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
-import { ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { ThingAnimProvider, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+
+/** The speed the Outfits grid animates at, having no creature to read one from.
+ *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
+ *  the same cap, so the exact value only matters for the very fastest. */
+const NOMINAL_SPEED = 100;
 
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */
@@ -85,10 +90,12 @@ type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
 /** The three nav entries backed by a dat category, and that category's own name. */
 type ThingView = 'outfits' | 'effects' | 'missiles';
 
-/** True when a thing's first frame is a standing pose to be left out of the
- *  loop: outfits only, and never under animateAlways. */
-function skipsStandingFrame(t: ThingSummary): boolean {
-	return t.frames > 1 && !t.animateAlways;
+/** How many strip frames are the walk cycle — what an outfit cell loops. Zero
+ *  when there is nothing but idle: a one-frame outfit, or an animateAlways one
+ *  whose whole strip is the animation. */
+function walkCells(t: ThingSummary): number {
+	if (t.animateAlways) return 0;
+	return Math.max(0, t.frames - (t.idleFrames ?? 1));
 }
 
 const LINT_SEVERITY_LABEL: Record<LintSeverity, string> = {
@@ -431,34 +438,43 @@ export default function Workspace({
 		};
 	}, [things]);
 
-	// The grid runs one clock for every cell, so it gets the duration that
-	// dominates the category rather than any single thing's: 300 ms for a modern
-	// walk cycle, 100 ms for effects, and undefined for the `.spr`/`.dat`
-	// engines, which state none and keep the fixed tick their client used.
+	// The grid runs one clock for every cell, so each category gets the timing
+	// that dominates it rather than any single thing's.
+	//
+	// Effects and missiles are phase-timed, so that is the commonest declared
+	// duration — 100 ms on Canary. **Outfit cells are not**: they animate the
+	// walk cycle, which the client times from the creature's speed and never
+	// from the phases, so the browser's own clock has to be the foot delay or
+	// every outfit crawls at the 300 ms its phases claim. The browser has no
+	// creature to read a speed from, hence a nominal one; the clamp swallows
+	// the choice anyway, since anything slower than about 375 lands on the cap.
 	const thingIntervals = useMemo(() => {
-		const modal = (list: ThingSummary[]) => {
+		const commonest = (values: Iterable<number>) => {
 			const counts = new Map<number, number>();
-			for (const t of list) {
-				for (const d of t.frameDurations ?? []) {
-					if (d > 0) counts.set(d, (counts.get(d) ?? 0) + 1);
-				}
+			for (const v of values) {
+				if (v > 0) counts.set(v, (counts.get(v) ?? 0) + 1);
 			}
 			let best: number | undefined;
 			let seen = 0;
-			for (const [ms, n] of counts) {
+			for (const [value, n] of counts) {
 				if (n > seen) {
 					seen = n;
-					best = ms;
+					best = value;
 				}
 			}
 			return best;
 		};
+		const durations = (list: ThingSummary[]) =>
+			commonest(list.flatMap(t => t.frameDurations ?? []));
+		const walkPhases = commonest(things.outfit.map(t => t.walkFrames ?? 0));
 		return {
-			outfits: modal(things.outfit),
-			effects: modal(things.effect),
-			missiles: modal(things.missile)
+			outfits: walkPhases
+				? walkFrameMs(NOMINAL_SPEED, walkPhases, info.enhancedAnimations)
+				: durations(things.outfit),
+			effects: durations(things.effect),
+			missiles: durations(things.missile)
 		};
-	}, [things]);
+	}, [things, info.enhancedAnimations]);
 
 	const thingAnim = useCallback<ThingAnimLookup>(
 		async (kind, id) => {
@@ -1928,14 +1944,15 @@ export default function Workspace({
 							}
 							cellKey={t => t.id}
 							cellLabel={t => t.name ?? String(t.id)}
-							// Outfits: frame 0 is the standing pose, so loop the walking
-							// frames (1..n-1), exactly as SPRx does — unless the dat marks the
-							// outfit animateAlways, where frame 0 belongs to the animation and
-							// dropping it is what leaves a fire elemental standing unlit.
-							cellFrames={t => (view === 'outfits' && skipsStandingFrame(t) ? t.frames - 1 : t.frames)}
+							// Outfits loop their walk cycle, which sits after the idle run in
+							// the strip — usually one standing frame, but eight for the outfits
+							// that idle on their own. Skipping exactly the idle run keeps a
+							// fire elemental burning (it is all idle, so all of it plays) and
+							// stops a two-group outfit playing half an idle before its walk.
+							cellFrames={t => (view === 'outfits' && walkCells(t) > 0 ? walkCells(t) : t.frames)}
 							cellUrl={(t, frame) =>
 								thingUrlFor(info.sprPath, info.datPath, THING_CAT[view as ThingView], t.id, info.transparent, {
-									frame: view === 'outfits' && skipsStandingFrame(t) ? frame + 1 : frame
+									frame: view === 'outfits' && walkCells(t) > 0 ? frame + (t.idleFrames ?? 1) : frame
 								})
 							}
 							searchId={t => t.id}

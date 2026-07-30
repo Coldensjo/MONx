@@ -620,11 +620,16 @@ error in speed.
 The last row is the point of doing it properly rather than picking a better constant: a fast
 monster's feet really do move faster, and now the preview shows it.
 
-Two places still run one clock for many things, and deliberately. The browser grid gets the
-duration that dominates its category — a contact sheet of two hundred things cannot afford two
-hundred timers, and `synchronized` says the client shares a clock too. The `.spr`/`.dat`
-engines state no durations at all, so they keep the fixed tick their client used; the fallback
-is not a guess there, it is the format's actual answer.
+The browser grid still runs one clock for the whole category — a contact sheet of two hundred
+things cannot afford two hundred timers, and `synchronized` says the client shares a clock too
+— but *which* clock depends on what the cells are showing. Effects and missiles are
+phase-timed, so it is the commonest declared duration. **Outfit cells animate the walk cycle**,
+so it has to be the foot delay, or the grid keeps crawling at 300 ms after the preview has been
+fixed. There is no creature in a browser to read a speed from, so it uses a nominal one; the
+clamp swallows the choice, since anything below about speed 375 lands on the same cap.
+
+The `.spr`/`.dat` engines state no durations at all, so they keep the fixed tick their client
+used. The fallback is not a guess there — it is the format's actual answer.
 
 `items.otb` also became optional as part of this. The modern engines have no server↔client id
 split, so the file does not exist and requiring it cost the entire item database — every loot
