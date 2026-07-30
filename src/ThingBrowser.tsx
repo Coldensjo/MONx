@@ -51,6 +51,8 @@ export interface ThingBrowserProps<T> {
 
 	/** Tooltip text. Defaults to `cellLabel`. */
 	cellTitle?: (item: T) => string;
+	/** Marks the cell with a star — favourites, in the Items view. */
+	cellMark?: (item: T) => boolean;
 	/** Free-text search haystack. Without it, only id search works. */
 	searchText?: (item: T) => string;
 	/** Numeric id for `parseIdSearch` ("2400", "100-250"). */
@@ -169,7 +171,7 @@ function GridRowInner<T>({
 	onCellContextMenu,
 	onCellDoubleClick
 }: RowProps<T>) {
-	const { rowAtlasUrl, cellKey, cellLabel, cellTitle, cellFrames, cellUrl } = props;
+	const { rowAtlasUrl, cellKey, cellLabel, cellTitle, cellMark, cellFrames, cellUrl } = props;
 	const rowAnimates = animateEnabled && !!cellFrames && !!cellUrl && cells.some(c => cellFrames(c) > 1);
 	const atlasUrl = rowAnimates ? null : rowAtlasUrl(cells, zoom);
 	return (
@@ -189,6 +191,7 @@ function GridRowInner<T>({
 						cellH={cellH}
 						label={cellLabel(item)}
 						title={cellTitle ? cellTitle(item) : cellLabel(item)}
+						marked={cellMark ? cellMark(item) : false}
 						atlasUrl={atlasUrl}
 						// The whole row leaves the atlas when any cell animates, so every
 						// cell must render per-cell — a static one is simply frame 0.
@@ -224,6 +227,7 @@ interface BrowserCellProps<T> {
 	cellH: number;
 	label: string;
 	title: string;
+	marked: boolean;
 	atlasUrl: string | null;
 	animated: boolean;
 	frames: number;
@@ -250,6 +254,7 @@ function BrowserCellInner<T>({
 	cellH,
 	label,
 	title,
+	marked,
 	atlasUrl,
 	animated,
 	frames,
@@ -308,6 +313,7 @@ function BrowserCellInner<T>({
 			) : (
 				<div className="ss-cell-sprite" style={{ width: zoom, height: zoom }} />
 			)}
+			{marked && <span className="mx-cell-star" title="Favourite">★</span>}
 			<div className="ss-cell-id">{label}</div>
 		</div>
 	);

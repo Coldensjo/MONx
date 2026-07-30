@@ -737,3 +737,22 @@ body.ss-dragging {
 	line-height: 1;
 	pointer-events: none;
 }
+
+/* ---------- Favourites ---------- */
+
+/* The cell is a plain flex column in the frozen base sheet, so the containing
+   block for the star is established here rather than there. */
+.ss-cell {
+	position: relative;
+}
+
+.mx-cell-star {
+	position: absolute;
+	top: 1px;
+	right: 3px;
+	color: var(--accent);
+	font-size: 11px;
+	line-height: 1;
+	pointer-events: none;
+	text-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+}

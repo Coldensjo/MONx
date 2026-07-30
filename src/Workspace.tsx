@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirm, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { Package, Percent, PersonStanding, Plus, Save, Skull, Sparkles, Trash2, Users, Wand2, X } from 'lucide-react';
+import { Package, Percent, PersonStanding, Plus, Save, Skull, Sparkles, Star, Trash2, Users, Wand2, X } from 'lucide-react';
 import {
 	getItem,
 	allLints as fetchAllLints,
@@ -63,6 +63,7 @@ import QuickOpenDialog from './QuickOpenDialog';
 import CompareDialog from './CompareDialog';
 import PatchNotesDialog from './PatchNotesDialog';
 import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
+import { loadFavourites, saveFavourites } from './favourites';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
@@ -163,6 +164,8 @@ export default function Workspace({
 	/** Server ids the saved corpus drops, for the "not dropped by any monster"
 	 *  filter. Re-read after anything that rewrites loot on disk. */
 	const [dropped, setDropped] = useState<Set<number>>(new Set());
+	/** Starred items, by server id. Persisted in `monx.favourites`. */
+	const [favourites, setFavourites] = useState<Set<number>>(loadFavourites);
 	/** Filter keys the Items browser opens with. Pickupable is the standing default
 	 *  (the view exists to feed loot); Select corpse / Select item override it. */
 	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>(['pickupable']);
@@ -838,6 +841,7 @@ export default function Workspace({
 		[]
 	);
 	const itemKey = useCallback((i: ItemInfo) => i.serverId, []);
+	const itemIsFavourite = useCallback((i: ItemInfo) => favourites.has(i.serverId), [favourites]);
 	const itemLabel = useCallback((i: ItemInfo) => i.name || `#${i.serverId}`, []);
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
@@ -883,6 +887,12 @@ export default function Workspace({
 		const slot = 'Slot';
 		const props = 'Properties';
 		return [
+			{
+				key: 'favourite',
+				label: 'Favourites',
+				section: special,
+				test: (i: ItemInfo) => favourites.has(i.serverId)
+			},
 			{ key: 'pickupable', label: 'Pickupable', section: special, test: (i: ItemInfo) => i.pickupable },
 			{ key: 'corpses', label: 'Show corpses', section: special, test: attr('corpseType') },
 			{
@@ -938,7 +948,32 @@ export default function Workspace({
 			{ key: 'ambiguous', label: 'Ambiguous name', section: props, test: (i: ItemInfo) => i.ambiguousName },
 			{ key: 'animated', label: 'Animated', section: props, test: (i: ItemInfo) => (itemFrames.get(i.clientId) ?? 1) > 1 }
 		];
-	}, [itemFrames, dropped]);
+	}, [itemFrames, dropped, favourites]);
+
+	/** Stars or unstars a whole selection: the menu acts on what is selected,
+	 *  and unstars only when every one of them is already a favourite. */
+	const toggleFavourites = useCallback(
+		(picked: ItemInfo[]) => {
+			if (picked.length === 0) return;
+			setFavourites(prev => {
+				const next = new Set(prev);
+				const allStarred = picked.every(i => next.has(i.serverId));
+				for (const i of picked) {
+					if (allStarred) next.delete(i.serverId);
+					else next.add(i.serverId);
+				}
+				saveFavourites(next);
+				showToast(
+					'ok',
+					`${allStarred ? 'Removed' : 'Added'} ${picked.length} ${
+						picked.length === 1 ? 'item' : 'items'
+					} ${allStarred ? 'from' : 'to'} favourites`
+				);
+				return next;
+			});
+		},
+		[showToast]
+	);
 
 	const thingContextMenu = useCallback((t: ThingSummary, e: React.MouseEvent, kind: 'effect' | 'missile') => {
 		const table = kind === 'effect' ? MAGIC_EFFECTS : SHOOT_EFFECTS;
@@ -1568,6 +1603,7 @@ export default function Workspace({
 								searchText={itemSearchText}
 								searchId={itemSearchId}
 								cellTitle={itemCellTitle}
+								cellMark={itemIsFavourite}
 								cellFrames={itemCellFrames}
 								cellUrl={itemCellUrl}
 								filters={itemFilters}
@@ -1653,6 +1689,18 @@ export default function Workspace({
 									>
 										<Users size={14} />
 										Used by…
+									</button>
+									<button
+										className="ss-menu-item"
+										onClick={() => {
+											setItemMenu(null);
+											toggleFavourites(itemMenu.items);
+										}}
+									>
+										<Star size={14} />
+										{itemMenu.items.every(i => favourites.has(i.serverId)) ? 'Remove' : 'Add'}{' '}
+										{itemMenu.items.length === 1 ? 'item' : `${itemMenu.items.length} items`}{' '}
+										{itemMenu.items.every(i => favourites.has(i.serverId)) ? 'from' : 'to'} favourites
 									</button>
 									<button
 										className="ss-menu-item"
