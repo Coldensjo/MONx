@@ -1,6 +1,6 @@
 # MONx — Multi-engine support
 
-**Status: implemented** (0.1.13). This document is the reference for *why* each engine differs;
+**Status: implemented** (0.1.14). This document is the reference for *why* each engine differs;
 `engine.rs` is the authority for what MONx does about it. §6 records what shipped against the
 original phasing, §7 the Lua engines, and §8–9 what is still open.
 
@@ -509,8 +509,8 @@ would be a diff nobody asked for.
 | | Canary | BlackTek |
 |---|---|---|
 | `monsters.xml` registry | — (every script autoloads) | — |
-| `items.otb` | — (`items.xml` only) | — (`assets.dat`) |
-| `.spr` / `.dat` client | — (`appearances.dat`, protobuf) | — (`assets.dat`) |
+| `items.otb` | — (`items.xml` only; **read anyway**) | — (`assets.dat`) |
+| `.spr` / `.dat` client | — (asset bundle; **read anyway**) | — (`assets.dat`) |
 | Bestiary | ✅ `Bestiary` + `bosstiary` | — |
 | `strategiesTarget` | ✅ (`nearest`/`health`/`damage`/`random`) | — |
 | Numeric flags | inside `monster.flags` | top level, as TFS |
@@ -519,11 +519,51 @@ would be a diff nobody asked for.
 No registry means "orphan" and "dangling entry" are not findings but categories that do not
 exist; both profiles suppress `registry.*` and a file on disk *is* a live monster.
 
-No `items.otb` and no `.spr` means MONx now opens a workspace with **only** a monsters folder.
-That was a real change: items and client were required, and demanding them would have made both
-corpora unopenable in exchange for previews they cannot have. The Landing screen says what is
-missing, the editor degrades — nothing is drawn, loot ids that are numbers stay numbers — and
-everything else works.
+MONx opens a workspace with **only** a monsters folder, which it previously could not: items
+and client were both required, and demanding them would have made these corpora unopenable.
+The Landing screen says what is missing and the editor degrades rather than refusing.
+
+**Canary does get sprites**, though, because it ships a modern client asset bundle and MONx
+now reads one — see §7.1. BlackTek does not: its `assets.dat` is a different, custom format.
+
+### 7.1 Canary's sprites — the modern asset bundle
+
+MONx's whole rendering path is inherited from SPRx and reads `.spr` + `.dat`. Canary ships
+neither. It ships the 12.x+ client bundle instead, and `assets.rs` + `appearances.rs` read it —
+the second sprite backend, sitting beside the inherited one exactly as the Lua document backend
+sits beside the XML one.
+
+A bundle is `catalog-content.json` plus content-addressed files: one `appearances-<sha>.dat`
+and 4,927 `sprites-<sha>.bmp.lzma`. Canary's own `data/items/appearances.dat` turns out to be
+**byte-identical** to the client's — the sha in the filename matches — so a client of the right
+version is exactly the right asset set.
+
+Three things were needed, and the first is the only one that took a dependency:
+
+- **The sheets are not `.lzma` files** despite the extension. Each opens with a 32-byte CIP
+  header — a run of NULs, the marker `70 0A FA 80 24`, and a 7-bit-encoded length — then the
+  LZMA properties byte, the dictionary size, eight bytes the client skips outright, and then a
+  *raw* LZMA1 stream with **no end marker and no stored output size**. Nothing in the stream
+  says when to stop. `lzma-rs` is the one new dependency, chosen pure-Rust so no C toolchain
+  joins the build. Sheets decompress lazily and cache; a session touches a few dozen of 4,927.
+- **`appearances.dat` is read directly off the protobuf wire**, not through codegen — the same
+  call `spr.rs` and `dat.rs` made for their formats. Only the fields that say which sprite draws
+  what: 42,107 objects, 1,443 outfits, 242 effects, 62 missiles. Unknown fields skip by wire
+  type, so a newer client still reads.
+- **Composition reuses `colourize`.** Outfit templating works identically in both formats —
+  layer 0 is the body, layer 1 the mask — so a Canary outfit colourises from `lookHead` and
+  friends through the same code the `.spr` engines use. The four MONx protocol routes gained a
+  bundle path with identical query parameters, so the frontend cannot tell which it is talking
+  to.
+
+`items.otb` also became optional as part of this. The modern engines have no server↔client id
+split, so the file does not exist and requiring it cost the entire item database — every loot
+name and icon — for an indirection that is not there. Canary loads 37,506 items from
+`items.xml` alone, with the server id used directly as the client id.
+
+`probe_assets` is the gate: it decodes a spread of sheets, composes outfits, and writes PNGs, so
+the result can be looked at rather than trusted — a sheet that decodes to the right *size* and
+the wrong *pixels* is exactly what a byte count would miss.
 
 ### Two findings worth the whole exercise
 
@@ -539,24 +579,22 @@ everything else works.
 
 ## 8. Still open
 
-**Three engines have no item database MONx can read**, and it is always the same shape of gap —
-in the *items* layer, which none of this work touched. Their monsters open, lint and save
-correctly; what is missing is resolving a loot id to a name and a sprite.
+**Two engines still have no item database or sprites MONx can read.** Canary's are done (§7.1);
+what remains is a different file format in each case, and each is its own reader.
 
-| Engine | Ships | MONx wants |
+| Engine | Ships | Status |
 |---|---|---|
-| Nostalrius | `items.srv` (7.x text) | `items.otb` + `items.xml` |
-| Canary | `items.xml` + `appearances.dat` (protobuf) | `items.otb` |
-| BlackTek | `assets.dat` | `items.otb` |
+| Canary | `items.xml` + client asset bundle | **read** — 37,506 items, sprites, outfits |
+| Nostalrius | `items.srv` (7.x text) | not read — needs an `items.srv` parser |
+| BlackTek | `assets.dat` | not read — a custom format, not yet investigated |
 
-Canary is the closest: it has `items.xml`, so only the OTB server↔client id map is absent.
-Closing any of these means a new reader in `items.rs` — an `items.srv` parser, or an
-`appearances.dat` one, which would also be the route to sprites for the modern engines.
+Nostalrius is the smaller of the two: `items.srv` is a text format, and its sprites would come
+from an ordinary `.spr`/`.dat` pair, which MONx already reads if one is supplied. BlackTek's
+`assets.dat` begins `a3 42 00 00` and is neither OTB nor protobuf appearances; working out what
+it is comes before anything else.
 
-**Neither Lua engine can show sprites at all.** MONx's whole rendering path is inherited from
-SPRx and reads `.spr` + `.dat`; Canary and BlackTek ship a protobuf appearance bundle instead.
-This is a separate project from engine support and is why the Landing screen now says plainly
-what a monsters-only workspace gives up.
+Both engines' monsters open, lint and save correctly regardless — this is only about drawing
+them and naming their loot.
 
 **TVP's `speed=` collision is reported, not resolved.** The loader reads `speed` as the cast
 cadence and then, on a `speed` spell, again as the delta — so one node cannot carry both. MONx

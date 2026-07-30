@@ -2,9 +2,11 @@
 
 A monster editor for the Ironcore Tibia server, and for five others. **Open workspace → pick a monster → edit → save.**
 
-Opens a workspace of up to four folders: the server's `monster/` folder, its `items/` folder (`items.otb` + `items.xml`), a Tibia client folder (`Tibia.dat` + `Tibia.spr`) and optionally `spells/`. Every outfit, corpse and loot item renders as a real sprite because the client files are loaded alongside the monsters.
+Opens a workspace of up to four folders: the server's `monster/` folder, its `items/` folder, a client folder and optionally `spells/`. Every outfit, corpse and loot item renders as a real sprite because the client assets are loaded alongside the monsters.
 
-**Only the monsters folder is required.** Canary and BlackTek ship neither `items.otb` nor a `.spr`/`.dat` pair, so a workspace can open with monsters alone — nothing is drawn and loot ids stay numbers, but reading, linting and saving all work.
+**Only the monsters folder is required.** Canary and BlackTek ship no `items.otb`, so a workspace can open with monsters alone — reading, linting and saving all work regardless.
+
+**The client slot takes either kind of client.** A `.spr`/`.dat` folder goes through the inherited SPRx engine; a modern asset bundle (a folder with `catalog-content.json`, as Canary and any 12.x+ client ship) goes through `assets.rs` + `appearances.rs` instead. `items.otb` is likewise optional — without one the server id *is* the client id, which is how the modern engines address things.
 
 MONx is a fork of **SPRx** (kept at [SPRx/](SPRx/) for reference). The sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image server, the virtualized browsers — is inherited whole. What's new is the monster-XML layer on top.
 
@@ -16,7 +18,7 @@ MONx is a fork of **SPRx** (kept at [SPRx/](SPRx/) for reference). The sprite/th
 | Frontend | React 18, TypeScript, Vite |
 | Backend | Rust (`src-tauri/`) |
 | XML | `quick-xml` |
-| Binary formats | `byteorder` (OTB), hand-rolled readers (`spr.rs`, `dat.rs`) |
+| Binary formats | `byteorder` (OTB), hand-rolled readers (`spr.rs`, `dat.rs`, `appearances.rs`), `lzma-rs` (modern sprite sheets) |
 | Package manager | Bun (`packageManager: bun@1.3.14`) |
 | Icons | lucide-react |
 
@@ -82,6 +84,11 @@ On Linux use `./monx.sh` — it runs the hot-reloading dev app, forcing XWayland
 ```sh
 cargo run --example probe -- <file.spr> [out.png] [start_id]
 cargo run --example probe_dat -- <file.dat> <file.spr> [out_dir]
+
+# Modern client bundles (Canary and any 12.x+ client): decodes sheets,
+# composes outfits, and writes PNGs — the point is to look at them, since a
+# sheet can decode to the right size and the wrong pixels.
+cargo run --example probe_assets -- <assets-dir> [out_dir]
 ```
 
 ## Architecture
@@ -107,6 +114,8 @@ cargo run --example probe_dat -- <file.dat> <file.spr> [out_dir]
 │  engine.rs   — engine profiles (six servers, two formats) │
 │  luadoc.rs   — span-preserving Lua documents (Canary/BT)  │
 │  monster_lua.rs — Lua tables <-> MonsterDoc               │
+│  assets.rs   — modern client bundle: LZMA sprite sheets    │
+│  appearances.rs — appearances.dat protobuf (12.x+ things)  │
 │  otb.rs      — items.otb server↔client id map            │
 │  items.rs    — items.xml database + name search          │
 │  spr.rs      — .spr file reader (inherited, frozen)      │
