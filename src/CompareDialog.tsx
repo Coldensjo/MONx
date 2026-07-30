@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight } from 'lucide-react';
 import { getMonster, lookUrl, type MonsterDoc, type MonsterSummary } from './monster';
@@ -38,6 +39,7 @@ function MonsterSelect({
  * an unsaved edit is deliberately not part of it.
  */
 export default function CompareDialog({ monsters, initialFile, onClose, onError }: Props) {
+	const { t } = useTranslation();
 	const sorted = useMemo(() => [...monsters].sort((a, b) => a.name.localeCompare(b.name)), [monsters]);
 	const [fileA, setFileA] = useState(initialFile ?? sorted[0]?.file ?? '');
 	const [fileB, setFileB] = useState(
@@ -75,7 +77,7 @@ export default function CompareDialog({ monsters, initialFile, onClose, onError 
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal mx-cmp-modal" onMouseDown={e => e.stopPropagation()}>
-				<div className="ss-modal-title">Compare monsters</div>
+				<div className="ss-modal-title">{t('Compare monsters')}</div>
 
 				<div className="mx-cmp-heads">
 					<div className="mx-cmp-head">
@@ -85,7 +87,7 @@ export default function CompareDialog({ monsters, initialFile, onClose, onError 
 					<button
 						type="button"
 						className="ss-btn ss-btn-ghost ss-ed-mini"
-						title="Swap sides"
+						title={t('Swap sides')}
 						onClick={() => {
 							setFileA(fileB);
 							setFileB(fileA);
@@ -100,14 +102,14 @@ export default function CompareDialog({ monsters, initialFile, onClose, onError 
 				</div>
 
 				{!docA || !docB ? (
-					<div className="ss-modal-desc">Reading both monsters…</div>
+					<div className="ss-modal-desc">{t('Reading both monsters…')}</div>
 				) : (
 					<>
 						<div className="ss-modal-desc mx-cmp-bar">
 							<span>
 								{differences === 0
-									? 'These two agree on every field MONx models.'
-									: `${differences} ${differences === 1 ? 'field differs' : 'fields differ'}.`}
+									? t('These two agree on every field MONx models.')
+									: t('{{count}} field differs.', { count: differences })}
 							</span>
 							<label className="mx-scale-check">
 								<input
@@ -115,18 +117,20 @@ export default function CompareDialog({ monsters, initialFile, onClose, onError 
 									checked={diffsOnly}
 									onChange={e => setDiffsOnly(e.target.checked)}
 								/>
-								Differences only
+								{t('Differences only')}
 							</label>
 						</div>
 
 						<div className="mx-pin-list mx-cmp-list">
 							{shown.map(g => (
 								<div key={g.title}>
-									<div className="mx-cmp-group">{g.title}</div>
+									{/* Group titles and row labels are i18n keys from compare.ts.
+									    The raw English still keys the React list. */}
+									<div className="mx-cmp-group">{t(g.title)}</div>
 									{g.rows.map(r => (
 										<div className={`mx-cmp-row${r.same ? '' : ' mx-cmp-diff'}`} key={r.label}>
-											<span className="mx-cmp-label" title={r.label}>
-												{r.label}
+											<span className="mx-cmp-label" title={t(r.label)}>
+												{t(r.label)}
 											</span>
 											<span className="mx-cmp-a mono">{r.a}</span>
 											<span className="mx-cmp-b mono">{r.b}</span>
@@ -147,7 +151,7 @@ export default function CompareDialog({ monsters, initialFile, onClose, onError 
 									))}
 								</div>
 							))}
-							{shown.length === 0 && <div className="ss-ed-empty">Nothing differs.</div>}
+							{shown.length === 0 && <div className="ss-ed-empty">{t('Nothing differs.')}</div>}
 						</div>
 					</>
 				)}
@@ -155,7 +159,7 @@ export default function CompareDialog({ monsters, initialFile, onClose, onError 
 				<div className="ss-modal-buttons">
 					<div className="ss-modal-buttons-spacer" />
 					<button className="ss-btn ss-btn-primary" onClick={onClose}>
-						Done
+						{t('Done')}
 					</button>
 				</div>
 			</div>

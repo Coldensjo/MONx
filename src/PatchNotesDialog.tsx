@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from './monster';
@@ -10,9 +11,17 @@ import {
 	relativeWhen,
 	saveCutoff,
 	toMarkdown,
+	type ChangeKind,
 	type PatchCutoff,
 	type PatchMark
 } from './patchnotes';
+
+/** The badge on each group. Values are i18n keys; the wire value keys the class. */
+const KIND_LABEL: Record<ChangeKind, string> = {
+	added: 'added',
+	updated: 'updated',
+	removed: 'removed'
+};
 
 interface Props {
 	/** Display name of the workspace, for the report heading. */
@@ -32,6 +41,7 @@ interface Props {
  * offered here — on export and, when nothing changed, on its own.
  */
 export default function PatchNotesDialog({ label, monstersPath, dirty, onClose, onToast }: Props) {
+	const { t } = useTranslation();
 	const [cutoff, setCutoff] = useState<PatchCutoff | null>(() => loadCutoff(monstersPath));
 	const [now, setNow] = useState<PatchMark[] | null>(null);
 	/** Move the cut-off point to now as part of exporting. */
@@ -65,11 +75,11 @@ export default function PatchNotesDialog({ label, monstersPath, dirty, onClose, 
 		if (!now) return;
 		const next = saveCutoff(monstersPath, now);
 		if (!next) {
-			onToast('error', 'Could not store the cut-off point');
+			onToast('error', t('Could not store the cut-off point'));
 			return;
 		}
 		setCutoff(next);
-		onToast('ok', `Cut-off point set — ${now.length} ${now.length === 1 ? 'monster' : 'monsters'} marked`);
+		onToast('ok', t('Cut-off point set — {{count}} monster marked', { count: now.length }));
 	};
 
 	const exportNotes = async () => {
@@ -85,7 +95,9 @@ export default function PatchNotesDialog({ label, monstersPath, dirty, onClose, 
 			const moved = advance && saveCutoff(monstersPath, now) !== null;
 			onToast(
 				'ok',
-				`Exported ${lines} ${lines === 1 ? 'change' : 'changes'}${moved ? ' — cut-off point moved to now' : ''}`
+				moved
+					? t('Exported {{count}} change — cut-off point moved to now', { count: lines })
+					: t('Exported {{count}} change', { count: lines })
 			);
 			onClose();
 		} catch (e) {
@@ -98,7 +110,7 @@ export default function PatchNotesDialog({ label, monstersPath, dirty, onClose, 
 		if (!cutoff) return;
 		try {
 			await navigator.clipboard.writeText(toMarkdown(label, cutoff.at, changes));
-			onToast('ok', 'Patch notes copied');
+			onToast('ok', t('Patch notes copied'));
 		} catch (e) {
 			onToast('error', String(e));
 		}
@@ -107,57 +119,60 @@ export default function PatchNotesDialog({ label, monstersPath, dirty, onClose, 
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal mx-pin-modal mx-patch-modal" onMouseDown={e => e.stopPropagation()}>
-				<div className="ss-modal-title">Export patch notes</div>
+				<div className="ss-modal-title">{t('Export patch notes')}</div>
 
 				{!now ? (
-					<div className="ss-modal-desc">Reading the corpus…</div>
+					<div className="ss-modal-desc">{t('Reading the corpus…')}</div>
 				) : !cutoff ? (
 					<>
 						<div className="ss-modal-desc">
-							No cut-off point is set for this workspace yet. Set one now, edit monsters as usual, and come
-							back here — the notes will cover everything between the two.
+							{t('No cut-off point is set for this workspace yet. Set one now, edit monsters as usual, and come back here — the notes will cover everything between the two.')}
 						</div>
 						<div className="ss-modal-buttons">
 							<button className="ss-btn ss-btn-ghost" onClick={onClose}>
-								Cancel
+								{t('Cancel')}
 							</button>
 							<div className="ss-modal-buttons-spacer" />
 							<button className="ss-btn ss-btn-primary" onClick={markNow}>
-								Set cut-off point
+								{t('Set cut-off point')}
 							</button>
 						</div>
 					</>
 				) : (
 					<>
 						<div className="ss-modal-desc">
-							Cut-off point: <span className="mono">{formatWhen(cutoff.at)}</span>{' '}
+							{t('Cut-off point:')} <span className="mono">{formatWhen(cutoff.at)}</span>{' '}
 							<span className="mx-patch-ago">({relativeWhen(cutoff.at)})</span>
 						</div>
 
 						{dirty && (
 							<div className="ss-modal-desc mx-pin-warn">
-								The open monster has unsaved edits. Notes are read from disk, so those are not included
-								yet.
+								{t('The open monster has unsaved edits. Notes are read from disk, so those are not included yet.')}
 							</div>
 						)}
 
 						{lines === 0 ? (
 							<div className="ss-modal-desc">
-								No monster has changed since the cut-off point. Move it to now if you are starting a new
-								round of edits.
+								{t('No monster has changed since the cut-off point. Move it to now if you are starting a new round of edits.')}
 							</div>
 						) : (
 							<>
 								<div className="ss-modal-desc">
-									{lines.toLocaleString()} {lines === 1 ? 'change' : 'changes'} across {changes.length}{' '}
-									{changes.length === 1 ? 'monster' : 'monsters'}.
+									{t('{{count}} change across {{monsters}}.', {
+										count: lines,
+										monsters: t('{{count}} monster', { count: changes.length })
+									})}
 								</div>
 								<div className="mx-pin-list mx-patch-list">
 									{changes.map(c => (
 										<div className="mx-patch-group" key={c.file}>
 											<div className="mx-patch-monster">
 												{c.monster}
-												<span className={`mx-patch-kind mx-patch-${c.kind}`}>{c.kind}</span>
+												{/* `kind` is a wire value; the class keeps it, the badge shows
+												    a label. */}
+												<span className={`mx-patch-kind mx-patch-${c.kind}`}>
+													{t(KIND_LABEL[c.kind])}
+												</span>
 											</div>
 											{c.lines.map((l, i) => (
 												<div className="mx-patch-line" key={i}>
@@ -172,26 +187,26 @@ export default function PatchNotesDialog({ label, monstersPath, dirty, onClose, 
 
 						<label className="mx-scale-check">
 							<input type="checkbox" checked={advance} onChange={e => setAdvance(e.target.checked)} />
-							Set a new cut-off point here after exporting
+							{t('Set a new cut-off point here after exporting')}
 						</label>
 
 						<div className="ss-modal-buttons">
 							<button className="ss-btn ss-btn-ghost" onClick={onClose}>
-								Cancel
+								{t('Cancel')}
 							</button>
-							<button className="ss-btn ss-btn-ghost" onClick={markNow} title="Start the next span from now">
-								Set cut-off to now
+							<button className="ss-btn ss-btn-ghost" onClick={markNow} title={t('Start the next span from now')}>
+								{t('Set cut-off to now')}
 							</button>
 							<div className="ss-modal-buttons-spacer" />
 							<button className="ss-btn ss-btn-ghost" disabled={lines === 0} onClick={() => void copy()}>
-								Copy
+								{t('Copy')}
 							</button>
 							<button
 								className="ss-btn ss-btn-primary"
 								disabled={busy || lines === 0}
 								onClick={() => void exportNotes()}
 							>
-								{busy ? 'Exporting…' : 'Export…'}
+								{busy ? t('Exporting…') : t('Export…')}
 							</button>
 						</div>
 					</>

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { n } from './i18n';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dices } from 'lucide-react';
 import type { ItemIndex, ItemInfo, LootEntry } from './monster';
@@ -115,6 +117,7 @@ function duration(seconds: number): string {
 }
 
 export default function LootSimDialog({ loot, monsterName, items, onClose }: Props) {
+	const { t } = useTranslation();
 	const [inputs, setInputs] = useState<Inputs>(loadInputs);
 	const [resolved, setResolved] = useState<Map<LootEntry, ItemInfo | null> | null>(null);
 	const [result, setResult] = useState<SimResult | null>(null);
@@ -203,24 +206,24 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal ss-lootsim-modal" onMouseDown={e => e.stopPropagation()}>
-				<div className="ss-modal-title">Loot simulator — {monsterName}</div>
+				<div className="ss-modal-title">{t('Loot simulator — {{monster}}', { monster: monsterName })}</div>
 
 				<div className="ss-lootsim-modes">
 					<button
 						type="button"
 						className={`ss-btn ss-btn-ghost ss-ed-mini${timeMode ? ' ss-lootsim-tab-on' : ''}`}
 						onClick={() => set({ mode: 'time' })}
-						title="Hunt for a stretch of time; kills follow from the cadence"
+						title={t('Hunt for a stretch of time; kills follow from the cadence')}
 					>
-						By time
+						{t('By time')}
 					</button>
 					<button
 						type="button"
 						className={`ss-btn ss-btn-ghost ss-ed-mini${!timeMode ? ' ss-lootsim-tab-on' : ''}`}
 						onClick={() => set({ mode: 'kills' })}
-						title="Kill a fixed number of monsters instantly — no clock, no cadence"
+						title={t('Kill a fixed number of monsters instantly — no clock, no cadence')}
 					>
-						By kills
+						{t('By kills')}
 					</button>
 				</div>
 
@@ -228,9 +231,9 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 					{timeMode ? (
 						<>
 							<label className="ss-lootsim-input">
-								<span>Session</span>
-								<NumberField value={inputs.sessionMinutes} onChange={v => set({ sessionMinutes: v })} min={1} width={70} title="Session length in minutes" />
-								<span className="ss-lootsim-unit">min</span>
+								<span>{t('Session')}</span>
+								<NumberField value={inputs.sessionMinutes} onChange={v => set({ sessionMinutes: v })} min={1} width={70} title={t('Session length in minutes')} />
+								<span className="ss-lootsim-unit">{t('min')}</span>
 								{[15, 60, 180].map(m => (
 									<button
 										key={m}
@@ -243,20 +246,20 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 								))}
 							</label>
 							<label className="ss-lootsim-input">
-								<span>Per kill</span>
-								<NumberField value={inputs.killSeconds} onChange={v => set({ killSeconds: v })} min={0} width={58} title="Fight duration in seconds" />
+								<span>{t('Per kill')}</span>
+								<NumberField value={inputs.killSeconds} onChange={v => set({ killSeconds: v })} min={0} width={58} title={t('Fight duration in seconds')} />
 								<span className="ss-lootsim-unit">s</span>
 							</label>
 							<label className="ss-lootsim-input">
-								<span>Between kills</span>
-								<NumberField value={inputs.gapSeconds} onChange={v => set({ gapSeconds: v })} min={0} width={58} title="Walking, respawn, targeting" />
+								<span>{t('Between kills')}</span>
+								<NumberField value={inputs.gapSeconds} onChange={v => set({ gapSeconds: v })} min={0} width={58} title={t('Walking, respawn, targeting')} />
 								<span className="ss-lootsim-unit">s</span>
 							</label>
 						</>
 					) : (
 						<label className="ss-lootsim-input">
-							<span>Kills</span>
-							<NumberField value={inputs.kills} onChange={v => set({ kills: v })} min={0} max={100000} width={90} title="Monsters killed per run, instantly" />
+							<span>{t('Kills')}</span>
+							<NumberField value={inputs.kills} onChange={v => set({ kills: v })} min={0} max={100000} width={90} title={t('Monsters killed per run, instantly')} />
 							{[100, 1000, 10000].map(k => (
 								<button
 									key={k}
@@ -270,31 +273,31 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 						</label>
 					)}
 					<label className="ss-lootsim-input">
-						<span>Loot rate</span>
-						<NumberField value={inputs.lootRate} onChange={v => set({ lootRate: v })} min={0} step={0.5} width={58} title="Server loot-rate multiplier; chances clamp at 100%" />
+						<span>{t('Loot rate')}</span>
+						<NumberField value={inputs.lootRate} onChange={v => set({ lootRate: v })} min={0} step={0.5} width={58} title={t('Server loot-rate multiplier; chances clamp at 100%')} />
 						<span className="ss-lootsim-unit">×</span>
 					</label>
 					<label className="ss-lootsim-input">
-						<span>{timeMode ? 'Sessions' : 'Runs'}</span>
-						<NumberField value={inputs.sessions} onChange={v => set({ sessions: v })} min={1} max={1000} width={58} title="1 is a single concrete hunt; more shows the spread" />
+						<span>{timeMode ? t('Sessions') : t('Runs')}</span>
+						<NumberField value={inputs.sessions} onChange={v => set({ sessions: v })} min={1} max={1000} width={58} title={t('1 is a single concrete hunt; more shows the spread')} />
 					</label>
 					<label className="ss-lootsim-input">
-						<span>Seed</span>
-						<NumberField value={inputs.seed} onChange={v => set({ seed: v })} min={0} width={90} title="0 rolls a fresh seed each run; any other value reproduces a run exactly" />
+						<span>{t('Seed')}</span>
+						<NumberField value={inputs.seed} onChange={v => set({ seed: v })} min={0} width={90} title={t('0 rolls a fresh seed each run; any other value reproduces a run exactly')} />
 					</label>
 				</div>
 
 				<div className="ss-lootsim-derived">
 					{timeMode ? (
 						<>
-							{killsPerSession.toLocaleString()} kills per session at one kill every {cadence}s
+							{t('{{kills}} kills per session at one kill every {{cadence}}s', { kills: n(killsPerSession), cadence })}
 						</>
 					) : (
 						<>
-							{killsPerSession.toLocaleString()} kills per run, killed instantly — no clock, so totals are per run
+							{t('{{kills}} kills per run, killed instantly — no clock, so totals are per run', { kills: n(killsPerSession) })}
 						</>
 					)}
-					{ranSeed !== null && inputs.seed === 0 && <> · seed {ranSeed}</>}
+					{ranSeed !== null && inputs.seed === 0 && <> · {t('seed {{seed}}', { seed: ranSeed })}</>}
 				</div>
 
 				{result && stats && (
@@ -302,21 +305,21 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 						<div className="ss-lootsim-headline">
 							<div className="ss-lootsim-stat">
 								<span className="ss-lootsim-stat-value">{Math.round(stats.gpPerHour).toLocaleString()}</span>
-								<span className="ss-lootsim-stat-label">{timeMode ? 'gp/h' : 'gp per run'}</span>
+								<span className="ss-lootsim-stat-label">{timeMode ? t('gp/h') : t('gp per run')}</span>
 							</div>
 							<div className="ss-lootsim-stat">
 								<span className="ss-lootsim-stat-value">
 									{timeMode ? gp(stats.meanGp) : result.killsPerSession.toLocaleString()}
 								</span>
-								<span className="ss-lootsim-stat-label">{timeMode ? 'per session' : 'kills per run'}</span>
+								<span className="ss-lootsim-stat-label">{timeMode ? t('per session') : t('kills per run')}</span>
 							</div>
 							<div className="ss-lootsim-stat">
 								<span className="ss-lootsim-stat-value">{stats.gpPerKill.toFixed(1)}</span>
-								<span className="ss-lootsim-stat-label">gp per kill</span>
+								<span className="ss-lootsim-stat-label">{t('gp per kill')}</span>
 							</div>
 							<div className="ss-lootsim-stat">
 								<span className="ss-lootsim-stat-value">{Math.round(expectedPerHour).toLocaleString()}</span>
-								<span className="ss-lootsim-stat-label">{timeMode ? 'expected gp/h' : 'expected gp per run'}</span>
+								<span className="ss-lootsim-stat-label">{timeMode ? t('expected gp/h') : t('expected gp per run')}</span>
 							</div>
 						</div>
 						{/* The spread rides in the tab row rather than on a line of its own —
@@ -327,23 +330,27 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 								className={`ss-btn ss-btn-ghost ss-ed-mini${view === 'totals' ? ' ss-lootsim-tab-on' : ''}`}
 								onClick={() => setView('totals')}
 							>
-								Totals
+								{t('Totals')}
 							</button>
 							<button
 								type="button"
 								className={`ss-btn ss-btn-ghost ss-ed-mini${view === 'log' ? ' ss-lootsim-tab-on' : ''}`}
 								onClick={() => setView('log')}
-								title="Kill-by-kill corpses of the first session"
+								title={t('Kill-by-kill corpses of the first session')}
 							>
-								Corpse log
+								{t('Corpse log')}
 							</button>
 							{result.sessions > 1 && (
 								<span
 									className="ss-lootsim-spread"
-									title={`Across ${result.sessions} ${timeMode ? 'sessions' : 'runs'}, min / median / max`}
+									title={
+										timeMode
+											? t('Across {{count}} sessions, min / median / max', { count: result.sessions })
+											: t('Across {{count}} runs, min / median / max', { count: result.sessions })
+									}
 								>
 									{Math.round(stats.minRate).toLocaleString()} / {Math.round(stats.medianRate).toLocaleString()} /{' '}
-									{Math.round(stats.maxRate).toLocaleString()} {timeMode ? 'gp/h' : 'gp'} over {result.sessions}
+									{Math.round(stats.maxRate).toLocaleString()} {timeMode ? t('gp/h') : t('gp')} {t('over {{count}}', { count: result.sessions })}
 								</span>
 							)}
 						</div>
@@ -366,19 +373,23 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 									</div>
 								))}
 								{result.logTruncated && (
-									<div className="ss-lootsim-empty">Log capped at the first {result.log.length.toLocaleString()} kills.</div>
+									<div className="ss-lootsim-empty">
+										{t('Log capped at the first {{count}} kills.', { count: result.log.length })}
+									</div>
 								)}
-								{result.log.length === 0 && <div className="ss-lootsim-empty">No kills in the session.</div>}
+								{result.log.length === 0 && (
+									<div className="ss-lootsim-empty">{t('No kills in the session.')}</div>
+								)}
 							</div>
 						) : (
 						<div className="ss-lootsim-table">
 							<div className="ss-lootsim-row ss-lootsim-head">
 								<span />
-								<span>Item</span>
-								<span>Total</span>
-								<span>Drops</span>
-								<span>1st drop</span>
-								<span>Value</span>
+								<span>{t('Item')}</span>
+								<span>{t('Total')}</span>
+								<span>{t('Drops')}</span>
+								<span>{t('1st drop')}</span>
+								<span>{t('Value')}</span>
 							</div>
 							{result.items.map(item => {
 								const observed = stats.totalKills > 0 ? item.drops / stats.totalKills : 0;
@@ -391,17 +402,17 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 										<span className="mono">{Math.round(item.total / result.sessions).toLocaleString()}</span>
 										<span
 											className="mono"
-											title={`Dropped on ${item.drops.toLocaleString()} of ${stats.totalKills.toLocaleString()} kills`}
+											title={t('Dropped on {{drops}} of {{kills}} kills', { drops: n(item.drops), kills: n(stats.totalKills) })}
 										>
 											{percentText(observed * 100000)}
-											<span className="ss-lootsim-vs"> vs {percentText(Math.min(item.configured, 1) * 100000)}</span>
+											<span className="ss-lootsim-vs"> {t('vs {{chance}}', { chance: percentText(Math.min(item.configured, 1) * 100000) })}</span>
 										</span>
 										<span
 											className="mono"
 											title={
 												firstMedian !== null
-													? `Median first drop: kill ${Math.round(firstMedian)}; dropped in ${item.firstDropKills.length} of ${result.sessions} sessions`
-													: 'Never dropped'
+													? t('Median first drop: kill {{kill}}; dropped in {{hit}} of {{total}} sessions', { kill: Math.round(firstMedian), hit: item.firstDropKills.length, total: result.sessions })
+													: t('Never dropped')
 											}
 										>
 											{firstMedian === null ? (
@@ -413,7 +424,7 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 												</>
 											) : (
 												// No clock in kill mode — the kill index is the whole answer.
-												<>kill {Math.round(firstMedian).toLocaleString()}</>
+												<>{t('kill {{kill}}', { kill: n(Math.round(firstMedian)) })}</>
 											)}
 										</span>
 										<span className="mono">
@@ -425,13 +436,13 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 													)}
 												</>
 											) : (
-												<span className="ss-lootsim-vs">unpriced</span>
+												<span className="ss-lootsim-vs">{t('unpriced')}</span>
 											)}
 										</span>
 									</div>
 								);
 							})}
-							{result.items.length === 0 && <div className="ss-lootsim-empty">Nothing dropped.</div>}
+							{result.items.length === 0 && <div className="ss-lootsim-empty">{t('Nothing dropped.')}</div>}
 						</div>
 						)}
 
@@ -439,13 +450,14 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 							<div className="ss-lootsim-notes">
 								{result.deadEntries > 0 && (
 									<span>
-										{result.deadEntries} {result.deadEntries === 1 ? 'entry' : 'entries'} never drop — see lints.
+										{t('{{count}} entry never drops — see lints.', { count: result.deadEntries })}
 									</span>
 								)}
 								{result.unpricedKinds > 0 && (
 									<span>
-										{result.unpricedKinds} {result.unpricedKinds === 1 ? 'item is' : 'items are'} unpriced and
-										excluded from gp totals.
+										{t('{{count}} item is unpriced and excluded from gp totals.', {
+											count: result.unpricedKinds
+										})}
 									</span>
 								)}
 							</div>
@@ -454,22 +466,20 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 				)}
 
 				<details className="ss-lootsim-about">
-					<summary>How these numbers are produced</summary>
+					<summary>{t('How these numbers are produced')}</summary>
 					<p>
-						Per-session totals are averages over the runs. The model mirrors the documented loader rules; the
-						per-entry uniform roll and 1–countmax stack count are inferred from the TFS lineage, not Ironcore
-						source.
+						{t('Per-session totals are averages over the runs. The model mirrors the documented loader rules; the per-entry uniform roll and 1–countmax stack count are inferred from the TFS lineage, not Ironcore source.')}
 					</p>
 				</details>
 
 				<div className="ss-modal-buttons">
 					<button className="ss-btn ss-btn-ghost" onClick={onClose}>
-						Close
+						{t('Close')}
 					</button>
 					<div className="ss-modal-buttons-spacer" />
 					<button className="ss-btn ss-btn-primary" disabled={!resolved} onClick={run}>
 						<Dices size={14} />
-						{resolved ? (result ? 'Simulate again' : 'Simulate') : 'Resolving items…'}
+						{resolved ? (result ? t('Simulate again') : t('Simulate')) : t('Resolving items…')}
 					</button>
 				</div>
 			</div>

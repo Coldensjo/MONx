@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw, Search } from 'lucide-react';
 import {
@@ -33,6 +34,7 @@ const EMPTY: Binding = { primary: null, secondary: null };
  * the keyboard does.
  */
 export default function HotkeysDialog({ commands, bindings, onChange, onClose }: Props) {
+	const { t } = useTranslation();
 	const [query, setQuery] = useState('');
 	/** Which slot is listening for a key, if any. */
 	const [capturing, setCapturing] = useState<{ id: string; slot: Slot } | null>(null);
@@ -54,7 +56,7 @@ export default function HotkeysDialog({ commands, bindings, onChange, onClose }:
 			}
 		}
 		next[id] = { ...(next[id] ?? EMPTY), [slot]: chord };
-		setStolen(takenFrom && `Taken from “${takenFrom}”.`);
+		setStolen(takenFrom);
 		onChange(next);
 	};
 
@@ -130,9 +132,15 @@ export default function HotkeysDialog({ commands, bindings, onChange, onClose }:
 					shared ? ' mx-hk-chip-clash' : ''
 				}`}
 				onClick={() => setCapturing(armed ? null : { id: c.id, slot })}
-				title={armed ? 'Press a key — Esc cancels, Backspace clears' : `Set the ${slot} hotkey`}
+				title={
+					armed
+						? t('Press a key — Esc cancels, Backspace clears')
+						: slot === 'primary'
+							? t('Set the primary hotkey')
+							: t('Set the secondary hotkey')
+				}
 			>
-				{armed ? 'Press a key…' : chord ? formatChord(chord) : '—'}
+				{armed ? t('Press a key…') : chord ? formatChord(chord) : '—'}
 			</button>
 		);
 	};
@@ -140,13 +148,19 @@ export default function HotkeysDialog({ commands, bindings, onChange, onClose }:
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal mx-hk-modal" onMouseDown={e => e.stopPropagation()}>
-				<div className="ss-modal-title">Hotkeys</div>
+				<div className="ss-modal-title">{t('Hotkeys')}</div>
 
 				<div className="ss-modal-desc">
-					Click a slot, then press the keys. <span className="mono">Esc</span> cancels,{' '}
-					<span className="mono">Backspace</span> clears. Every command takes a primary and a secondary
-					binding.
-					{stolen && <span className="mx-hk-note"> {stolen}</span>}
+					{/* The two key names are literal, so they are passed in rather than
+					    left as prose a translator might localise into something that is
+					    not what is printed on the keyboard. */}
+					{t('Click a slot, then press the keys. {{cancel}} cancels, {{clear}} clears. Every command takes a primary and a secondary binding.', {
+						cancel: 'Esc',
+						clear: 'Backspace'
+					})}
+					{stolen && (
+						<span className="mx-hk-note"> {t('Taken from “{{command}}”.', { command: stolen })}</span>
+					)}
 				</div>
 
 				<div className="ss-search mx-hk-search">
@@ -154,7 +168,7 @@ export default function HotkeysDialog({ commands, bindings, onChange, onClose }:
 					<input
 						autoFocus
 						value={query}
-						placeholder="Search commands"
+						placeholder={t('Search commands')}
 						spellCheck={false}
 						onChange={e => setQuery(e.target.value)}
 					/>
@@ -163,8 +177,8 @@ export default function HotkeysDialog({ commands, bindings, onChange, onClose }:
 				<div className="mx-hk-list">
 					<div className="mx-hk-row mx-hk-head">
 						<span />
-						<span>Primary</span>
-						<span>Secondary</span>
+						<span>{t('Primary')}</span>
+						<span>{t('Secondary')}</span>
 						<span />
 					</div>
 					{groups.map(([group, list]) => (
@@ -181,7 +195,7 @@ export default function HotkeysDialog({ commands, bindings, onChange, onClose }:
 										type="button"
 										className="ss-btn ss-btn-ghost ss-ed-mini"
 										disabled={isDefault(c.id)}
-										title="Back to the default binding"
+										title={t('Back to the default binding')}
 										onClick={() => onChange({ ...bindings, [c.id]: DEFAULT_BINDINGS[c.id] ?? EMPTY })}
 									>
 										<RotateCcw size={12} />
@@ -190,16 +204,16 @@ export default function HotkeysDialog({ commands, bindings, onChange, onClose }:
 							))}
 						</div>
 					))}
-					{shown.length === 0 && <div className="ss-ed-empty">No command matches.</div>}
+					{shown.length === 0 && <div className="ss-ed-empty">{t('No command matches.')}</div>}
 				</div>
 
 				<div className="ss-modal-buttons">
 					<button className="ss-btn ss-btn-ghost" onClick={() => onChange({ ...DEFAULT_BINDINGS })}>
-						Reset all
+						{t('Reset all')}
 					</button>
 					<div className="ss-modal-buttons-spacer" />
 					<button className="ss-btn ss-btn-primary" onClick={onClose}>
-						Done
+						{t('Done')}
 					</button>
 				</div>
 			</div>

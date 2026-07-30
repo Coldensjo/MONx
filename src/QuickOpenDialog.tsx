@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { MonsterSummary } from './monster';
@@ -70,6 +71,7 @@ function Highlight({ text, at }: { text: string; at: number[] }) {
  * order is left alone — the ranking is the query's, not a history's.
  */
 export default function QuickOpenDialog({ monsters, dirtyFiles, onPick, onClose }: Props) {
+	const { t } = useTranslation();
 	const [query, setQuery] = useState('');
 	const [active, setActive] = useState(0);
 	const listRef = useRef<HTMLDivElement>(null);
@@ -132,13 +134,13 @@ export default function QuickOpenDialog({ monsters, dirtyFiles, onPick, onClose 
 						autoFocus
 						value={query}
 						spellCheck={false}
-						placeholder="Go to monster…"
+						placeholder={t('Go to monster…')}
 						onChange={e => setQuery(e.target.value)}
 						onKeyDown={onKey}
 					/>
 				</div>
 				<div className="mx-qo-list" ref={listRef}>
-					{hits.length === 0 && <div className="ss-ed-empty">No monster matches.</div>}
+					{hits.length === 0 && <div className="ss-ed-empty">{t('No monster matches.')}</div>}
 					{hits.map((h, i) => (
 						<button
 							type="button"
@@ -163,9 +165,11 @@ export default function QuickOpenDialog({ monsters, dirtyFiles, onPick, onClose 
 						</button>
 					))}
 				</div>
+				{/* Three key/verb pairs rather than one sentence with markup through
+				    it — a translator can reorder each pair freely. */}
 				<div className="mx-qo-foot">
-					<span className="mono">↑↓</span> move · <span className="mono">Enter</span> open ·{' '}
-					<span className="mono">Esc</span> close
+					<span className="mono">↑↓</span> {t('move')} · <span className="mono">Enter</span> {t('open')} ·{' '}
+					<span className="mono">Esc</span> {t('close')}
 				</div>
 			</div>
 		</div>

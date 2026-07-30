@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { pinLootIds, type PinReport } from './monster';
 
@@ -20,6 +21,7 @@ interface Props {
  * the write does — nothing is recomputed between the two.
  */
 export default function PinLootDialog({ scope, onClose, onApplied, onError }: Props) {
+	const { t } = useTranslation();
 	const ambiguousOnly = scope === 'ambiguous';
 	const [report, setReport] = useState<PinReport | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -57,34 +59,39 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal mx-pin-modal" onMouseDown={e => e.stopPropagation()}>
 				<div className="ss-modal-title">
-					{ambiguousOnly ? 'Pin ambiguous loot ids' : 'Pin all loot ids'}
+					{ambiguousOnly ? t('Pin ambiguous loot ids') : t('Pin all loot ids')}
 				</div>
 
 				{!report ? (
-					<div className="ss-modal-desc">Scanning the corpus…</div>
+					<div className="ss-modal-desc">{t('Scanning the corpus…')}</div>
 				) : (
 					<>
 						<div className="ss-modal-desc">
 							{total === 0
 								? ambiguousOnly
-									? 'No loot entry names an ambiguous item. Nothing to pin.'
-									: 'Every loot entry is already pinned to an id and named.'
-								: `${total.toLocaleString()} loot ${total === 1 ? 'entry' : 'entries'} in ${report.files} ${
-										report.files === 1 ? 'file' : 'files'
-									} become id + a trailing comment naming the item.`}
+									? t('No loot entry names an ambiguous item. Nothing to pin.')
+									: t('Every loot entry is already pinned to an id and named.')
+								: t('{{count}} loot entry in {{files}} becomes id + a trailing comment naming the item.', {
+										count: total,
+										files: t('{{count}} file', { count: report.files })
+									})}
 							{!ambiguousOnly && count > 0 && (
 								<>
 									{' '}
-									{report.pinned.filter(p => p.ambiguous).length} of them are ambiguous names the server
-									drops today.
+									{t('{{count}} of them are ambiguous names the server drops today.', {
+										count: report.pinned.filter(p => p.ambiguous).length
+									})}
 								</>
 							)}
+							{/* Verb and pronoun both agree with the count, so the whole
+							    sentence is one message per plural form. */}
 							{named.length > 0 && (
 								<>
 									{' '}
-									{named.length.toLocaleString()} {named.length === 1 ? 'was' : 'were'} already an id
-									with nothing saying what it is; {named.length === 1 ? 'it gains' : 'they gain'} only
-									the comment.
+									{t(
+										'{{count}} was already an id with nothing saying what it is; it gains only the comment.',
+										{ count: named.length }
+									)}
 								</>
 							)}
 						</div>
@@ -97,7 +104,7 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 										<span>
 											name="{p.name}" → id="{p.id}" &lt;!-- {p.name} --&gt;
 										</span>
-										{p.ambiguous && <span className="mx-pin-flag">ambiguous</span>}
+										{p.ambiguous && <span className="mx-pin-flag">{t('ambiguous')}</span>}
 									</div>
 								))}
 								{named.slice(0, Math.max(0, PREVIEW_ROWS - count)).map((n, i) => (
@@ -109,33 +116,39 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 									</div>
 								))}
 								{total > PREVIEW_ROWS && (
-									<div className="mx-pin-more">and {(total - PREVIEW_ROWS).toLocaleString()} more</div>
+									<div className="mx-pin-more">
+										{t('and {{count}} more', { count: total - PREVIEW_ROWS })}
+									</div>
 								)}
 							</div>
 						)}
 
 						{report.unresolved.length > 0 && (
 							<div className="ss-modal-desc mx-pin-warn">
-								{report.unresolved.length} {report.unresolved.length === 1 ? 'name' : 'names'} match no
-								items.xml entry and are left untouched — MONx never invents an item id. First:{' '}
-								{report.unresolved
-									.slice(0, 3)
-									.map(u => `${u.file}: "${u.name}"`)
-									.join(', ')}
-								.
+								{t(
+									'{{count}} name matches no items.xml entry and is left untouched — MONx never invents an item id. First: {{list}}.',
+									{
+										count: report.unresolved.length,
+										list: report.unresolved
+											.slice(0, 3)
+											.map(u => `${u.file}: "${u.name}"`)
+											.join(', ')
+									}
+								)}
 							</div>
 						)}
 
 						<div className="ss-modal-desc">
-							Every changed file is backed up to <span className="mono">.monx-backup/</span> before it is
-							rewritten.
+							{t('Every changed file is backed up to {{folder}} before it is rewritten.', {
+								folder: '.monx-backup/'
+							})}
 						</div>
 					</>
 				)}
 
 				<div className="ss-modal-buttons">
 					<button className="ss-btn ss-btn-ghost" onClick={onClose}>
-						Cancel
+						{t('Cancel')}
 					</button>
 					<div className="ss-modal-buttons-spacer" />
 					<button
@@ -143,7 +156,7 @@ export default function PinLootDialog({ scope, onClose, onApplied, onError }: Pr
 						disabled={busy || !report || total === 0}
 						onClick={() => void apply()}
 					>
-						{busy ? 'Pinning…' : total > 0 ? `Pin ${total.toLocaleString()}` : 'Pin'}
+						{busy ? t('Pinning…') : total > 0 ? t('Pin {{count}}', { count: total }) : t('Pin')}
 					</button>
 				</div>
 			</div>

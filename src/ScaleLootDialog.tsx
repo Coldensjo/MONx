@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { scaleLootChances, tauriItemIndex, type ScaleOptions, type ScaleReport, type ScaledEntry } from './monster';
 import { NumberField } from './fields/NumberField';
@@ -41,6 +42,7 @@ function group(sample: ScaledEntry[]): FileGroup[] {
  * the list said it would.
  */
 export default function ScaleLootDialog({ initialItemId = null, onClose, onApplied, onError }: Props) {
+	const { t } = useTranslation();
 	const [itemId, setItemId] = useState<number | null>(initialItemId);
 	/** False multiplies the existing chance; true sets a flat chance. */
 	const [set, setSet] = useState(false);
@@ -118,30 +120,30 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal mx-pin-modal mx-scale-modal" onMouseDown={e => e.stopPropagation()}>
-				<div className="ss-modal-title">Scale loot chances</div>
+				<div className="ss-modal-title">{t('Scale loot chances')}</div>
 
 				<div className="mx-scale-controls">
 					<label className="mx-scale-row">
-						<span className="mx-scale-label">Item</span>
+						<span className="mx-scale-label">{t('Item')}</span>
 						<ItemPicker
 							index={tauriItemIndex}
 							value={itemId}
 							onChange={item => setItemId(item.serverId)}
 							onClear={() => setItemId(null)}
-							placeholder="Every item in the corpus"
+							placeholder={t('Every item in the corpus')}
 						/>
 					</label>
 
 					<div className="mx-scale-row">
-						<span className="mx-scale-label">Change</span>
+						<span className="mx-scale-label">{t('Change')}</span>
 						<div className="mx-scale-modes">
 							<label className="mx-scale-mode">
 								<input type="radio" checked={!set} onChange={() => setSet(false)} />
-								Multiply by
+								{t('Multiply by')}
 							</label>
 							<label className="mx-scale-mode">
 								<input type="radio" checked={set} onChange={() => setSet(true)} />
-								Set to
+								{t('Set to')}
 							</label>
 							<NumberField
 								value={percent}
@@ -158,40 +160,43 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 
 					<label className="mx-scale-check">
 						<input type="checkbox" checked={keepNonzero} onChange={e => setKeepNonzero(e.target.checked)} />
-						Never scale a drop down to never — floor it at 0.001% instead
+						{t('Never scale a drop down to never — floor it at 0.001% instead')}
 					</label>
 				</div>
 
 				<div className="ss-modal-desc">
 					{itemId === null
-						? 'Every loot chance in the corpus is matched. Pick an item to scale just that drop.'
-						: 'Every monster dropping this item is matched, nested container entries included.'}{' '}
+						? t('Every loot chance in the corpus is matched. Pick an item to scale just that drop.')
+						: t('Every monster dropping this item is matched, nested container entries included.')}{' '}
 					{set
-						? `Matched entries become a flat ${percent}% drop.`
-						: 'Matched chances are multiplied, then clamped to 0–100%.'}{' '}
-					Entries that would not change are left untouched.
+						? t('Matched entries become a flat {{percent}}% drop.', { percent })
+						: t('Matched chances are multiplied, then clamped to 0–100%.')}{' '}
+					{t('Entries that would not change are left untouched.')}
 				</div>
 
-				{noop && <div className="ss-modal-desc">Pick a factor other than 100% to see what changes.</div>}
-				{!noop && !report && <div className="ss-modal-desc">Previewing…</div>}
+				{noop && (
+					<div className="ss-modal-desc">{t('Pick a factor other than 100% to see what changes.')}</div>
+				)}
+				{!noop && !report && <div className="ss-modal-desc">{t('Previewing…')}</div>}
 
 				{report && (
 					<>
 						<div className="ss-modal-desc mx-scale-summary">
 							{report.entries === 0 ? (
-								'Nothing changes at these settings.'
+								t('Nothing changes at these settings.')
 							) : (
 								<>
-									{entries.toLocaleString()} {entries === 1 ? 'entry' : 'entries'} across {files}{' '}
-									{files === 1 ? 'file' : 'files'} change.
-									{excluded.size > 0 && ` ${excluded.size} unticked.`}
+									{t('{{count}} entry across {{files}} change.', {
+										count: entries,
+										files: t('{{count}} file', { count: files })
+									})}
+									{excluded.size > 0 && ` ${t('{{count}} unticked.', { count: excluded.size })}`}
 								</>
 							)}
 							{report.zeroed > 0 && (
 								<span className="mx-pin-warn">
 									{' '}
-									{report.zeroed} {report.zeroed === 1 ? 'entry stops' : 'entries stop'} dropping
-									entirely.
+									{t('{{count}} entry stops dropping entirely.', { count: report.zeroed })}
 								</span>
 							)}
 						</div>
@@ -205,7 +210,7 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 										onClick={() => setExcluded(new Set())}
 										disabled={excluded.size === 0}
 									>
-										Select all
+										{t('Select all')}
 									</button>
 									<button
 										type="button"
@@ -213,7 +218,7 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 										onClick={() => setExcluded(new Set(groups.map(g => g.file)))}
 										disabled={excluded.size === groups.length}
 									>
-										Select none
+										{t('Select none')}
 									</button>
 								</div>
 
@@ -235,7 +240,7 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 												{g.entries.map((e, i) => (
 													<span className="mx-scale-entry" key={i}>
 														<ItemSprite serverId={e.itemId} size={20} />
-														<span className="mx-scale-name">{e.label || 'entry'}</span>
+														<span className="mx-scale-name">{e.label || t('entry')}</span>
 														<span className="mono mx-scale-from">{percentText(e.from)}</span>
 														<span className="mx-scale-arrow">→</span>
 														<span className="mono mx-scale-to">{percentText(e.to)}</span>
@@ -247,8 +252,9 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 									))}
 									{report.truncated && (
 										<div className="mx-pin-more">
-											and {(report.entries - report.sample.length).toLocaleString()} more entries not
-											listed — they are scaled too
+											{t('and {{count}} more entries not listed — they are scaled too', {
+												count: report.entries - report.sample.length
+											})}
 										</div>
 									)}
 								</div>
@@ -256,15 +262,16 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 						)}
 
 						<div className="ss-modal-desc">
-							Every changed file is backed up to <span className="mono">.monx-backup/</span> before it is
-							rewritten.
+							{t('Every changed file is backed up to {{folder}} before it is rewritten.', {
+								folder: '.monx-backup/'
+							})}
 						</div>
 					</>
 				)}
 
 				<div className="ss-modal-buttons">
 					<button className="ss-btn ss-btn-ghost" onClick={onClose}>
-						Cancel
+						{t('Cancel')}
 					</button>
 					<div className="ss-modal-buttons-spacer" />
 					<button
@@ -272,7 +279,11 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 						disabled={busy || !report || entries === 0 || noop}
 						onClick={() => void apply()}
 					>
-						{busy ? 'Scaling…' : report && entries > 0 ? `Scale ${entries.toLocaleString()}` : 'Scale'}
+						{busy
+							? t('Scaling…')
+							: report && entries > 0
+								? t('Scale {{count}}', { count: entries })
+								: t('Scale')}
 					</button>
 				</div>
 			</div>

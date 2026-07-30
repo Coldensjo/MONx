@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -76,6 +77,7 @@ function describe(x: number, y: number): Info | null {
 }
 
 export default function UiInspector() {
+	const { t } = useTranslation();
 	const [info, setInfo] = useState<Info | null>(null);
 	const [copied, setCopied] = useState(false);
 	const active = useRef(false);
@@ -167,7 +169,7 @@ export default function UiInspector() {
 				</div>
 			</div>
 			<div className="mx-inspect-hint">
-				{copied ? 'Copied' : `Hold ${HOTKEY} · click to copy`}
+				{copied ? t('Copied') : t('Hold {{key}} · click to copy', { key: HOTKEY })}
 			</div>
 		</div>
 	);

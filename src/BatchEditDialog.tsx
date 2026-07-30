@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { batchEdit, type BatchChange, type BatchFilter, type BatchReport, type BatchTarget } from './monster';
 import { NumberField } from './fields/NumberField';
@@ -138,13 +139,14 @@ function TriSelect({
 	yes: string;
 	no: string;
 }) {
+	const { t } = useTranslation();
 	return (
 		<select
 			className="ss-ed-input"
 			value={value === null ? '' : value ? 'y' : 'n'}
 			onChange={e => onChange(e.target.value === '' ? null : e.target.value === 'y')}
 		>
-			<option value="">Any</option>
+			<option value="">{t('Any')}</option>
 			<option value="y">{yes}</option>
 			<option value="n">{no}</option>
 		</select>
@@ -158,6 +160,7 @@ function TriSelect({
  * splices, so an insert is the only thing that moves the rest of the file.
  */
 export default function BatchEditDialog({ species, onClose, onApplied, onError }: Props) {
+	const { t } = useTranslation();
 	const [name, setName] = useState('');
 	const [race, setRace] = useState('');
 	const [speciesFilter, setSpeciesFilter] = useState('');
@@ -222,7 +225,7 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 	useEffect(() => {
 		setExcluded(new Set());
 		let live = true;
-		const t = setTimeout(() => {
+		const timer = setTimeout(() => {
 			batchEdit(filter, wire, [], false)
 				.then(r => {
 					if (!live) return;
@@ -239,7 +242,7 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 		}, 300);
 		return () => {
 			live = false;
-			clearTimeout(t);
+			clearTimeout(timer);
 		};
 	}, [filter, wire]);
 
@@ -267,7 +270,7 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 	};
 
 	const valueField = () => {
-		if (op === 'clear') return <span className="ss-ed-field-note">Removes the value entirely.</span>;
+		if (op === 'clear') return <span className="ss-ed-field-note">{t('Removes the value entirely.')}</span>;
 		switch (target.value) {
 			case 'bool':
 				return (
@@ -318,18 +321,18 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal mx-pin-modal mx-batch-modal" onMouseDown={e => e.stopPropagation()}>
-				<div className="ss-modal-title">Batch edit</div>
+				<div className="ss-modal-title">{t('Batch edit')}</div>
 
-				<div className="mx-batch-section">Which monsters</div>
+				<div className="mx-batch-section">{t('Which monsters')}</div>
 				<div className="mx-batch-filters">
 					<label className="mx-batch-row">
-						<span className="mx-batch-label">Name contains</span>
+						<span className="mx-batch-label">{t('Name contains')}</span>
 						<TextField value={name} onChange={setName} />
 					</label>
 					<label className="mx-batch-row">
-						<span className="mx-batch-label">Race</span>
+						<span className="mx-batch-label">{t('Race')}</span>
 						<select className="ss-ed-input" value={race} onChange={e => setRace(e.target.value)}>
-							<option value="">Any</option>
+							<option value="">{t('Any')}</option>
 							{RACES.map(r => (
 								<option key={r.value} value={r.value}>
 									{r.label}
@@ -338,13 +341,13 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 						</select>
 					</label>
 					<label className="mx-batch-row">
-						<span className="mx-batch-label">Species</span>
+						<span className="mx-batch-label">{t('Species')}</span>
 						<select
 							className="ss-ed-input"
 							value={speciesFilter}
 							onChange={e => setSpeciesFilter(e.target.value)}
 						>
-							<option value="">Any</option>
+							<option value="">{t('Any')}</option>
 							{species.map(s => (
 								<option key={s} value={s}>
 									{s}
@@ -353,22 +356,22 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 						</select>
 					</label>
 					<div className="mx-batch-row">
-						<span className="mx-batch-label">Experience</span>
+						<span className="mx-batch-label">{t('Experience')}</span>
 						<NumberField value={minExp ?? 0} onChange={v => setMinExp(v || null)} min={0} width={92} />
-						<span className="ss-ed-field-note">to</span>
+						<span className="ss-ed-field-note">{t('to')}</span>
 						<NumberField value={maxExp ?? 0} onChange={v => setMaxExp(v || null)} min={0} width={92} />
-						<span className="ss-ed-field-note">0 = no bound</span>
+						<span className="ss-ed-field-note">{t('0 = no bound')}</span>
 					</div>
 					<div className="mx-batch-row">
-						<span className="mx-batch-label">Health</span>
+						<span className="mx-batch-label">{t('Health')}</span>
 						<NumberField value={minHp ?? 0} onChange={v => setMinHp(v || null)} min={0} width={92} />
-						<span className="ss-ed-field-note">to</span>
+						<span className="ss-ed-field-note">{t('to')}</span>
 						<NumberField value={maxHp ?? 0} onChange={v => setMaxHp(v || null)} min={0} width={92} />
 					</div>
 					<div className="mx-batch-row">
-						<span className="mx-batch-label">Has flag</span>
+						<span className="mx-batch-label">{t('Has flag')}</span>
 						<select className="ss-ed-input" value={flag} onChange={e => setFlag(e.target.value)}>
-							<option value="">Any</option>
+							<option value="">{t('Any')}</option>
 							{ALL_FLAGS.map(f => (
 								<option key={f.key} value={f.key}>
 									{f.label}
@@ -377,27 +380,27 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 						</select>
 						{flag && (
 							<>
-								<span className="ss-ed-field-note">at value</span>
-								<TextField value={flagValue} onChange={setFlagValue} placeholder="any" />
+								<span className="ss-ed-field-note">{t('at value')}</span>
+								<TextField value={flagValue} onChange={setFlagValue} placeholder={t('any')} />
 							</>
 						)}
 					</div>
 					<div className="mx-batch-row">
-						<span className="mx-batch-label">Registered</span>
-						<TriSelect value={registered} onChange={setRegistered} yes="In monsters.xml" no="Orphan" />
-						<span className="mx-batch-label">Loot</span>
-						<TriSelect value={hasLoot} onChange={setHasLoot} yes="Has loot" no="No loot" />
+						<span className="mx-batch-label">{t('Registered')}</span>
+						<TriSelect value={registered} onChange={setRegistered} yes={t('In monsters.xml')} no={t('Orphan')} />
+						<span className="mx-batch-label">{t('Loot')}</span>
+						<TriSelect value={hasLoot} onChange={setHasLoot} yes={t('Has loot')} no={t('No loot')} />
 					</div>
 				</div>
 
-				<div className="mx-batch-section">What to change</div>
+				<div className="mx-batch-section">{t('What to change')}</div>
 				<div className="mx-batch-row">
 					<select className="ss-ed-input" value={targetId} onChange={e => setTargetId(e.target.value)}>
 						{groups.map(g => (
-							<optgroup key={g} label={g}>
-								{TARGETS.filter(t => t.group === g).map(t => (
-									<option key={t.id} value={t.id}>
-										{t.label}
+							<optgroup key={g} label={t(g)}>
+								{TARGETS.filter(x => x.group === g).map(x => (
+									<option key={x.id} value={x.id}>
+										{t(x.label)}
 									</option>
 								))}
 							</optgroup>
@@ -406,7 +409,7 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 					<select className="ss-ed-input" value={op} onChange={e => setOp(e.target.value as Op)}>
 						{target.ops.map(o => (
 							<option key={o} value={o}>
-								{OP_LABEL[o]}
+								{t(OP_LABEL[o])}
 							</option>
 						))}
 					</select>
@@ -414,21 +417,28 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 				</div>
 
 				{error && <div className="ss-modal-desc mx-pin-warn">{error}</div>}
-				{!error && !report && <div className="ss-modal-desc">Previewing…</div>}
+				{!error && !report && <div className="ss-modal-desc">{t('Previewing…')}</div>}
 
 				{report && (
 					<>
 						<div className="ss-modal-desc">
-							{report.matched.toLocaleString()} {report.matched === 1 ? 'monster matches' : 'monsters match'}
+							{/* The old form read "1 changes" / "2 change" — the branches were
+							    the wrong way round. Rebuilt as one sentence per plural form. */}
 							{report.changed === 0
-								? ' — none of them change at these settings.'
-								: `, ${changed.toLocaleString()} ${changed === 1 ? 'changes' : 'change'}.`}
+								? t('{{count}} monster matches — none of them change at these settings.', {
+										count: report.matched
+									})
+								: t('{{count}} monster matches, {{changed}}.', {
+										count: report.matched,
+										changed: t('{{count}} change', { count: changed })
+									})}
 							{report.structural > 0 && (
 								<span className="mx-batch-insert">
 									{' '}
-									{report.structural} of them {report.structural === 1 ? 'adds' : 'add'} or{' '}
-									{report.structural === 1 ? 'removes' : 'remove'} a node rather than changing one in
-									place, so those files shift every line below the edit.
+									{t(
+										'{{count}} of them adds or removes a node rather than changing one in place, so those files shift every line below the edit.',
+										{ count: report.structural }
+									)}
 								</span>
 							)}
 						</div>
@@ -442,7 +452,7 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 										disabled={excluded.size === 0}
 										onClick={() => setExcluded(new Set())}
 									>
-										Select all
+										{t('Select all')}
 									</button>
 									<button
 										type="button"
@@ -450,7 +460,7 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 										disabled={excluded.size === rows.length}
 										onClick={() => setExcluded(new Set(rows.map(r => r.file)))}
 									>
-										Select none
+										{t('Select none')}
 									</button>
 								</div>
 								<div className="mx-pin-list mx-scale-list">
@@ -473,7 +483,7 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 												<span className="mono mx-scale-to">{r.to}</span>
 												{r.structural && (
 													<span className="mx-batch-new">
-														{r.to === '(absent)' ? 'removed' : 'new'}
+														{r.to === '(absent)' ? t('removed') : t('new')}
 													</span>
 												)}
 											</span>
@@ -481,8 +491,9 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 									))}
 									{report.truncated && (
 										<div className="mx-pin-more">
-											and {(report.changed - report.sample.length).toLocaleString()} more not listed —
-											they change too
+											{t('and {{count}} more not listed — they change too', {
+												count: report.changed - report.sample.length
+											})}
 										</div>
 									)}
 								</div>
@@ -490,15 +501,16 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 						)}
 
 						<div className="ss-modal-desc">
-							Every changed file is backed up to <span className="mono">.monx-backup/</span> before it is
-							rewritten.
+							{t('Every changed file is backed up to {{folder}} before it is rewritten.', {
+								folder: '.monx-backup/'
+							})}
 						</div>
 					</>
 				)}
 
 				<div className="ss-modal-buttons">
 					<button className="ss-btn ss-btn-ghost" onClick={onClose}>
-						Cancel
+						{t('Cancel')}
 					</button>
 					<div className="ss-modal-buttons-spacer" />
 					<button
@@ -506,7 +518,7 @@ export default function BatchEditDialog({ species, onClose, onApplied, onError }
 						disabled={busy || !report || changed === 0}
 						onClick={() => void apply()}
 					>
-						{busy ? 'Changing…' : changed > 0 ? `Change ${changed.toLocaleString()}` : 'Change'}
+						{busy ? t('Changing…') : changed > 0 ? t('Change {{count}}', { count: changed }) : t('Change')}
 					</button>
 				</div>
 			</div>

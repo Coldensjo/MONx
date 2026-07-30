@@ -1,5 +1,8 @@
 import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { t } from 'i18next';
 import { ChevronDown, ChevronRight, Dices, Package, Plus, Trash2 } from 'lucide-react';
+import { n } from '../i18n';
 import LootSimDialog from '../LootSimDialog';
 import type { ItemIndex, LootEntry } from '../monster';
 import { Field } from '../fields/Field';
@@ -54,11 +57,11 @@ export function percentText(chance: number): string {
  * instead — "3 in 4" is not how anyone says 75%.
  */
 export function oddsText(chance: number): string {
-	if (chance <= 0) return 'never';
-	if (chance >= MAX_CHANCE) return 'always';
+	if (chance <= 0) return t('never');
+	if (chance >= MAX_CHANCE) return t('always');
 	const ratio = MAX_CHANCE / chance;
 	if (ratio < 2) return percentText(chance);
-	return `1 in ${Math.round(ratio).toLocaleString()}`;
+	return t('1 in {{odds}}', { odds: n(Math.round(ratio)) });
 }
 
 /**
@@ -105,6 +108,8 @@ const LootRow = memo(function LootRow({
 	checked,
 	onToggleCheck
 }: RowProps) {
+	// memo boundary — subscribes so a language change reaches these rows.
+	const { t } = useTranslation();
 	const [expanded, setExpanded] = useState(false);
 	/** Percent being typed into the chance field; null when it is not focused. */
 	const [chanceDraft, setChanceDraft] = useState<number | null>(null);
@@ -143,14 +148,14 @@ const LootRow = memo(function LootRow({
 						checked={checked ?? false}
 						disabled={readOnly}
 						onChange={() => onToggleCheck(rowIndex)}
-						title="Select for delete / scale"
+						title={t('Select for delete / scale')}
 					/>
 				)}
 				<button
 					type="button"
 					className="ss-ed-loot-expand"
 					onClick={() => setExpanded(x => !x)}
-					title={expanded ? 'Hide details' : 'Show subtype, action id and text'}
+					title={expanded ? t('Hide details') : t('Show subtype, action id and text')}
 				>
 					{expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
 				</button>
@@ -160,19 +165,19 @@ const LootRow = memo(function LootRow({
 				<span className="ss-ed-loot-id">{serverId ?? '—'}</span>
 
 				<span className="ss-ed-loot-name">
-					{info?.name ?? entry.name ?? (entry.id !== null ? `id ${entry.id}` : 'unresolved')}
+					{info?.name ?? entry.name ?? (entry.id !== null ? t('id {{id}}', { id: entry.id }) : t('unresolved'))}
 					{container && <Package size={12} className="ss-ed-loot-container-mark" />}
 					{info?.ambiguousName && entry.id === null && (
 						<button
 							type="button"
 							className="ss-ed-ambiguous"
 							disabled={readOnly}
-							title="This name belongs to more than one item, so the server drops the entry. Pin it to a single id."
+							title={t('This name belongs to more than one item, so the server drops the entry. Pin it to a single id.')}
 							// The name is what made the row readable, so it moves into a
 							// trailing comment — the file keeps saying what the id is.
 							onClick={() => onChange({ ...entry, id: info.serverId, name: null, comment: entry.comment ?? info.name })}
 						>
-							ambiguous — pin id
+							{t('ambiguous — pin id')}
 						</button>
 					)}
 					{entry.comment && <span className="ss-ed-loot-comment">{entry.comment}</span>}
@@ -206,19 +211,19 @@ const LootRow = memo(function LootRow({
 						hardMax={MAX_COUNTMAX}
 						width={58}
 						disabled={readOnly}
-						title="Hard maximum 100 — a larger value makes the server drop the whole entry"
+						title={t('Hard maximum 100 — a larger value makes the server drop the whole entry')}
 					/>
 					{countLints.length > 0 && <FieldLint lints={countLints} />}
 				</span>
 
-				<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" disabled={readOnly} title="Remove" onClick={onRemove}>
+				<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" disabled={readOnly} title={t('Remove')} onClick={onRemove}>
 					<Trash2 size={14} />
 				</button>
 			</div>
 
 			{expanded && (
 				<div className="ss-ed-loot-detail" style={{ paddingLeft: 48 + depth * 20 }}>
-					<Field label="Subtype" hint="fluid, charges" lints={lintAt(`${path}.subtype`)}>
+					<Field label={t('Subtype')} hint={t('fluid, charges')} lints={lintAt(`${path}.subtype`)}>
 						<NumberField
 							value={entry.subtype ?? -1}
 							onChange={v => onChange({ ...entry, subtype: v })}
@@ -227,9 +232,9 @@ const LootRow = memo(function LootRow({
 						/>
 					</Field>
 					<Field
-						label="Action id"
+						label={t('Action id')}
 						lints={lintAt(`${path}.actionId`)}
-						note="Spelled actionId — the lower-case spelling is silently ignored by the server."
+						note={t('Spelled actionId — the lower-case spelling is silently ignored by the server.')}
 					>
 						<NumberField
 							value={entry.actionId ?? -1}
@@ -238,21 +243,28 @@ const LootRow = memo(function LootRow({
 							disabled={readOnly}
 						/>
 					</Field>
-					<Field label="Text" lints={lintAt(`${path}.text`)}>
+					<Field label={t('Text')} lints={lintAt(`${path}.text`)}>
 						<TextField
 							value={entry.text ?? ''}
 							onChange={v => onChange({ ...entry, text: v === '' ? null : v })}
 							disabled={readOnly}
 						/>
 					</Field>
-					<Field label="Comment" note="Written after the entry as an XML comment. Set to the item name when the entry is added by id.">
+					<Field
+						label={t('Comment')}
+						note={t('Written after the entry as an XML comment. Set to the item name when the entry is added by id.')}
+					>
 						<TextField
 							value={entry.comment ?? ''}
 							onChange={v => onChange({ ...entry, comment: v === '' ? null : v })}
 							disabled={readOnly}
 						/>
 					</Field>
-					{container && <div className="ss-ed-field-note">Drop an item onto this row to nest it inside the container.</div>}
+					{container && (
+						<div className="ss-ed-field-note">
+							{t('Drop an item onto this row to nest it inside the container.')}
+						</div>
+					)}
 				</div>
 			)}
 
@@ -276,6 +288,7 @@ const LootRow = memo(function LootRow({
 });
 
 export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	const [adding, setAdding] = useState(false);
 	const [simulating, setSimulating] = useState(false);
 	/** Top-level row indices in the multi-selection. */
@@ -323,15 +336,15 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 			onToggle={() => onToggle('loot')}
 			summary={
 				<>
-					{doc.loot.length === 1 ? '1 drop' : `${doc.loot.length} drops`}
+					{t('{{count}} drop', { count: doc.loot.length })}
 					<button
 						type="button"
 						className="ss-btn ss-ed-mini ss-ed-sim"
-						title="Simulate a hunting session over this loot — runs on the unsaved buffer"
+						title={t('Simulate a hunting session over this loot — runs on the unsaved buffer')}
 						onClick={() => setSimulating(true)}
 					>
 						<Dices size={13} />
-						Simulate…
+						{t('Simulate…')}
 					</button>
 					{/* Lives in the header slot so it opens even while the section is collapsed. */}
 					{simulating && (
@@ -341,7 +354,9 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 			}
 		>
 			<div className="ss-ed-loot" {...listDrop}>
-				{doc.loot.length === 0 && <div className="ss-ed-empty">No loot. Drop items here from the Items browser.</div>}
+				{doc.loot.length === 0 && (
+					<div className="ss-ed-empty">{t('No loot. Drop items here from the Items browser.')}</div>
+				)}
 				{doc.loot.map((entry, i) => (
 					<LootRow
 						key={i}
@@ -363,13 +378,13 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 
 			{checked.size > 0 && (
 				<div className="ss-ed-loot-bulk">
-					<span>{checked.size} selected</span>
+					<span>{t('{{count}} selected', { count: checked.size })}</span>
 					<button type="button" className="ss-btn ss-ed-mini" disabled={readOnly} onClick={deleteChecked}>
 						<Trash2 size={13} />
-						Delete
+						{t('Delete')}
 					</button>
 					<span className="ss-ed-loot-bulk-scale">
-						Scale chances to
+						{t('Scale chances to')}
 						<NumberField value={scalePct} onChange={setScalePct} min={0} max={10000} width={64} disabled={readOnly} />
 						%
 						<button
@@ -378,11 +393,11 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 							disabled={readOnly || scalePct === 100}
 							onClick={scaleChecked}
 						>
-							Apply
+							{t('Apply')}
 						</button>
 					</span>
 					<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => setChecked(new Set())}>
-						Clear selection
+						{t('Clear selection')}
 					</button>
 				</div>
 			)}
@@ -398,24 +413,26 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 							setAdding(false);
 						}}
 						disabled={readOnly}
-						placeholder="Search items…"
+						placeholder={t('Search items…')}
 					/>
 				) : (
 					<button type="button" className="ss-btn" disabled={readOnly} onClick={() => setAdding(true)}>
 						<Plus size={14} />
-						Add item
+						{t('Add item')}
 					</button>
 				)}
 				<button
 					type="button"
 					className="ss-btn ss-btn-ghost"
 					disabled={readOnly || doc.loot.length < 2}
-					title="Rarest last"
+					title={t('Rarest last')}
 					onClick={() => setLoot([...doc.loot].sort((a, b) => b.chance - a.chance))}
 				>
-					Sort by chance
+					{t('Sort by chance')}
 				</button>
-				<span className="ss-ed-field-note">Chance is out of 100,000 in the file; shown here as a percent.</span>
+				<span className="ss-ed-field-note">
+					{t('Chance is out of 100,000 in the file; shown here as a percent.')}
+				</span>
 			</div>
 		</Section>
 	);

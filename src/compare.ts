@@ -1,3 +1,4 @@
+import { t } from 'i18next';
 import type { LootEntry, MonsterDoc, SpellBlock } from './monster';
 import { percentText } from './sections/Loot';
 import { BOOLEAN_FLAGS, NUMERIC_FLAGS } from './catalog';
@@ -92,7 +93,7 @@ export function compareDocs(a: MonsterDoc, b: MonsterDoc): CompareGroup[] {
 	const flagText = (d: MonsterDoc, key: string): string => {
 		const v = d.flags[key];
 		if (v === undefined) return ABSENT;
-		return typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v);
+		return typeof v === 'boolean' ? (v ? t('yes') : t('no')) : String(v);
 	};
 
 	const lootA = lootIndex(a.loot);
@@ -104,7 +105,7 @@ export function compareDocs(a: MonsterDoc, b: MonsterDoc): CompareGroup[] {
 			rows: [
 				row('File', a.file, b.file),
 				row('Race id', text(a.raceid?.toString()), text(b.raceid?.toString())),
-				row('Registered', a.registered ? 'yes' : 'no', b.registered ? 'yes' : 'no'),
+				row('Registered', a.registered ? t('yes') : t('no'), b.registered ? t('yes') : t('no')),
 				row('Blood', text(a.race), text(b.race)),
 				row('Species', text(a.species), text(b.species)),
 				row('Skull', a.skull, b.skull),
@@ -134,7 +135,7 @@ export function compareDocs(a: MonsterDoc, b: MonsterDoc): CompareGroup[] {
 		{
 			title: 'Immunities',
 			rows: keys(a.immunities, b.immunities).map(k =>
-				row(k, a.immunities[k] === undefined ? ABSENT : a.immunities[k] ? 'yes' : 'no', b.immunities[k] === undefined ? ABSENT : b.immunities[k] ? 'yes' : 'no')
+				row(k, a.immunities[k] === undefined ? ABSENT : a.immunities[k] ? t('yes') : t('no'), b.immunities[k] === undefined ? ABSENT : b.immunities[k] ? t('yes') : t('no'))
 			)
 		},
 		{
