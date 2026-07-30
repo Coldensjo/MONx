@@ -941,3 +941,120 @@
 .mx-engine-pick-note[data-weak='true'] {
 	color: var(--ss-warn, #b58900);
 }
+
+/* ---------- Landing: saved workspaces ---------- */
+
+.mx-saved {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+	max-width: 560px;
+}
+
+.mx-saved-label {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.mx-saved-row {
+	display: flex;
+	align-items: stretch;
+	gap: 4px;
+}
+
+.mx-saved-open {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: 1;
+	min-width: 0;
+	padding: 8px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.mx-saved-open:hover {
+	background: var(--surface-2);
+	border-color: var(--accent);
+}
+
+.mx-saved-open svg {
+	flex: 0 0 auto;
+	color: var(--accent);
+}
+
+.mx-saved-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+	flex: 1;
+}
+
+.mx-saved-name {
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.mx-saved-path {
+	font-size: 11px;
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mx-saved-engine {
+	flex: 0 0 auto;
+	padding: 1px 6px;
+	border-radius: 3px;
+	background: var(--surface-2);
+	color: var(--text-muted);
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.mx-saved-act {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.mx-saved-act:hover {
+	background: var(--surface-2);
+	color: var(--text);
+}
+
+.mx-saved-input {
+	flex: 1;
+	min-width: 0;
+	padding: 8px 12px;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	font-size: 13px;
+}
+
+.mx-landing-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	max-width: 560px;
+	justify-content: center;
+}

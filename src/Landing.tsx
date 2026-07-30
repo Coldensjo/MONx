@@ -2,18 +2,30 @@ import { useCallback, useEffect, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import {
 	AlertCircle,
+	Bookmark,
 	Check,
 	FolderOpen,
 	History,
 	Image,
 	Loader2,
 	Package,
+	Pencil,
 	Skull,
-	Sparkles
+	Sparkles,
+	Star,
+	Trash2
 } from 'lucide-react';
 import { ENGINES } from './engine';
 import { probeWorkspace, type SlotStatus, type WorkspacePaths, type WorkspaceProbe } from './monster';
-import type { RecentWorkspace } from './settings';
+import {
+	loadSavedWorkspaces,
+	newWorkspaceId,
+	removeSavedWorkspace,
+	saveSavedWorkspace,
+	type RecentWorkspace,
+	type SavedWorkspace
+} from './settings';
+import { workspaceLabel } from './App';
 
 /** The four folder rows. `engine` is on `WorkspacePaths` too, but it is a
  *  choice rather than a path and gets its own control below the rows. */
@@ -58,6 +70,12 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 	const [probe, setProbe] = useState<WorkspaceProbe | null>(null);
 	const [probing, setProbing] = useState(false);
 	const [hoverSlot, setHoverSlot] = useState<SlotKey | null>(null);
+	const [saved, setSaved] = useState<SavedWorkspace[]>(loadSavedWorkspaces);
+	// The name editor is one input serving two jobs: naming the workspace that is
+	// currently in the rows, and renaming one already in the list. `naming` holds
+	// the id being renamed, or 'new' while saving what is on screen.
+	const [naming, setNaming] = useState<string | null>(null);
+	const [nameDraft, setNameDraft] = useState('');
 
 	// Every path change is re-probed, and the probe result — not what the user
 	// picked — is what fills the rows: the backend resolves a file to its folder
@@ -119,11 +137,97 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 	const ready = !!probe && probe.monsters.ok && !probing && !opening;
 	const degraded = !!probe && probe.monsters.ok && !(probe.items.ok && probe.client.ok);
 
+	// Saving keeps the engine as it will be opened — the picked one, or the
+	// sniffed guess — so a saved workspace never has to be sniffed again.
+	const commitName = useCallback(() => {
+		const name = nameDraft.trim();
+		if (!naming || !name) {
+			setNaming(null);
+			return;
+		}
+		if (naming === 'new') {
+			if (!probe?.monsters.ok) {
+				setNaming(null);
+				return;
+			}
+			setSaved(
+				saveSavedWorkspace({
+					id: newWorkspaceId(),
+					name,
+					paths: { ...paths, engine: paths.engine ?? probe.engine.best }
+				})
+			);
+		} else {
+			const entry = saved.find(w => w.id === naming);
+			if (entry) setSaved(saveSavedWorkspace({ ...entry, name }));
+		}
+		setNaming(null);
+	}, [naming, nameDraft, paths, probe, saved]);
+
+	const engineLabel = useCallback(
+		(key: string | null) => ENGINES.find(e => e.key === key)?.label ?? 'auto-detect',
+		[]
+	);
+
 	return (
 		<div className="ss-landing">
 			<img src="/icon.png" alt="" className="ss-landing-icon" width={40} height={40} />
 
 			{error && <div className="ss-landing-error">{error}</div>}
+
+			{saved.length > 0 && (
+				<div className="mx-saved">
+					<div className="mx-saved-label">Saved workspaces</div>
+					{saved.map(entry => (
+						<div key={entry.id} className="mx-saved-row">
+							{naming === entry.id ? (
+								<input
+									className="mx-saved-input"
+									autoFocus
+									value={nameDraft}
+									onChange={e => setNameDraft(e.target.value)}
+									onBlur={commitName}
+									onKeyDown={e => {
+										if (e.key === 'Enter') commitName();
+										if (e.key === 'Escape') setNaming(null);
+									}}
+								/>
+							) : (
+								<button
+									className="mx-saved-open"
+									disabled={opening}
+									onClick={() => onOpen(entry.paths)}
+									title={entry.paths.monsters}
+								>
+									<Star size={14} />
+									<span className="mx-saved-body">
+										<span className="mx-saved-name">{entry.name}</span>
+										<span className="mx-saved-path mono">{entry.paths.monsters}</span>
+									</span>
+									<span className="mx-saved-engine">{engineLabel(entry.paths.engine)}</span>
+								</button>
+							)}
+							<button
+								className="mx-saved-act"
+								title="Rename"
+								onClick={() => {
+									setNameDraft(entry.name);
+									setNaming(entry.id);
+								}}
+							>
+								<Pencil size={13} />
+							</button>
+							<button
+								className="mx-saved-act"
+								title="Forget this workspace"
+								onClick={() => setSaved(removeSavedWorkspace(entry.id))}
+							>
+								<Trash2 size={13} />
+							</button>
+						</div>
+					))}
+				</div>
+			)}
 
 			<div className="mx-slots">
 				{SLOTS.map(slot => {
@@ -191,10 +295,39 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 				</div>
 			)}
 
-			<button className="ss-btn ss-btn-primary" disabled={!ready} onClick={() => onOpen(paths)}>
-				{opening || probing ? <Loader2 size={15} className="ss-spin" /> : <FolderOpen size={15} />}
-				{opening ? 'Opening…' : probing ? 'Checking…' : 'Open workspace'}
-			</button>
+			<div className="mx-landing-actions">
+				<button className="ss-btn ss-btn-primary" disabled={!ready} onClick={() => onOpen(paths)}>
+					{opening || probing ? <Loader2 size={15} className="ss-spin" /> : <FolderOpen size={15} />}
+					{opening ? 'Opening…' : probing ? 'Checking…' : 'Open workspace'}
+				</button>
+				{naming === 'new' ? (
+					<input
+						className="mx-saved-input"
+						autoFocus
+						placeholder="Workspace name"
+						value={nameDraft}
+						onChange={e => setNameDraft(e.target.value)}
+						onBlur={commitName}
+						onKeyDown={e => {
+							if (e.key === 'Enter') commitName();
+							if (e.key === 'Escape') setNaming(null);
+						}}
+					/>
+				) : (
+					<button
+						className="ss-btn"
+						disabled={!ready}
+						title="Save these folders under a name, to open in one click"
+						onClick={() => {
+							setNameDraft(workspaceLabel(paths.monsters));
+							setNaming('new');
+						}}
+					>
+						<Bookmark size={15} />
+						Save workspace
+					</button>
+				)}
+			</div>
 
 			{recent.length > 0 && (
 				<div className="ss-recent">
