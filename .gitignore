@@ -11,3 +11,6 @@ src-tauri/gen/schemas
 # see AGENTS.md — but deliberately never committed.
 assets/
 sources/
+# Reference client sources, dropped in alongside `sources/` for the same reason:
+# needed on disk to read a format, never ours to commit.
+clients/

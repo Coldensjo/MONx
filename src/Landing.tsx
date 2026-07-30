@@ -111,8 +111,13 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 		if (typeof picked === 'string') setPaths(prev => ({ ...prev, [key]: picked }));
 	}, []);
 
-	const ready =
-		!!probe && probe.monsters.ok && probe.items.ok && probe.client.ok && !probing && !opening;
+	// Only the monsters folder is required. Canary and BlackTek ship neither
+	// `items.otb` nor a `.spr`/`.dat` pair, so insisting on all three would make
+	// their corpora unopenable in exchange for previews they cannot have. The
+	// slots still show what is missing, and the editor degrades rather than
+	// refusing: loot ids stay numbers and nothing is drawn.
+	const ready = !!probe && probe.monsters.ok && !probing && !opening;
+	const degraded = !!probe && probe.monsters.ok && !(probe.items.ok && probe.client.ok);
 
 	return (
 		<div className="ss-landing">
@@ -177,6 +182,13 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 								: 'could not tell confidently — check this'}
 					</span>
 				</label>
+			)}
+
+			{degraded && (
+				<div className="mx-engine-pick-note" data-weak="true">
+					No item database or client files — monsters open and save normally, but nothing is
+					drawn and loot ids stay numbers.
+				</div>
 			)}
 
 			<button className="ss-btn ss-btn-primary" disabled={!ready} onClick={() => onOpen(paths)}>

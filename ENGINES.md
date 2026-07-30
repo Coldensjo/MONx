@@ -1,21 +1,26 @@
 # MONx — Multi-engine support
 
-**Status: implemented** (0.1.12). This document is the reference for *why* each engine differs;
+**Status: implemented** (0.1.13). This document is the reference for *why* each engine differs;
 `engine.rs` is the authority for what MONx does about it. §6 records what shipped against the
-original phasing, and §7–8 what is still open.
+original phasing, §7 the Lua engines, and §8–9 what is still open.
 
-Gates, run against each engine's own shipped corpus — 1,866 files in total: round-trip
-byte-identical, canonical re-read equal, `--mutate` equal after an edit, `--crud` consistent
-with `monsters.xml`. Detection identifies all four unaided.
+Gates, run against each engine's own shipped corpus — 4,261 files in total: round-trip
+byte-identical, canonical re-read equal, `--mutate` equal after an edit and within the diff
+budget, `--crud` consistent. Detection identifies all six unaided.
 
-Four engines are in scope:
+Six engines are in scope, in **two formats**:
 
-| Key | Engine | Source read | Era |
-|-----|--------|-------------|-----|
-| `ironcore` | Ironcore (the current target) | encoded in `monster.rs` / `catalog.rs` / `lint.rs` | 10.x + heavy divergence |
-| `tfs` | TheForgottenServer 1.x | `sources/forgottenserver-master/src/monsters.cpp` | 10.98 / bestiary-era |
-| `tvp` | TheVioletProject | `sources/TVP-main/src/monsters.cpp` | 7.x |
-| `nostalrius` | Nostalrius | `sources/Nostalrius-master/src/monsters.cpp` | 7.x |
+| Key | Engine | Format | Source read | Era |
+|-----|--------|--------|-------------|-----|
+| `ironcore` | Ironcore (the original target) | XML | encoded in `monster.rs` / `catalog.rs` / `lint.rs` | 10.x + heavy divergence |
+| `tfs` | TheForgottenServer 1.x | XML | `sources/forgottenserver-master/src/monsters.cpp` | 10.98 / bestiary-era |
+| `tvp` | TheVioletProject | XML | `sources/TVP-main/src/monsters.cpp` | 7.x |
+| `nostalrius` | Nostalrius | XML | `sources/Nostalrius-master/src/monsters.cpp` | 7.x |
+| `canary` | Canary / OTServBR | **Lua** | `sources/canary-main/src/lua/functions/creatures/monster/` | 13.x |
+| `blacktek` | BlackTek | **Lua** | `sources/BlackTek-Server-master/src/` | TFS 1.x fork |
+
+The format split is the deepest difference in the table and is covered in §7. Everything from
+§2–§5 describes the four XML engines.
 
 Every claim below is cited to a line in one of those loaders. Where this document and the C++
 disagree, the C++ wins.
@@ -444,14 +449,114 @@ mapping is mechanical.
 that the Combat section currently expects to find in a spell card. Design that section before
 implementing the reader, not after.
 
+## 7. The Lua engines
+
+Canary and BlackTek do not use XML at all. A monster is a Lua script:
+
+```lua
+local mType = Game.createMonsterType("Azure Frog")
+local monster = {}
+monster.description = "an azure frog"
+monster.outfit = { lookType = 226, lookHead = 87, … }
+monster.loot = { { name = "gold coin", chance = 74000 } }
+mType:register(monster)
+```
+
+So "add two profiles" was not the shape of the work. It needed a **second document backend**
+beside the XML one — `luadoc.rs` for the bytes, `monster_lua.rs` for the meaning — feeding the
+same `MonsterDoc`, the same lints and the same editor. The profile system built for the first
+four is what made that a seam rather than a fork: `Parsed` became an enum with two bodies, and
+`read_bytes`/`write_bytes` dispatch on `profile.format`. Four call sites total.
+
+### Why splicing still works
+
+MONx's contract is *edit one field, rewrite one field*. That survives the format change because
+the corpora are extraordinarily uniform — measured, not assumed:
+
+- **48,208** top-level `monster.KEY = VALUE` assignments across both corpora. **Every one starts
+  at column zero**, and not one is nested inside anything.
+- Zero files interleave code between two assignments.
+- Real Lua exists — Canary has ~45 files with `if`/`for` and some with trailing
+  `mType.onSpawn = function…` callbacks — but always *after* the data.
+
+A document is therefore a prologue, an ordered assignment list, and an epilogue. Anything the
+model does not name lands in a raw region and rides along, exactly as `<personalloot>` does on
+the XML side.
+
+Two refinements were needed to make the contract literally true rather than nearly true:
+
+- **Seeded rendering.** Both sides of a save are rendered *starting from the file's own tables*,
+  with only model-owned keys overwritten in place. A key nobody touched therefore compares equal
+  and never becomes an edit — and, critically, a nested field MONx does not model is not deleted
+  when its parent key is edited.
+- **Splicing inside tables.** A changed table is spliced entry by entry, recursively, keeping
+  each entry's own inline-or-multiline shape. Without it, changing one loot chance re-rendered
+  an eighty-line table.
+
+Result: a five-field edit touches about five lines, on a boss with 150.
+
+### The one real translation
+
+Both engines write `name = "combat", type = COMBAT_FIREDAMAGE` where the XML engines write
+`name="fire"`. The reader folds that into the XML form so there is one spell model, one set of
+lints and one editor across all six engines — and the writer unfolds it, **but only where the
+file already spoke that way**. BlackTek inherited TFS's habit of naming the spell after the
+damage type (`name = "lifedrain"`), and rewriting all 740 of its files into the `combat` form
+would be a diff nobody asked for.
+
+### What these engines lack
+
+| | Canary | BlackTek |
+|---|---|---|
+| `monsters.xml` registry | — (every script autoloads) | — |
+| `items.otb` | — (`items.xml` only) | — (`assets.dat`) |
+| `.spr` / `.dat` client | — (`appearances.dat`, protobuf) | — (`assets.dat`) |
+| Bestiary | ✅ `Bestiary` + `bosstiary` | — |
+| `strategiesTarget` | ✅ (`nearest`/`health`/`damage`/`random`) | — |
+| Numeric flags | inside `monster.flags` | top level, as TFS |
+| `skull` | **fatal** — see below | ✅ |
+
+No registry means "orphan" and "dangling entry" are not findings but categories that do not
+exist; both profiles suppress `registry.*` and a file on disk *is* a live monster.
+
+No `items.otb` and no `.spr` means MONx now opens a workspace with **only** a monsters folder.
+That was a real change: items and client were required, and demanding them would have made both
+corpora unopenable in exchange for previews they cannot have. The Landing screen says what is
+missing, the editor degrades — nothing is drawn, loot ids that are numbers stay numbers — and
+everything else works.
+
+### Two findings worth the whole exercise
+
+- **`monster.skull` is fatal on Canary.** It calls `mtype:skull(…)`, and no such method is
+  registered — the file raises "attempt to call a nil value" and the monster never loads. Not
+  one monster in the shipped corpus sets it, which is exactly why an editor that offered the
+  field would be dangerous. MONx offers no skull under Canary and lints one as an error.
+- **`monster.maxHealth = monster.health`** appears six times in Canary's corpus. MONx does not
+  evaluate Lua, so the editor would show a default where the server uses something else.
+  `lua.value-not-literal` says so; the line itself is preserved and never rewritten.
+
+---
+
 ## 8. Still open
 
-**Nostalrius items are not readable.** It ships `data/items/items.srv`, the 7.x text format,
-where MONx's item layer wants `items.otb` + `items.xml`. Its monster corpus opens, lints and
-saves correctly, but only with another server's items folder standing in — so loot ids resolve
-to the wrong names and sprites. This is the one real gap: it is in the *items* layer, which
-this work deliberately did not touch, and closing it means an `items.srv` reader in `items.rs`.
-Nothing in the engine profiles helps.
+**Three engines have no item database MONx can read**, and it is always the same shape of gap —
+in the *items* layer, which none of this work touched. Their monsters open, lint and save
+correctly; what is missing is resolving a loot id to a name and a sprite.
+
+| Engine | Ships | MONx wants |
+|---|---|---|
+| Nostalrius | `items.srv` (7.x text) | `items.otb` + `items.xml` |
+| Canary | `items.xml` + `appearances.dat` (protobuf) | `items.otb` |
+| BlackTek | `assets.dat` | `items.otb` |
+
+Canary is the closest: it has `items.xml`, so only the OTB server↔client id map is absent.
+Closing any of these means a new reader in `items.rs` — an `items.srv` parser, or an
+`appearances.dat` one, which would also be the route to sprites for the modern engines.
+
+**Neither Lua engine can show sprites at all.** MONx's whole rendering path is inherited from
+SPRx and reads `.spr` + `.dat`; Canary and BlackTek ship a protobuf appearance bundle instead.
+This is a separate project from engine support and is why the Landing screen now says plainly
+what a monsters-only workspace gives up.
 
 **TVP's `speed=` collision is reported, not resolved.** The loader reads `speed` as the cast
 cadence and then, on a `speed` spell, again as the delta — so one node cannot carry both. MONx

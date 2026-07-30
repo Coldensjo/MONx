@@ -1,8 +1,10 @@
 # MONx — Agent Guide
 
-A monster XML editor for the Ironcore Tibia server. **Open workspace → pick a monster → edit → save.**
+A monster editor for the Ironcore Tibia server, and for five others. **Open workspace → pick a monster → edit → save.**
 
-Opens a workspace of three folders: the server's `monster/` folder, its `items/` folder (`items.otb` + `items.xml`), and a Tibia client folder (`Tibia.dat` + `Tibia.spr`). Every outfit, corpse and loot item renders as a real sprite because the client files are loaded alongside the XML.
+Opens a workspace of up to four folders: the server's `monster/` folder, its `items/` folder (`items.otb` + `items.xml`), a Tibia client folder (`Tibia.dat` + `Tibia.spr`) and optionally `spells/`. Every outfit, corpse and loot item renders as a real sprite because the client files are loaded alongside the monsters.
+
+**Only the monsters folder is required.** Canary and BlackTek ship neither `items.otb` nor a `.spr`/`.dat` pair, so a workspace can open with monsters alone — nothing is drawn and loot ids stay numbers, but reading, linting and saving all work.
 
 MONx is a fork of **SPRx** (kept at [SPRx/](SPRx/) for reference). The sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image server, the virtualized browsers — is inherited whole. What's new is the monster-XML layer on top.
 
@@ -37,12 +39,20 @@ cargo run --release --example probe_monster -- ../assets/monsters --crud <scratc
 
 `--mutate` is the one that proves the writer is driven by the model rather than copying bytes: it edits several fields in every file, writes, re-reads, and checks the document that comes back is the one that went in. It also budgets the diff — a handful of field edits that rewrite more than 12 lines fail, because the writer is meant to splice. A change that *inserts or removes* a node moves every line under it and can never meet that budget, so it belongs in a pass of its own (see `voice_extras_survive`). Add `--verbose` to any of them to list every finding.
 
-`--engine <key>` picks the profile (`ironcore`, `tfs`, `tvp`, `nostalrius`); without it the corpus is sniffed exactly as the Landing dialog sniffs it, and the guess is printed. **Run every gate against all four engines' own corpora when touching the reader, writer or a profile** — an over-declared `known_attrs` drops data, and `--mutate` is the only thing that catches it:
+`--engine <key>` picks the profile (`ironcore`, `tfs`, `tvp`, `nostalrius`, `canary`, `blacktek`); without it the corpus is sniffed exactly as the Landing dialog sniffs it, and the guess is printed. **Run every gate against all six engines' own corpora when touching the reader, writer or a profile** — an over-declared `known_attrs` drops data, and `--mutate` is the only thing that catches it:
 
 ```sh
 cargo run --release --example probe_monster -- ../sources/forgottenserver-master/data/monster --engine tfs --mutate
 cargo run --release --example probe_monster -- ../sources/TVP-main/data/monster --engine tvp --mutate
 cargo run --release --example probe_monster -- ../sources/Nostalrius-master/data/monster --engine nostalrius --mutate
+cargo run --release --example probe_monster -- ../sources/canary-main/data-otservbr-global/monster --engine canary --mutate
+cargo run --release --example probe_monster -- ../sources/BlackTek-Server-master/data/scripts/monsters/monsters --engine blacktek --mutate
+```
+
+The two Lua engines also have `probe_lua`, which tests the document layer alone — parse, write back, diff, and measure how much of each file the assignment model actually accounts for:
+
+```sh
+cargo run --release --example probe_lua -- ../sources/canary-main/data-otservbr-global/monster
 ```
 
 Those corpora ship with the engines under `sources/`, which is gitignored — clone them there to run the foreign gates.
@@ -94,7 +104,9 @@ cargo run --example probe_dat -- <file.dat> <file.spr> [out_dir]
 │  spells.rs   — spell name catalogue + ### verification    │
 │  lint.rs     — the lint engine                           │
 │  catalog.rs  — enum catalogues (effects, conditions, …)   │
-│  engine.rs   — engine profiles (Ironcore/TFS/TVP/Nostal.) │
+│  engine.rs   — engine profiles (six servers, two formats) │
+│  luadoc.rs   — span-preserving Lua documents (Canary/BT)  │
+│  monster_lua.rs — Lua tables <-> MonsterDoc               │
 │  otb.rs      — items.otb server↔client id map            │
 │  items.rs    — items.xml database + name search          │
 │  spr.rs      — .spr file reader (inherited, frozen)      │
@@ -176,9 +188,10 @@ assets/                fixture workspace: monsters/, items/, client/
 
 **Do not infer behaviour from upstream TFS.** Ironcore diverges in ways that matter constantly: per-spell cooldowns, extra flags, the pacifist system, `force` on summons, `corpseactionid`, `masterEffect`.
 
-MONx also opens **TheForgottenServer 1.x, TheVioletProject and Nostalrius** corpora. Everything below describes Ironcore, which is the default profile; what the other three do differently lives in `engine.rs` and is summarised in [ENGINES.md](ENGINES.md). Three consequences worth knowing before touching anything:
+MONx also opens **TheForgottenServer 1.x, TheVioletProject, Nostalrius, Canary/OTServBR and BlackTek** corpora. Everything below describes Ironcore, which is the default profile; what the other three do differently lives in `engine.rs` and is summarised in [ENGINES.md](ENGINES.md). Three consequences worth knowing before touching anything:
 
 - **The reader, writer and linter all take a `&'static EngineProfile`.** There is one `MonsterDoc` for all four engines — a superset — and the profile decides which parts the reader populates and the writer emits. Never hard-code a spelling like `raceid` or `CONST_ME_*`; ask the profile.
+- **Two formats, one model.** Canary and BlackTek define monsters as Lua tables, not XML. `Parsed` is an enum with an XML body and a Lua body; `read_bytes`/`write_bytes` dispatch on `profile.format`. Everything above the document layer — `MonsterDoc`, the lints, the editor — is shared, and should stay that way.
 - **A corpus can be a tree.** Only Ironcore is flat. A monster's key is its path relative to the monsters folder (`monsters/demon.xml`), matching its `file=` in `monsters.xml`.
 - **A lint the engine has no rule for is suppressed, not reported.** `silent` severity is only worth anything if it means the server really would say nothing; firing Ironcore's rules at a TVP corpus inverts that. Per-engine suppressions live on the profile.
 
