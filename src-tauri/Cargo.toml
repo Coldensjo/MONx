@@ -1,6 +1,6 @@
 [package]
 name = "monx"
-version = "0.1.13"
+version = "0.1.14"
 description = "MONx — Ironcore monster XML editor"
 authors = ["Ironcore"]
 edition = "2021"
@@ -30,6 +30,9 @@ image = { version = "0.24", default-features = false, features = ["png", "gif"] 
 zip = "0.6"
 quick-xml = "0.31"
 byteorder = "1.5"
+# Modern Tibia clients ship sprite sheets as raw LZMA1. Pure Rust on purpose:
+# the C bindings would put a build toolchain in the way of every build.
+lzma-rs = "0.3"
 
 [profile.release]
 opt-level = 3

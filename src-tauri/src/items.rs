@@ -151,11 +151,30 @@ impl ItemIndex {
 
     /// Loads the item database from a folder holding `items.otb` + `items.xml`.
     pub fn load(dir: &Path) -> Result<ItemIndex, String> {
-        let otb = Otb::load(&dir.join("items.otb"))?;
         let mut index = ItemIndex::load_xml(&dir.join("items.xml"))?;
-        index.apply_otb(&otb);
-        index.otb = otb;
+        match Otb::load(&dir.join("items.otb")) {
+            Ok(otb) => {
+                index.apply_otb(&otb);
+                index.otb = otb;
+            }
+            // Canary and the other modern engines ship no `items.otb` — there is
+            // no server↔client id split to resolve, the two are the same number.
+            // Requiring the file would cost the whole item database, and with it
+            // every loot name and icon, for an indirection that does not exist.
+            Err(_) => index.assume_direct_ids(),
+        }
         Ok(index)
+    }
+
+    /// Treats every server id as its own client id, for engines with no OTB.
+    fn assume_direct_ids(&mut self) {
+        for (id, item) in self.by_id.iter_mut() {
+            item.client_id = *id;
+            // Nothing says otherwise without an OTB, and a loot list of things
+            // the editor claims cannot be picked up would be worse than silence.
+            item.pickupable = true;
+        }
+        self.cross_check.missing_from_otb.clear();
     }
 
     /// Resolves every entry's client id through the OTB and records the delta

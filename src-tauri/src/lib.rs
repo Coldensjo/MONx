@@ -1,3 +1,5 @@
+pub mod appearances;
+pub mod assets;
 pub mod catalog;
 pub mod dat;
 pub mod engine;
@@ -189,6 +191,16 @@ fn open_workspace(
         manager.open_file(dat_path.to_string_lossy().into_owned(), None)?;
     }
 
+    // A modern client asset bundle in the client slot, where there is no
+    // .spr/.dat pair. Canary ships one; it carries both the sprites and the
+    // thing metadata, so it replaces the inherited sprite path rather than
+    // supplementing it.
+    let bundle = client_dir
+        .as_deref()
+        .filter(|_| dat_path.is_none() || spr_path.is_none())
+        .and_then(|d| crate::assets::Bundle::load(d).ok())
+        .map(std::sync::Arc::new);
+
     // An unreadable or absent items folder is a degraded workspace, not a
     // failed one: loot ids stay numbers and the lints that need the database
     // stand down.
@@ -260,6 +272,7 @@ fn open_workspace(
     ws.spr_path = info.spr_path.clone();
     ws.dat_path = info.dat_path.clone();
     ws.transparent = transparent;
+    ws.bundle = bundle;
 
     Ok(info)
 }

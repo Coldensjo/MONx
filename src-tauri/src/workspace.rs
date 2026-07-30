@@ -98,6 +98,10 @@ pub struct Workspace {
     /// every composition call must be given the same value the file was opened
     /// with, or the pixel stream decodes to garbage.
     pub transparent: bool,
+    /// A modern client asset bundle, where one was given instead of a
+    /// `.spr`/`.dat` pair. Canary ships these; the protocol routes prefer it
+    /// when present and fall back to the inherited sprite engine otherwise.
+    pub bundle: Option<std::sync::Arc<crate::assets::Bundle>>,
 }
 
 impl Default for Workspace {
@@ -113,6 +117,7 @@ impl Default for Workspace {
             spr_path: String::new(),
             dat_path: String::new(),
             transparent: false,
+            bundle: None,
         }
     }
 }
@@ -331,20 +336,31 @@ pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
             if !dir.join("items.xml").is_file() {
                 return Err("items.xml not found".to_string());
             }
-            if !dir.join("items.otb").is_file() {
-                return Err("items.otb not found".to_string());
-            }
+            // `items.otb` is optional: the modern engines have no server↔client
+            // id split and ship none.
             let index = ItemIndex::load(dir)?;
             let check = &index.cross_check;
-            Ok(format!(
-                "{} items · {} · {} unmapped",
-                index.len(),
-                index.otb_version,
-                check.missing_from_otb.len()
-            ))
+            Ok(if dir.join("items.otb").is_file() {
+                format!(
+                    "{} items · {} · {} unmapped",
+                    index.len(),
+                    index.otb_version,
+                    check.missing_from_otb.len()
+                )
+            } else {
+                format!("{} items · no items.otb, ids used directly", index.len())
+            })
         }),
         client: slot(Some(&expanded.client), |dir| {
-            let dat = find_by_ext(dir, "dat").ok_or("No .dat file here")?;
+            // A modern asset bundle instead of a .spr/.dat pair.
+            if dir.join("catalog-content.json").is_file() {
+                let bundle = crate::assets::Assets::load(dir)?;
+                return Ok(format!(
+                    "{} sprite sheets · appearances",
+                    bundle.sheet_count()
+                ));
+            }
+            let dat = find_by_ext(dir, "dat").ok_or("No .dat or catalog-content.json here")?;
             let spr = find_by_ext(dir, "spr").ok_or("No .spr file here")?;
             Ok(format!(
                 "{} + {}",

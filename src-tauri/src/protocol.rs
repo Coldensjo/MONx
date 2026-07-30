@@ -285,6 +285,148 @@ fn csv(query: &HashMap<String, String>, key: &str) -> Vec<String> {
 
 /// The MONx routes. Their file paths come from the open workspace, so they fail
 /// with a clear message rather than a blank image when nothing is open.
+/// The same four MONx routes, drawn from a modern client asset bundle instead
+/// of a `.spr`/`.dat` pair.
+///
+/// It is a separate function rather than a branch inside `dispatch_monx`
+/// because that one opens the `.dat` before it does anything else, and a
+/// workspace with a bundle has none to open. The routes and their query
+/// parameters are identical, so the frontend does not know which it is talking
+/// to — which is the point.
+fn dispatch_bundle(
+    bundle: &crate::assets::Bundle,
+    ws: &crate::workspace::Workspace,
+    path_seg: &str,
+    query: &HashMap<String, String>,
+) -> Result<(&'static str, Vec<u8>), String> {
+    use crate::appearances::Kind;
+    let cell = num::<u32>(query, "cell", 64).clamp(16, 256);
+
+    // Modern clients address items by their client id directly; there is no OTB
+    // indirection, so a server id *is* the appearance id.
+    let item_cell = |id: u32| -> Result<ThingRender, String> {
+        bundle.compose(Kind::Object, id, 0, 0, 0, 0, None)
+    };
+
+    let look_cell = |look: &Look, dir: u32, frame: u32| -> Result<ThingRender, String> {
+        if let Some(typeex) = look.typeex.filter(|_| look.mode == "typeex") {
+            return item_cell(typeex);
+        }
+        let id = look.type_.unwrap_or(0);
+        let thing = bundle
+            .appearances
+            .get(Kind::Outfit, id)
+            .ok_or_else(|| format!("unknown outfit id {id}"))?;
+        let group = thing.idle().ok_or("outfit has no frame group")?;
+        let dirs = group.pattern_width.max(1);
+        let frames = group.frames.max(1);
+        let mut base = bundle.compose(
+            Kind::Outfit,
+            id,
+            frame % frames,
+            dir % dirs,
+            0,
+            0,
+            Some(0),
+        )?;
+        // Two layers marks a colourable outfit, exactly as in the old format:
+        // layer 1 is the template mask, and `colourize` is shared with it.
+        if group.layers >= 2 {
+            let mask = bundle.compose(
+                Kind::Outfit,
+                id,
+                frame % frames,
+                dir % dirs,
+                0,
+                0,
+                Some(1),
+            )?;
+            colourize(&mut base, &mask, look.head, look.body, look.legs, look.feet);
+        }
+        Ok(base)
+    };
+
+    let blank = || ThingRender {
+        width_px: 0,
+        height_px: 0,
+        rgba: Vec::new(),
+    };
+
+    match path_seg {
+        "/look.png" => {
+            let typeex = query.get("typeex").and_then(|v| v.parse::<u32>().ok());
+            let look = Look {
+                mode: if typeex.is_some() { "typeex" } else { "type" }.to_string(),
+                type_: query.get("type").and_then(|v| v.parse().ok()),
+                head: num(query, "head", 0),
+                body: num(query, "body", 0),
+                legs: num(query, "legs", 0),
+                feet: num(query, "feet", 0),
+                addons: num(query, "addons", 0),
+                mount: num(query, "mount", 0),
+                typeex,
+                corpse: 0,
+                corpseactionid: 0,
+            };
+            let render = look_cell(&look, num(query, "dir", 2), num(query, "frame", 0))?;
+            let render = if query.contains_key("cell") {
+                into_cell(render, cell)
+            } else {
+                render
+            };
+            Ok(("image/png", dat::encode_png(&render)?))
+        }
+        "/item.png" => {
+            let render = item_cell(num::<u32>(query, "sid", 0))?;
+            let render = if query.contains_key("cell") {
+                into_cell(render, cell)
+            } else {
+                render
+            };
+            Ok(("image/png", dat::encode_png(&render)?))
+        }
+        "/items.png" => {
+            let sids: Vec<u32> = csv(query, "sids")
+                .iter()
+                .map(|s| s.parse().unwrap_or(0))
+                .collect();
+            if sids.is_empty() {
+                return Err("no item ids requested".to_string());
+            }
+            if sids.len() > 256 {
+                return Err("too many item ids in one request".to_string());
+            }
+            let renders: Vec<ThingRender> = sids
+                .iter()
+                .map(|&sid| item_cell(sid).unwrap_or_else(|_| blank()))
+                .collect();
+            Ok(("image/png", dat::encode_png(&row_atlas(renders, cell))?))
+        }
+        "/monsters.png" => {
+            let files = csv(query, "files");
+            if files.is_empty() {
+                return Err("no monster files requested".to_string());
+            }
+            if files.len() > 256 {
+                return Err("too many monster files in one request".to_string());
+            }
+            let dir = num::<u32>(query, "dir", 2);
+            let frame = num::<u32>(query, "frame", 0);
+            let renders: Vec<ThingRender> = files
+                .iter()
+                .map(|f| {
+                    ws.monster(f)
+                        .ok_or_else(|| format!("unknown monster file {f}"))
+                        .and_then(|m| look_cell(&m.look, dir, frame))
+                        .unwrap_or_else(|_| blank())
+                })
+                .collect();
+            Ok(("image/png", dat::encode_png(&row_atlas(renders, cell))?))
+        }
+        other => Err(format!("unknown route: {other}")),
+    }
+}
+
 fn dispatch_monx(
     spr: &SprManagerState,
     dat: &DatManagerState,
@@ -295,6 +437,11 @@ fn dispatch_monx(
     let ws = ws.read().map_err(|e| format!("lock: {e}"))?;
     if !ws.is_open() {
         return Err("No workspace is open".to_string());
+    }
+    // A modern bundle replaces the whole inherited sprite path — including the
+    // `.dat` this function opens next, which such a workspace does not have.
+    if let Some(bundle) = ws.bundle.clone() {
+        return dispatch_bundle(&bundle, &ws, path_seg, query);
     }
     let spr_manager = spr.read().map_err(|e| format!("lock: {e}"))?;
     let dat_manager = dat.read().map_err(|e| format!("lock: {e}"))?;
