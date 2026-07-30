@@ -132,6 +132,7 @@ src/
   LintPanel.tsx        Lint drawer
   PinLootDialog.tsx    Corpus-wide loot id pinning (Tools menu)
   ScaleLootDialog.tsx  Corpus-wide loot chance scaling, per item or corpus-wide
+  BatchEditDialog.tsx  Filter the corpus, then set/scale/clear one field (Tools menu)
   PatchNotesDialog.tsx Patch notes since the user's cut-off point (Tools menu)
   HotkeysDialog.tsx    The hotkey manager (Preferences menu)
   PreferencesDialog.tsx  Editor tab visibility + default tab (Preferences menu)

@@ -59,6 +59,3 @@ record of what landed.
 - **Spawn integration** (L) — if a `data/world` spawn file is present, show
   where a monster spawns and how many; turns balance numbers into context
   ("this drops 2k gp/h *and* there are 40 of them").
-- **Batch flag/field edit** (M) — the loot-chance scaler generalised: pick a
-  filter (race, level band, flag) and set or clear a field across the
-  matches, preview-then-apply, with the same diff budget discipline.

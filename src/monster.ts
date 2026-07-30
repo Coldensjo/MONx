@@ -300,6 +300,65 @@ export interface ScaleOptions {
 	excludeFiles: string[];
 }
 
+// ---------- Batch field edit ----------
+
+/** Every set field narrows the selection; they are AND-ed. */
+export interface BatchFilter {
+	name?: string | null;
+	race?: string | null;
+	species?: string | null;
+	minExperience?: number | null;
+	maxExperience?: number | null;
+	minHealth?: number | null;
+	maxHealth?: number | null;
+	/** Carries this flag at all — or at exactly `flagValue`, when that is set. */
+	flag?: string | null;
+	flagValue?: string | null;
+	registered?: boolean | null;
+	hasLoot?: boolean | null;
+}
+
+export interface BatchTarget {
+	kind: 'field' | 'flag' | 'element' | 'immunity';
+	key: string;
+	op: 'set' | 'scale' | 'clear';
+	/** Always text on the wire; the backend parses it for the field it addresses. */
+	value: string;
+}
+
+export interface BatchChange {
+	file: string;
+	monster: string;
+	from: string;
+	to: string;
+	/** Adds or removes a node rather than editing one in place, which moves every
+	 *  line below it. Verified against the corpus: an in-place edit rewrites two
+	 *  lines, a structural one, and four when a self-closed block grows a body. */
+	structural: boolean;
+}
+
+export interface BatchReport {
+	applied: boolean;
+	/** Monsters the filter selects, changed or not. */
+	matched: number;
+	changed: number;
+	files: number;
+	/** Changes that add or remove a node — the diff-size warning. */
+	structural: number;
+	sample: BatchChange[];
+	truncated: boolean;
+}
+
+/** Corpus-wide field edit; `apply: false` is the preview. */
+export function batchEdit(
+	filter: BatchFilter,
+	target: BatchTarget,
+	excludeFiles: string[],
+	apply: boolean
+): Promise<BatchReport> {
+	return invoke<BatchReport>('batch_edit', { filter, target, excludeFiles, apply });
+}
+
 // ---------- Item usage ----------
 
 export interface UsageRef {

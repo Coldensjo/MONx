@@ -58,6 +58,7 @@ import {
 	type Prefs
 } from './prefs';
 import ScaleLootDialog from './ScaleLootDialog';
+import BatchEditDialog from './BatchEditDialog';
 import PatchNotesDialog from './PatchNotesDialog';
 import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
 import { getThing, getThings, type ThingSummary } from './spr';
@@ -437,6 +438,12 @@ export default function Workspace({
 	/** The loot-chance scaler: null when closed, else the item it opens on
 	 *  (`null` item id = the whole corpus, as the Tools menu opens it). */
 	const [scaling, setScaling] = useState<{ itemId: number | null } | null>(null);
+	const [batchOpen, setBatchOpen] = useState(false);
+	/** Species the corpus actually uses, for the batch filter's dropdown. */
+	const speciesList = useMemo(
+		() => [...new Set(monsters.map(m => m.species).filter((s): s is string => !!s))].sort(),
+		[monsters]
+	);
 
 	const exportLints = useCallback(async () => {
 		try {
@@ -1216,6 +1223,13 @@ export default function Workspace({
 			enabled: !dirty,
 			run: () => setScaling({ itemId: null })
 		},
+		{
+			id: 'batch-edit',
+			label: 'Batch edit fields…',
+			group: 'Tools',
+			enabled: !dirty,
+			run: () => setBatchOpen(true)
+		},
 		{ id: 'export-lints', label: 'Export lint report…', group: 'Tools', run: () => void exportLints() },
 		{ id: 'export-patch-notes', label: 'Export patch notes…', group: 'Tools', run: () => setPatchOpen(true) },
 		{
@@ -1280,6 +1294,7 @@ export default function Workspace({
 				item('pin-ambiguous', { label: `Pin ambiguous loot ids…${toolsBlocked}` }),
 				item('pin-all', { label: `Pin all loot ids…${toolsBlocked}` }),
 				item('scale-loot', { label: `Scale loot chances…${toolsBlocked}` }),
+				item('batch-edit', { label: `Batch edit fields…${toolsBlocked}` }),
 				item('export-lints', { separated: true }),
 				item('export-patch-notes'),
 				item('set-patch-cutoff', { label: `Set patch notes cut-off point${patchCutoffAge}` })
@@ -1913,6 +1928,25 @@ export default function Workspace({
 					dirty={dirty}
 					onClose={() => setPatchOpen(false)}
 					onToast={showToast}
+				/>
+			)}
+
+			{batchOpen && (
+				<BatchEditDialog
+					species={speciesList}
+					onClose={() => setBatchOpen(false)}
+					onError={m => showToast('error', m)}
+					onApplied={report => {
+						onMonstersChanged(null);
+						lintWorkspace().then(setWorkspaceLints).catch(() => {});
+						setReloadKey(k => k + 1);
+						showToast(
+							'ok',
+							`Changed ${report.changed.toLocaleString()} ${
+								report.changed === 1 ? 'monster' : 'monsters'
+							}`
+						);
+					}}
 				/>
 			)}
 

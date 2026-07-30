@@ -124,7 +124,10 @@ fn get_thing(
 // ============================================================================
 
 use items::ItemInfo;
-use monster::{BalanceBand, Lint, MonsterDoc, MonsterSummary, SpellName};
+use monster::{
+    apply_target, matches_filter, BalanceBand, BatchFilter, BatchTarget, Lint, MonsterDoc,
+    MonsterSummary, SpellName,
+};
 use workspace::{WorkspaceInfo, WorkspacePaths, WorkspaceProbe};
 
 // ---------- Workspace (Agent 1) ----------
@@ -665,6 +668,102 @@ fn scale_loot_chances(
     Ok(ScaleReport { applied: apply, entries, files, zeroed, sample, truncated })
 }
 
+// ---------- Batch field edit ----------
+// The engine — filter, target, one-document edit — lives in `monster.rs`, where
+// an example can drive it. What is here is the wire shape and the corpus walk.
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct BatchChange {
+    file: String,
+    monster: String,
+    from: String,
+    to: String,
+    /// The change adds or removes a node rather than editing one in place.
+    structural: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchReport {
+    applied: bool,
+    /// Monsters the filter selects, whether or not the edit changes them.
+    matched: u32,
+    changed: u32,
+    files: u32,
+    /// Changes that add or remove a node instead of editing one in place. Those
+    /// move every line below them in the file, so the count is the diff-size
+    /// warning the splicing writer cannot give on its own.
+    structural: u32,
+    sample: Vec<BatchChange>,
+    truncated: bool,
+}
+
+const BATCH_PREVIEW_ROWS: usize = 500;
+
+
+/// Corpus-wide field edit, preview-then-apply like the loot tools: pick the
+/// monsters with a filter, then set, scale or clear one field across them. The
+/// dry run and the write are the same walk, so the preview list is exactly what
+/// the apply does.
+#[tauri::command]
+fn batch_edit(
+    state: State<WorkspaceState>,
+    filter: BatchFilter,
+    target: BatchTarget,
+    exclude_files: Vec<String>,
+    apply: bool,
+) -> Result<BatchReport, String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+
+    let mut matched = 0u32;
+    let mut changed = 0u32;
+    let mut structural = 0u32;
+    let mut sample = Vec::new();
+    let mut to_save = Vec::new();
+
+    for doc in &ws.docs {
+        if !matches_filter(doc, &filter) {
+            continue;
+        }
+        matched += 1;
+        // Unticked files are counted as matches — the preview listed them — but
+        // never walked, so the write skips exactly what the user said no to.
+        if exclude_files.iter().any(|f| f == &doc.file) {
+            continue;
+        }
+        let mut d = doc.clone();
+        if let Some(e) = apply_target(&mut d, &target)? {
+            changed += 1;
+            if e.structural {
+                structural += 1;
+            }
+            if sample.len() < BATCH_PREVIEW_ROWS {
+                sample.push(BatchChange {
+                    file: d.file.clone(),
+                    monster: d.name.clone(),
+                    from: e.from,
+                    to: e.to,
+                    structural: e.structural,
+                });
+            }
+            to_save.push(d);
+        }
+    }
+
+    let files = to_save.len() as u32;
+    let truncated = changed as usize > sample.len();
+
+    if apply {
+        for d in &to_save {
+            monster::save(&ws.monsters_dir(), &ws.registry, d)?;
+        }
+        refresh(&mut ws);
+    }
+
+    Ok(BatchReport { applied: apply, matched, changed, files, structural, sample, truncated })
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UsageRef {
@@ -945,6 +1044,7 @@ pub fn run() {
             item_usage,
             dropped_item_ids,
             scale_loot_chances,
+            batch_edit,
             patch_marks,
             all_lints,
             write_text_file

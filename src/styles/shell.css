@@ -308,6 +308,53 @@
 	font-size: 11px;
 }
 
+/* ---------- Corpus tools: batch field edit ---------- */
+
+.mx-batch-modal {
+	width: 760px;
+}
+
+.mx-batch-section {
+	margin-top: 4px;
+	color: var(--text-muted);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.mx-batch-filters {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.mx-batch-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.mx-batch-label {
+	flex: 0 0 96px;
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+/* A change that adds or removes a node moves every line under it — worth saying
+   in the same hue as the other "this will be bigger than you think" warnings. */
+.mx-batch-insert {
+	color: var(--warn);
+}
+
+.mx-batch-new {
+	padding: 0 5px;
+	border-radius: var(--radius);
+	background: var(--accent-dim);
+	color: var(--accent);
+	font-size: 10px;
+	text-transform: uppercase;
+}
+
 /* ---------- Corpus tools: patch notes ---------- */
 
 .mx-patch-modal {
