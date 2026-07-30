@@ -190,38 +190,41 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 			    it, so a first run is the single centred column it always was. */}
 			<div className="mx-landing-cols" data-side={saved.length || recent.length ? 'true' : undefined}>
 				<div className="mx-landing-col">
-					<div className="mx-slots">
-						{SLOTS.map(slot => {
-							const status = slotOf(probe, slot.key);
-							const path = slot.key === 'spells' ? paths.spells : paths[slot.key];
-							const state = !path ? 'empty' : status?.ok ? 'ok' : 'bad';
-							return (
-								<button
-									key={slot.key}
-									className="mx-slot"
-									data-state={state}
-									data-hover={hoverSlot === slot.key ? 'true' : undefined}
-									onClick={() => void pick(slot.key)}
-									onMouseEnter={() => setHoverSlot(slot.key)}
-									onMouseLeave={() => setHoverSlot(s => (s === slot.key ? null : s))}
-								>
-									<span className="mx-slot-icon">{slot.icon}</span>
-									<span className="mx-slot-body">
-										<span className="mx-slot-label">
-											{t(slot.label)}
-											{slot.optional && <span className="mx-slot-optional">{t('optional')}</span>}
-										</span>
-										<span className="mx-slot-path mono">{path || t(slot.hint)}</span>
-										{status && (status.summary || status.error) && (
-											<span className="mx-slot-status" data-ok={status.ok ? 'true' : 'false'}>
-												{status.ok ? <Check size={12} /> : <AlertCircle size={12} />}
-												{status.summary ?? status.error}
+					<div className="mx-landing-group">
+						<div className="mx-saved-label">{t('Folders')}</div>
+						<div className="mx-slots">
+							{SLOTS.map(slot => {
+								const status = slotOf(probe, slot.key);
+								const path = slot.key === 'spells' ? paths.spells : paths[slot.key];
+								const state = !path ? 'empty' : status?.ok ? 'ok' : 'bad';
+								return (
+									<button
+										key={slot.key}
+										className="mx-slot"
+										data-state={state}
+										data-hover={hoverSlot === slot.key ? 'true' : undefined}
+										onClick={() => void pick(slot.key)}
+										onMouseEnter={() => setHoverSlot(slot.key)}
+										onMouseLeave={() => setHoverSlot(s => (s === slot.key ? null : s))}
+									>
+										<span className="mx-slot-icon">{slot.icon}</span>
+										<span className="mx-slot-body">
+											<span className="mx-slot-label">
+												{t(slot.label)}
+												{slot.optional && <span className="mx-slot-optional">{t('optional')}</span>}
 											</span>
-										)}
-									</span>
-								</button>
-							);
-						})}
+											<span className="mx-slot-path mono">{path || t(slot.hint)}</span>
+											{status && (status.summary || status.error) && (
+												<span className="mx-slot-status" data-ok={status.ok ? 'true' : 'false'}>
+													{status.ok ? <Check size={12} /> : <AlertCircle size={12} />}
+													{status.summary ?? status.error}
+												</span>
+											)}
+										</span>
+									</button>
+								);
+							})}
+						</div>
 					</div>
 		
 					{/* The engine is one word once it is known, so it reads as one: a chip

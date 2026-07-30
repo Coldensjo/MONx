@@ -680,6 +680,16 @@
 
 /* ---------- Landing: the three workspace slots ---------- */
 
+/* The folder picker carries the same small label as the saved list beside it,
+   so both columns start on the same line with the same weight. */
+.mx-landing-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+	max-width: 560px;
+}
+
 .mx-slots {
 	display: flex;
 	flex-direction: column;

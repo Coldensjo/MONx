@@ -236,6 +236,7 @@ const pt: Record<string, string> = {
 
 	// --- Landing ---------------------------------------------------------------
 	Language: 'Idioma',
+	Folders: 'Pastas',
 	'Saved workspaces': 'Espaços de trabalho salvos',
 	Rename: 'Renomear',
 	'Forget this workspace': 'Esquecer este espaço de trabalho',

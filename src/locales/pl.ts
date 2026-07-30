@@ -311,6 +311,7 @@ const pl: Record<string, string> = {
 
 	// --- Landing -------------------------------------------------------------
 	Language: 'Język',
+	Folders: 'Foldery',
 	'Saved workspaces': 'Zapisane obszary robocze',
 	Rename: 'Zmień nazwę',
 	'Forget this workspace': 'Zapomnij ten obszar roboczy',
