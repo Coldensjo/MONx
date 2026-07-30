@@ -83,6 +83,23 @@ import { ThingAnimProvider, walkFrameMs, type PreviewUrl, type ThingAnimLookup }
  *  the same cap, so the exact value only matters for the very fastest. */
 const NOMINAL_SPEED = 100;
 
+/** The value that occurs most often, ignoring zeroes. */
+function commonest(values: Iterable<number>): number | undefined {
+	const counts = new Map<number, number>();
+	for (const v of values) {
+		if (v > 0) counts.set(v, (counts.get(v) ?? 0) + 1);
+	}
+	let best: number | undefined;
+	let seen = 0;
+	for (const [value, n] of counts) {
+		if (n > seen) {
+			seen = n;
+			best = value;
+		}
+	}
+	return best;
+}
+
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */
 type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
@@ -438,43 +455,44 @@ export default function Workspace({
 		};
 	}, [things]);
 
-	// The grid runs one clock for every cell, so each category gets the timing
-	// that dominates it rather than any single thing's.
+	// How long one cell holds a frame. This is per thing, not per category: two
+	// Canary outfits genuinely want different rates, because the foot delay is
+	// derived from the phase count and 158 of them walk in two phases against
+	// 1,232 in eight.
 	//
-	// Effects and missiles are phase-timed, so that is the commonest declared
-	// duration — 100 ms on Canary. **Outfit cells are not**: they animate the
-	// walk cycle, which the client times from the creature's speed and never
-	// from the phases, so the browser's own clock has to be the foot delay or
-	// every outfit crawls at the 300 ms its phases claim. The browser has no
-	// creature to read a speed from, hence a nominal one; the clamp swallows
-	// the choice anyway, since anything slower than about 375 lands on the cap.
+	// Effects and missiles are phase-timed, so they use their own declared
+	// duration. **Outfit cells are not**: they animate the walk cycle, which the
+	// client times from the creature's speed and never from the phases. The
+	// browser has no creature to read a speed from, hence a nominal one; the
+	// clamp swallows the choice for anything below about speed 375.
+	const cellIntervalFor = useCallback(
+		(view: ThingView, t: ThingSummary) => {
+			if (view === 'outfits') {
+				return walkFrameMs(NOMINAL_SPEED, t.walkFrames ?? 0, info.enhancedAnimations);
+			}
+			return commonest(t.frameDurations ?? []) ?? 0;
+		},
+		[info.enhancedAnimations]
+	);
+
+	// The timer runs at the shortest interval any cell in the category needs;
+	// everything slower counts ticks. Undefined leaves the fixed tick in place,
+	// which is what the `.spr`/`.dat` engines get — they declare no durations.
 	const thingIntervals = useMemo(() => {
-		const commonest = (values: Iterable<number>) => {
-			const counts = new Map<number, number>();
-			for (const v of values) {
-				if (v > 0) counts.set(v, (counts.get(v) ?? 0) + 1);
+		const base = (view: ThingView, list: ThingSummary[]) => {
+			let min = Infinity;
+			for (const t of list) {
+				const ms = cellIntervalFor(view, t);
+				if (ms > 0 && ms < min) min = ms;
 			}
-			let best: number | undefined;
-			let seen = 0;
-			for (const [value, n] of counts) {
-				if (n > seen) {
-					seen = n;
-					best = value;
-				}
-			}
-			return best;
+			return Number.isFinite(min) ? min : undefined;
 		};
-		const durations = (list: ThingSummary[]) =>
-			commonest(list.flatMap(t => t.frameDurations ?? []));
-		const walkPhases = commonest(things.outfit.map(t => t.walkFrames ?? 0));
 		return {
-			outfits: walkPhases
-				? walkFrameMs(NOMINAL_SPEED, walkPhases, info.enhancedAnimations)
-				: durations(things.outfit),
-			effects: durations(things.effect),
-			missiles: durations(things.missile)
+			outfits: base('outfits', things.outfit),
+			effects: base('effects', things.effect),
+			missiles: base('missiles', things.missile)
 		};
-	}, [things, info.enhancedAnimations]);
+	}, [things, cellIntervalFor]);
 
 	const thingAnim = useCallback<ThingAnimLookup>(
 		async (kind, id) => {
@@ -1958,6 +1976,7 @@ export default function Workspace({
 							searchId={t => t.id}
 							searchText={t => t.name ?? ''}
 							frameInterval={thingIntervals[view as ThingView]}
+							cellInterval={t => cellIntervalFor(view as ThingView, t)}
 							filters={view === 'outfits' ? outfitFilters : undefined}
 							selectionMode="single"
 							view={view}

@@ -620,13 +620,21 @@ error in speed.
 The last row is the point of doing it properly rather than picking a better constant: a fast
 monster's feet really do move faster, and now the preview shows it.
 
-The browser grid still runs one clock for the whole category — a contact sheet of two hundred
-things cannot afford two hundred timers, and `synchronized` says the client shares a clock too
-— but *which* clock depends on what the cells are showing. Effects and missiles are
-phase-timed, so it is the commonest declared duration. **Outfit cells animate the walk cycle**,
-so it has to be the foot delay, or the grid keeps crawling at 300 ms after the preview has been
-fixed. There is no creature in a browser to read a speed from, so it uses a nominal one; the
-clamp swallows the choice, since anything below about speed 375 lands on the same cap.
+The browser grid keeps one *timer* — a contact sheet of two hundred things cannot afford two
+hundred of them — but not one *rate*. It ticks at the shortest interval anything in the
+category needs, and each cell holds its frame across as many ticks as it wants. That is not a
+refinement; a shared rate is simply wrong here, because the foot delay follows the phase count
+and Canary's outfits are split between the two:
+
+| Walk phases | Outfits | Divisor | Clamp | Delay |
+|---|---|---|---|---|
+| 8 | 1,232 | 5 | 30–80 | 80 ms |
+| 2 | 158 | 2 | 20–205 | 205 ms |
+
+A two-phase outfit driven at the eight-phase rate flickers, which is exactly how it looked.
+Effects and missiles are phase-timed and use their own declared duration; outfit cells animate
+the walk cycle and use the foot delay. There is no creature in a browser to read a speed from,
+so it uses a nominal one — the clamp swallows the choice for anything below about speed 375.
 
 The `.spr`/`.dat` engines state no durations at all, so they keep the fixed tick their client
 used. The fallback is not a guess there — it is the format's actual answer.

@@ -46,10 +46,16 @@ export interface ThingBrowserProps<T> {
 	draggable?: boolean;
 	/** Persists zoom under `monx.zoom.<view>`. */
 	view: string;
-	/** Milliseconds per grid animation step. Defaults to the fixed tick the
-	 *  `.spr`/`.dat` client used for everything; a modern bundle states a
-	 *  duration per phase, and the caller passes the one that dominates. */
+	/** Milliseconds per grid tick — the base clock. Defaults to the fixed tick
+	 *  the `.spr`/`.dat` client used for everything. Set it to the shortest
+	 *  interval any cell needs, since a cell can wait several ticks but cannot
+	 *  animate between two. */
 	frameInterval?: number;
+	/** How long one cell holds a frame, when that differs from cell to cell.
+	 *  Two Canary outfits can want 80 ms and 205 ms — the phase count decides,
+	 *  and 158 of them are in one camp and 1,232 in the other — so one clock
+	 *  cannot serve the grid. Returning 0 means "just use the base tick". */
+	cellInterval?: (item: T) => number;
 
 	// ---- optional hooks; every one of these is off by default ----
 
@@ -142,6 +148,9 @@ interface RowProps<T> {
 	cellW: number;
 	cellH: number;
 	gridFrame: number;
+	/** Milliseconds one `gridFrame` step represents, so a cell can work out how
+	 *  much time has passed and hold its own frame for longer. */
+	baseInterval: number;
 	animateEnabled: boolean;
 	selectedKeys: Set<CellKey>;
 	primaryKey: CellKey | null;
@@ -165,6 +174,7 @@ function GridRowInner<T>({
 	cellW,
 	cellH,
 	gridFrame,
+	baseInterval,
 	animateEnabled,
 	selectedKeys,
 	primaryKey,
@@ -175,14 +185,19 @@ function GridRowInner<T>({
 	onCellContextMenu,
 	onCellDoubleClick
 }: RowProps<T>) {
-	const { rowAtlasUrl, cellKey, cellLabel, cellTitle, cellMark, cellFrames, cellUrl } = props;
+	const { rowAtlasUrl, cellKey, cellLabel, cellTitle, cellMark, cellFrames, cellUrl, cellInterval } = props;
 	const rowAnimates = animateEnabled && !!cellFrames && !!cellUrl && cells.some(c => cellFrames(c) > 1);
 	const atlasUrl = rowAnimates ? null : rowAtlasUrl(cells, zoom);
+	// The clock ticks at the shortest interval anything needs; a cell wanting a
+	// longer one simply holds each frame for several ticks.
+	const elapsed = gridFrame * baseInterval;
 	return (
 		<div className="ss-grid-row" style={{ top, paddingLeft: GRID_PAD }}>
 			{cells.map((item, i) => {
 				const key = cellKey(item);
 				const frames = cellFrames ? cellFrames(item) : 1;
+				const hold = cellInterval ? cellInterval(item) : 0;
+				const frame = hold > 0 ? Math.floor(elapsed / hold) : gridFrame;
 				return (
 					<BrowserCell
 						key={key}
@@ -201,7 +216,7 @@ function GridRowInner<T>({
 						// cell must render per-cell — a static one is simply frame 0.
 						animated={rowAnimates}
 						frames={frames}
-						gridFrame={gridFrame}
+						gridFrame={frame}
 						cellUrl={cellUrl}
 						selected={selectedKeys.has(key)}
 						primary={primaryKey === key}
@@ -691,22 +706,20 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		[shown, animateEnabled, cellFrames]
 	);
 
-	// One clock for the whole grid, not one per cell: a contact sheet of two
-	// hundred things cannot afford two hundred timers, and the format's own
-	// `synchronized` flag says a shared clock is what the client does too.
-	// `frameInterval` lets the caller set that clock from the client's declared
-	// durations — 300 ms for a modern walk cycle against the `.dat`'s fixed 220.
+	// One timer for the whole grid, not one per cell: a contact sheet of two
+	// hundred things cannot afford two hundred timers. It runs at the shortest
+	// interval anything needs, and `cellInterval` lets a slower cell hold each
+	// frame across several ticks — which is what keeps a two-phase outfit from
+	// flickering at the eight-phase rate beside it.
+	const tickMs = frameInterval ?? (view === 'items' ? ITEM_ANIM_INTERVAL_MS : ANIM_INTERVAL_MS);
 	useEffect(() => {
 		if (!gridAnimates) {
 			setGridFrame(0);
 			return;
 		}
-		const t = setInterval(
-			() => setGridFrame(f => f + 1),
-			frameInterval ?? (view === 'items' ? ITEM_ANIM_INTERVAL_MS : ANIM_INTERVAL_MS)
-		);
+		const t = setInterval(() => setGridFrame(f => f + 1), tickMs);
 		return () => clearInterval(t);
-	}, [gridAnimates, view, frameInterval]);
+	}, [gridAnimates, tickMs]);
 
 	return (
 		<>
@@ -835,6 +848,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 							cellW={cellW}
 							cellH={cellH}
 							gridFrame={gridFrame}
+							baseInterval={tickMs}
 							animateEnabled={animateEnabled}
 							selectedKeys={selectedKeys}
 							primaryKey={primaryKey}
