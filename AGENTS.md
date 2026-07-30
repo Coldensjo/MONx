@@ -55,7 +55,7 @@ On Linux use `./monx.sh` — it runs the hot-reloading dev app, forcing XWayland
 - Portable: `src-tauri/target/release/monx-portable.exe` (renamed/copied by `scripts/prepare-portable.mjs`)
 - Installer: `src-tauri/target/release/bundle/nsis/`
 
-**Version bumps** touch three files: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`.
+**Version bumps** touch three files: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`. Bump the patch version on every change to the software — keep all three in sync, in the same commit as the change itself.
 
 **Sprite probes** (run from `src-tauri/`; `probe_monster` is above):
 
