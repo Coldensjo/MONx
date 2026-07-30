@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirm, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { Package, PersonStanding, Plus, Save, Skull, Sparkles, Trash2, Users, Wand2, X } from 'lucide-react';
+import { Package, Percent, PersonStanding, Plus, Save, Skull, Sparkles, Trash2, Users, Wand2, X } from 'lucide-react';
 import {
 	getItem,
 	allLints as fetchAllLints,
@@ -401,7 +401,9 @@ export default function Workspace({
 		}
 	}, [monsters]);
 
-	const [scaling, setScaling] = useState(false);
+	/** The loot-chance scaler: null when closed, else the item it opens on
+	 *  (`null` item id = the whole corpus, as the Tools menu opens it). */
+	const [scaling, setScaling] = useState<{ itemId: number | null } | null>(null);
 
 	const exportLints = useCallback(async () => {
 		try {
@@ -847,9 +849,9 @@ export default function Workspace({
 					onSelect: () => setTool('all')
 				},
 				{
-					label: `Scale all loot chances…${toolsBlocked}`,
+					label: `Scale loot chances…${toolsBlocked}`,
 					disabled: dirty,
-					onSelect: () => setScaling(true)
+					onSelect: () => setScaling({ itemId: null })
 				},
 				{
 					label: 'Export lint report…',
@@ -1484,6 +1486,20 @@ export default function Workspace({
 									</button>
 									<button
 										className="ss-menu-item"
+										// Same gate as the Tools menu: the scaler rewrites files from
+										// what is on disk, so an unsaved buffer would be overwritten.
+										disabled={dirty}
+										title={dirty ? 'Save the open monster first' : undefined}
+										onClick={() => {
+											setItemMenu(null);
+											setScaling({ itemId: itemMenu.item.serverId });
+										}}
+									>
+										<Percent size={14} />
+										Scale drop chance…
+									</button>
+									<button
+										className="ss-menu-item"
 										onClick={() => {
 											setItemMenu(null);
 											void navigator.clipboard.writeText(String(itemMenu.item.serverId));
@@ -1740,7 +1756,8 @@ export default function Workspace({
 
 			{scaling && (
 				<ScaleLootDialog
-					onClose={() => setScaling(false)}
+					initialItemId={scaling.itemId}
+					onClose={() => setScaling(null)}
 					onError={m => showToast('error', m)}
 					onApplied={report => {
 						onMonstersChanged(null);

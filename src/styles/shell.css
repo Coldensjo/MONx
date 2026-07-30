@@ -191,6 +191,123 @@
 	color: var(--warn);
 }
 
+/* ---------- Corpus tools: the loot chance scaler ---------- */
+
+.mx-scale-modal {
+	width: 720px;
+}
+
+.mx-scale-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.mx-scale-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.mx-scale-label {
+	flex: 0 0 52px;
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.mx-scale-modes,
+.mx-scale-mode {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+}
+
+.mx-scale-modes {
+	gap: 12px;
+}
+
+.mx-scale-check {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 12px;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.mx-scale-head {
+	display: flex;
+	gap: 6px;
+	padding-bottom: 4px;
+}
+
+/* Rows are taller than the pin preview's — each carries a sprite. */
+.mx-scale-list {
+	max-height: 320px;
+	line-height: 1.4;
+	font-size: 12px;
+}
+
+.mx-scale-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 0;
+	cursor: pointer;
+}
+
+/* Unticked: still listed, so the count can be reasoned about, but visibly out. */
+.mx-scale-off {
+	opacity: 0.45;
+	text-decoration: line-through;
+}
+
+.mx-scale-monster {
+	flex: 0 0 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mx-scale-entries {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.mx-scale-entry {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+
+.mx-scale-name {
+	flex: 0 0 140px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--text-muted);
+}
+
+.mx-scale-from {
+	color: var(--text-muted);
+}
+
+.mx-scale-arrow {
+	color: var(--text-muted);
+}
+
+.mx-scale-to {
+	color: var(--accent);
+}
+
+.mx-scale-odds {
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
 /* ---------- Landing: the three workspace slots ---------- */
 
 .mx-slots {

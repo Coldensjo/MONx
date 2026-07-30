@@ -271,6 +271,8 @@ export interface ScaledEntry {
 	file: string;
 	monster: string;
 	label: string;
+	/** Server id the entry drops, when it resolves to one — for the row sprite. */
+	itemId: number | null;
 	from: number;
 	to: number;
 }
@@ -279,7 +281,23 @@ export interface ScaleReport {
 	applied: boolean;
 	entries: number;
 	files: number;
+	/** Entries that go from a real chance to never dropping at all. */
+	zeroed: number;
 	sample: ScaledEntry[];
+	/** True when more entries change than `sample` lists. */
+	truncated: boolean;
+}
+
+export interface ScaleOptions {
+	/** False multiplies by `percent`; true sets every matched chance to `percent`%. */
+	set: boolean;
+	percent: number;
+	/** Only entries dropping this server id; null is the whole corpus. */
+	itemId: number | null;
+	/** A chance that would round down to 0 lands on 1 instead. */
+	keepNonzero: boolean;
+	/** Files unticked in the preview — matched, listed, not written. */
+	excludeFiles: string[];
 }
 
 // ---------- Item usage ----------
@@ -439,8 +457,8 @@ export function droppedItemIds(): Promise<number[]> {
 }
 
 /** Corpus-wide loot chance scaling; `apply: false` is the preview. */
-export function scaleLootChances(percent: number, apply: boolean): Promise<ScaleReport> {
-	return invoke<ScaleReport>('scale_loot_chances', { percent, apply });
+export function scaleLootChances(opts: ScaleOptions, apply: boolean): Promise<ScaleReport> {
+	return invoke<ScaleReport>('scale_loot_chances', { opts, apply });
 }
 
 /** Every lint in the workspace — workspace-scope plus each monster's own. */

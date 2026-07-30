@@ -218,6 +218,6 @@ Four rules that come up constantly:
 - Do not break the `monx://` / `http://monx.localhost` dual-base URL logic; both platforms must keep working.
 - Do not normalise, reorder, or drop anything on save — see round-trip above.
 - Do not write `items.otb` or any client file. MONx reads them.
-- Do not add dependencies beyond the ones already in `Cargo.toml`.
+- Do not add dependencies beyond the ones already in `Cargo.toml` unless there are huge benefits in so, ask first.
 - Keep changes minimal. No new abstractions unless the pattern repeats 3+ times.
 - Do not add tests, docs, or config files unless explicitly requested.
