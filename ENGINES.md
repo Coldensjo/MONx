@@ -1,7 +1,12 @@
 # MONx — Multi-engine support
 
-**Status: design, not implemented.** This document specifies what has to change for MONx to
-open, edit, lint and save monster corpora for engines other than Ironcore.
+**Status: implemented** (0.1.12). This document is the reference for *why* each engine differs;
+`engine.rs` is the authority for what MONx does about it. §6 records what shipped against the
+original phasing, and §7–8 what is still open.
+
+Gates, run against each engine's own shipped corpus — 1,866 files in total: round-trip
+byte-identical, canonical re-read equal, `--mutate` equal after an edit, `--crud` consistent
+with `monsters.xml`. Detection identifies all four unaided.
 
 Four engines are in scope:
 
@@ -382,6 +387,34 @@ Each phase is independently shippable and leaves the app working.
 Phases 1–3 are worth doing even if the others never ship: they turn "MONx corrupts nothing but
 lies to you" into "MONx tells you what it is looking at".
 
+### What actually shipped
+
+All eight, in two commits rather than eight — the phases turned out to be far more coupled than
+the plan assumed. `known_attrs` alone decides the reader, the writer and what the lints can see,
+so splitting "profile plumbing" from "the TFS profile" would have meant landing a profile that
+declared nothing and a `--mutate` gate that could not run.
+
+Three predictions were wrong, all in the same direction — the foreign corpora found bugs in the
+*existing* Ironcore code rather than in the new profiles:
+
+- A loot entry with both `id` and `name` lost the name on re-render. Ironcore's corpus rarely
+  writes both; TFS's writes both as a matter of course.
+- `MeleeBlock` stored `skill`/`attack` as `i64`, so "absent" and "0" were one value. They are
+  not: the loader only derives melee damage when both are *written*, so saving TFS's
+  `fire_overlord` — which omits both and states its damage as min/max — would have zeroed its
+  melee. Now `Option<i64>`.
+- The writer reordered `min`/`max` when the loader would swap them, which is precisely the
+  silent rewriting the round-trip rule forbids. It is a lint, and `lintfix` already offers the
+  swap.
+
+And one in the UI, surfaced rather than caused: `monx.lastMonster` was a single global key, so
+reopening restored one corpus's file into another. Harmless while every key was a bare
+filename; an error toast once they carry subfolders. Now scoped per workspace.
+
+The lint gating (phase 5) is worth its own note. Before it, the foreign corpora reported 1,634
+(TFS), 854 (TVP) and 256 (Nostalrius) findings, nearly all of them Ironcore rules the target
+server does not implement. After: 872, 85 and 16 — and Ironcore's own count did not move.
+
 ---
 
 ## 7. Risks
@@ -411,18 +444,32 @@ mapping is mechanical.
 that the Combat section currently expects to find in a spell card. Design that section before
 implementing the reader, not after.
 
-## 8. Open questions
+## 8. Still open
 
-- Ironcore's `<targetstrategies nearest health damage random>` is currently an unmodelled raw
-  region. Modelling `<targetstrategy>` for TVP/Nostalrius makes it cheap to model Ironcore's
-  too. Worth doing in the same pass, or deliberately out of scope?
-- Should a workspace be allowed to *change* engine after open (a "reinterpret as…" action), or
-  is close-and-reopen the only path? Reinterpretation is a one-line state change but every
-  cached lint and summary has to be rebuilt.
-- The three foreign corpora ship with their engines under `sources/`. Keeping them as
-  permanent probe fixtures makes the acceptance test trivial, but `sources/` is gitignored —
-  do the fixtures move somewhere durable, or does the probe stay opt-in on a local path?
+**Nostalrius items are not readable.** It ships `data/items/items.srv`, the 7.x text format,
+where MONx's item layer wants `items.otb` + `items.xml`. Its monster corpus opens, lints and
+saves correctly, but only with another server's items folder standing in — so loot ids resolve
+to the wrong names and sprites. This is the one real gap: it is in the *items* layer, which
+this work deliberately did not touch, and closing it means an `items.srv` reader in `items.rs`.
+Nothing in the engine profiles helps.
+
+**TVP's `speed=` collision is reported, not resolved.** The loader reads `speed` as the cast
+cadence and then, on a `speed` spell, again as the delta — so one node cannot carry both. MONx
+lints it (`spell.speed-attribute-collision`, 57 findings in TVP's own corpus) and declines to
+invent an `interval` the server would never read. Whether the editor should offer to split such
+a spell in two is a design question, not a bug.
+
+Smaller ones:
+
+- Ironcore's `<targetstrategies nearest health damage random>` is still an unmodelled raw
+  region. Modelling `<targetstrategy>` for the 7.x engines made it cheap to model Ironcore's
+  too; it was left out to keep the diff honest about what was verified.
+- A workspace cannot *change* engine after open — close and reopen. Reinterpretation is a
+  one-line state change, but every cached lint and summary has to be rebuilt.
+- The three foreign corpora live under the gitignored `sources/`, so the foreign gates are
+  opt-in on a local checkout rather than something CI could run.
 - TFS's `MonsterSpell` path (`monsters.cpp:548`, the Lua-registered spell revive) accepts a
   different attribute set from the XML path. MONx only reads XML, so it is out of scope — but
-  a monster referencing a Lua-registered spell by name will lint as an unknown spell name
-  unless the profile knows to defer, exactly as `spells.rs` already defers for `###` names.
+  a monster referencing a Lua-registered spell by name lints as an unknown spell name unless
+  the profile learns to defer, exactly as `spells.rs` already defers for `###` names. This is
+  most of TFS's remaining 145 `spell.name-unverifiable` findings.

@@ -37,6 +37,16 @@ cargo run --release --example probe_monster -- ../assets/monsters --crud <scratc
 
 `--mutate` is the one that proves the writer is driven by the model rather than copying bytes: it edits several fields in every file, writes, re-reads, and checks the document that comes back is the one that went in. It also budgets the diff — a handful of field edits that rewrite more than 12 lines fail, because the writer is meant to splice. A change that *inserts or removes* a node moves every line under it and can never meet that budget, so it belongs in a pass of its own (see `voice_extras_survive`). Add `--verbose` to any of them to list every finding.
 
+`--engine <key>` picks the profile (`ironcore`, `tfs`, `tvp`, `nostalrius`); without it the corpus is sniffed exactly as the Landing dialog sniffs it, and the guess is printed. **Run every gate against all four engines' own corpora when touching the reader, writer or a profile** — an over-declared `known_attrs` drops data, and `--mutate` is the only thing that catches it:
+
+```sh
+cargo run --release --example probe_monster -- ../sources/forgottenserver-master/data/monster --engine tfs --mutate
+cargo run --release --example probe_monster -- ../sources/TVP-main/data/monster --engine tvp --mutate
+cargo run --release --example probe_monster -- ../sources/Nostalrius-master/data/monster --engine nostalrius --mutate
+```
+
+Those corpora ship with the engines under `sources/`, which is gitignored — clone them there to run the foreign gates.
+
 ## Commands
 
 ```sh
@@ -84,6 +94,7 @@ cargo run --example probe_dat -- <file.dat> <file.spr> [out_dir]
 │  spells.rs   — spell name catalogue + ### verification    │
 │  lint.rs     — the lint engine                           │
 │  catalog.rs  — enum catalogues (effects, conditions, …)   │
+│  engine.rs   — engine profiles (Ironcore/TFS/TVP/Nostal.) │
 │  otb.rs      — items.otb server↔client id map            │
 │  items.rs    — items.xml database + name search          │
 │  spr.rs      — .spr file reader (inherited, frozen)      │
@@ -165,6 +176,12 @@ assets/                fixture workspace: monsters/, items/, client/
 
 **Do not infer behaviour from upstream TFS.** Ironcore diverges in ways that matter constantly: per-spell cooldowns, extra flags, the pacifist system, `force` on summons, `corpseactionid`, `masterEffect`.
 
+MONx also opens **TheForgottenServer 1.x, TheVioletProject and Nostalrius** corpora. Everything below describes Ironcore, which is the default profile; what the other three do differently lives in `engine.rs` and is summarised in [ENGINES.md](ENGINES.md). Three consequences worth knowing before touching anything:
+
+- **The reader, writer and linter all take a `&'static EngineProfile`.** There is one `MonsterDoc` for all four engines — a superset — and the profile decides which parts the reader populates and the writer emits. Never hard-code a spelling like `raceid` or `CONST_ME_*`; ask the profile.
+- **A corpus can be a tree.** Only Ironcore is flat. A monster's key is its path relative to the monsters folder (`monsters/demon.xml`), matching its `file=` in `monsters.xml`.
+- **A lint the engine has no rule for is suppressed, not reported.** `silent` severity is only worth anything if it means the server really would say nothing; firing Ironcore's rules at a TVP corpus inverts that. Per-engine suppressions live on the profile.
+
 The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the product in `DESIGN.md`; both were derived from the server's own source and have since been removed from the repo. The `§n` markers throughout the code cite them. What they said now lives in the code, and that is where to look — or to add to:
 
 - `catalog.rs` / `catalog.ts` — the enum tables (flags, damage and condition types, races, skulls, `CONST_ME_*`, `CONST_ANI_*`, built-in spells), each citing its section.
@@ -175,7 +192,7 @@ The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the pro
 Four rules that come up constantly:
 
 - **Round-trip is sacred.** Unknown attributes and comments are preserved verbatim; nothing is reordered or normalised on save. A value the engine would clamp gets linted, not silently rewritten.
-- **Exact casing on the wire.** `raceid`, `maxSummons`, `actionId`, and upper-case `CONST_ME_*` / `CONST_ANI_*`.
+- **Exact casing on the wire.** `raceid`, `maxSummons`, `actionId`, and upper-case `CONST_ME_*` / `CONST_ANI_*` — under Ironcore. Which spelling is the live one is a property of the engine: TFS reads `raceId` and names effects `firearea`, so both come from the profile rather than a literal.
 - **MONx never invents item ids.** A loot id with no `items.otb` entry is a lint, not something to create.
 - **`silent` is the loudest severity, not the quietest.** It marks the findings the server never reports at all — a spell the loader drops without a word. Those are the ones a human cannot discover any other way, so the UI gives them their own icon and hue rather than burying them under errors.
 
