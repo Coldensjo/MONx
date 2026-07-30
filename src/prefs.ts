@@ -21,6 +21,10 @@ export interface Prefs {
  *  empty on most monsters, so the tab stays out of the way until asked for. */
 const HIDDEN_BY_DEFAULT: readonly SectionId[] = ['events'];
 
+/** Engine-specific sections. They are gated by the active engine anyway, so a
+ *  stored preference from before they existed should not hide them. */
+const ALWAYS_OFFERED: readonly SectionId[] = ['bestiary', 'strategy'];
+
 export const DEFAULT_PREFS: Prefs = {
 	defaultSection: 'identity',
 	visibleSections: SECTION_IDS.filter(id => !HIDDEN_BY_DEFAULT.includes(id))
@@ -41,6 +45,14 @@ export function loadPrefs(): Prefs {
 		if (!raw) return DEFAULT_PREFS;
 		const parsed = JSON.parse(raw) as Partial<Prefs>;
 		const visible = (parsed.visibleSections ?? []).filter(isSection);
+		// A section that did not exist when this blob was written is treated as
+		// visible rather than hidden. Otherwise opening a TFS workspace for the
+		// first time would silently omit its Bestiary tab, and the user would
+		// have no reason to suspect a preference was the cause.
+		for (const id of SECTION_IDS) {
+			if (!ALWAYS_OFFERED.includes(id)) continue;
+			if (!visible.includes(id)) visible.push(id);
+		}
 		return {
 			defaultSection: isSection(parsed.defaultSection) ? parsed.defaultSection : DEFAULT_PREFS.defaultSection,
 			visibleSections: visible.length > 0 ? visible : DEFAULT_PREFS.visibleSections

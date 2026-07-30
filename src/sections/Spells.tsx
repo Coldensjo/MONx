@@ -20,13 +20,14 @@ function blankSpell(which: 'attacks' | 'defenses'): SpellBlock {
 		script: null,
 		interval: 2000,
 		chance: attack ? 100 : 15,
+		delay: null,
 		range: attack ? 1 : 0,
 		min: 0,
 		max: 0,
 		target: false,
 		direction: false,
 		area: null,
-		melee: attack ? { skill: 0, attack: 0, condition: null } : null,
+		melee: attack ? { skill: 0, attack: 0, condition: null, skillfactor: null, skillnextlevel: null, skilladdcount: null, poisoncycles: null } : null,
 		condition: null,
 		status: null,
 		effects: { shootEffect: null, areaEffect: null, aoeShootEffect: false }
@@ -57,6 +58,7 @@ export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed,
 						block={block}
 						onChange={next => setBlocks(blocks.map((b, j) => (j === i ? next : b)))}
 						spells={spells}
+						engine={doc.engine}
 						lintAt={suffix => lintAt(`${which}[${i}].${suffix}`)}
 						readOnly={readOnly}
 						parent={which}

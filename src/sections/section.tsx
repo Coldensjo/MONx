@@ -7,7 +7,9 @@ import { BLOCK_LABEL, isBlockKind, useBlocks } from '../blocks';
 export const SECTION_IDS = [
 	'identity',
 	'look',
+	'bestiary',
 	'combat',
+	'strategy',
 	'attacks',
 	'defenses',
 	'resistances',
@@ -19,10 +21,25 @@ export const SECTION_IDS = [
 
 export type SectionId = (typeof SECTION_IDS)[number];
 
+/**
+ * Sections that only exist on some engines, keyed by the `EngineInfo` flag that
+ * decides. Anything absent from this table is universal.
+ *
+ * A section the engine does not have is not merely hidden — it is not offered in
+ * Preferences either, so a tab cannot be resurrected for a workspace whose
+ * server has never heard of it.
+ */
+export const SECTION_ENGINE_FLAG: Partial<Record<SectionId, 'bestiary' | 'targetStrategy'>> = {
+	bestiary: 'bestiary',
+	strategy: 'targetStrategy'
+};
+
 export const SECTION_LABEL: Record<SectionId, string> = {
 	identity: 'Identity',
 	look: 'Look',
+	bestiary: 'Bestiary',
 	combat: 'Combat',
+	strategy: 'Target strategy',
 	attacks: 'Attacks',
 	defenses: 'Defenses',
 	resistances: 'Resistances',

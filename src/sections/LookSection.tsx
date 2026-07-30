@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link2, PackageSearch, Unlink, X } from 'lucide-react';
 import { itemUrl, type Look } from '../monster';
+import { engineInfo } from '../engine';
 import { Field } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { ColorSwatchGrid } from '../fields/ColorSwatchGrid';
@@ -35,6 +36,7 @@ export function LookSection({
 	onBrowseCorpses,
 	onBrowseItems
 }: Props) {
+	const engine = engineInfo(doc.engine);
 	// Health stays locked unless the author deliberately wants a monster that
 	// spawns damaged; the loader clamps now > max and warns (§4).
 	const [healthUnlocked, setHealthUnlocked] = useState(doc.health.now !== doc.health.max);
@@ -157,7 +159,10 @@ export function LookSection({
 					</div>
 				</SubGroup>
 
+				{/* The 7.x engines read neither addons nor mount from <look>. */}
+				{(engine.lookAddons || engine.lookMount) && (
 				<div className="ss-ed-card-grid">
+					{engine.lookAddons && (
 					<Field label="Addons" ignored={typeex}>
 						<div className="ss-ed-inline">
 							<Toggle
@@ -174,11 +179,15 @@ export function LookSection({
 							/>
 						</div>
 					</Field>
+					)}
 
+					{engine.lookMount && (
 					<Field label="Mount" lints={lintAt('look.mount')} note="Read in both modes.">
 						<NumberField value={look.mount} onChange={v => setLook({ mount: v })} min={0} width={110} disabled={readOnly} />
 					</Field>
+					)}
 				</div>
+				)}
 			</div>
 
 			<SubGroup title="Corpse">
@@ -228,6 +237,7 @@ export function LookSection({
 
 				<DecayChain serverId={look.corpse === 0 ? null : look.corpse} />
 
+				{engine.corpseactionid && (
 				<Field
 					label="Corpse action id"
 					lints={lintAt('look.corpseactionid')}
@@ -241,6 +251,7 @@ export function LookSection({
 						disabled={readOnly}
 					/>
 				</Field>
+				)}
 			</SubGroup>
 
 			<SubGroup title="Health">

@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { BOOLEAN_FLAGS, FLAG_GROUP_LABEL, NUMERIC_FLAGS } from '../catalog';
+import { engineInfo } from '../engine';
+import { maxMeleeDamage } from '../derive';
+import type { AttacksStats } from '../monster';
 import { Field } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { Toggle } from '../fields/Toggle';
@@ -12,7 +15,10 @@ interface Props extends SectionProps {
 
 const GROUPS = ['behaviour', 'push', 'terrain'] as const;
 
+const blankAttacks = (s: AttacksStats | null): AttacksStats => s ?? { attack: 0, skill: 0, poison: null };
+
 export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const engine = engineInfo(doc.engine);
 	const [showPacifist, setShowPacifist] = useState(
 		doc.flags.pacifist === true || doc.flags.deaggroonkill === true || doc.flags.singletarget === true
 	);
@@ -37,10 +43,16 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 			onToggle={() => onToggle('combat')}
 			summary={`armor ${doc.defenseStats.armor} · defense ${doc.defenseStats.defense}`}
 		>
-			{GROUPS.map(group => (
+			{/* A group whose flags this engine all lacks renders nothing — an empty
+			    "Terrain" heading reads as a missing feature rather than an absent one. */}
+			{GROUPS.filter(
+				group =>
+					BOOLEAN_FLAGS.some(f => f.group === group && engine.boolFlags.includes(f.key)) ||
+					NUMERIC_FLAGS.some(f => f.group === group && engine.numFlags.includes(f.key))
+			).map(group => (
 				<SubGroup key={group} title={FLAG_GROUP_LABEL[group]}>
 					<div className="ss-ed-flags">
-						{BOOLEAN_FLAGS.filter(f => f.group === group).map(f => {
+						{BOOLEAN_FLAGS.filter(f => f.group === group && engine.boolFlags.includes(f.key)).map(f => {
 							const value = boolFlag(f.key, f.default);
 							return (
 								<Toggle
@@ -56,7 +68,7 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 						})}
 					</div>
 					<div className="ss-ed-card-grid">
-						{NUMERIC_FLAGS.filter(f => f.group === group).map(f => (
+						{NUMERIC_FLAGS.filter(f => f.group === group && engine.numFlags.includes(f.key)).map(f => (
 							<Field key={f.key} label={f.label} lints={lintAt(`flags.${f.key}`)} note={f.note}>
 								<NumberField
 									value={numFlag(f.key, f.default)}
@@ -117,6 +129,55 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 				</div>
 			</SubGroup>
 
+			{/* Nostalrius has no melee spell: the monster's melee is `skill` and
+			    `attack` on the `<attacks>` container itself, which makes it a
+			    monster stat rather than one of its spells. */}
+			{engine.meleeOnAttacks && (
+				<SubGroup
+					title="Melee"
+					note="On this engine melee lives on <attacks>, not in a spell block. Both skill and attack are needed."
+				>
+					<div className="ss-ed-card-grid">
+						<Field label="Skill" lints={lintAt('attacksStats')}>
+							<NumberField
+								value={doc.attacksStats?.skill ?? 0}
+								onChange={v => patch({ attacksStats: { ...blankAttacks(doc.attacksStats), skill: v } })}
+								min={0}
+								width={110}
+								disabled={readOnly}
+							/>
+						</Field>
+						<Field label="Attack" lints={lintAt('attacksStats')}>
+							<NumberField
+								value={doc.attacksStats?.attack ?? 0}
+								onChange={v => patch({ attacksStats: { ...blankAttacks(doc.attacksStats), attack: v } })}
+								min={0}
+								width={110}
+								disabled={readOnly}
+							/>
+						</Field>
+						<Field label="Max damage" hint="derived">
+							<span className="ss-ed-derived">
+								{doc.attacksStats
+									? maxMeleeDamage(doc.attacksStats.skill, doc.attacksStats.attack)
+									: '—'}
+							</span>
+						</Field>
+						<Field label="Poison" hint="optional, on hit">
+							<NumberField
+								value={doc.attacksStats?.poison ?? 0}
+								onChange={v =>
+									patch({ attacksStats: { ...blankAttacks(doc.attacksStats), poison: v || null } })
+								}
+								min={0}
+								width={110}
+								disabled={readOnly}
+							/>
+						</Field>
+					</div>
+				</SubGroup>
+			)}
+
 			<SubGroup
 				title="Defense stats"
 				note="Armor reduces melee and physical hits; defense is only consulted on hits that check it, i.e. melee."
@@ -143,6 +204,9 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 				</div>
 			</SubGroup>
 
+			{/* The pacifist system is Ironcore-only; every other loader reports its
+			    flags as unknown and ignores them. */}
+			{engine.pacifist && (
 			<div className="ss-ed-advanced">
 				<button type="button" className="ss-btn ss-btn-ghost" onClick={() => setShowPacifist(s => !s)}>
 					{showPacifist ? 'Hide' : 'Show'} pacifist system (Ironcore)
@@ -190,6 +254,7 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 					</SubGroup>
 				)}
 			</div>
+			)}
 		</Section>
 	);
 }

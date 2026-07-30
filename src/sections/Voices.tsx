@@ -5,6 +5,7 @@ import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
 import { Toggle } from '../fields/Toggle';
 import { SortableList } from '../fields/SortableList';
+import { engineInfo } from '../engine';
 import { Section, type SectionId, type SectionProps } from './section';
 
 interface Props extends SectionProps {
@@ -15,6 +16,7 @@ interface Props extends SectionProps {
 /** The random voice pool. The two pacifist strings and the creature events live
  *  in Pacifist & Events — they are Ironcore extras most monsters never use. */
 export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const engine = engineInfo(doc.engine);
 	const voices = doc.voices;
 	const setLines = (lines: VoiceLine[]) => patch({ voices: { ...voices, lines } });
 
@@ -32,6 +34,10 @@ export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 			onToggle={() => onToggle('voices')}
 			summary={voices.lines.length === 1 ? '1 line' : `${voices.lines.length} lines`}
 		>
+			{/* TVP has both attributes commented out in its loader and Nostalrius
+			    never read them: on those engines every line is simply in the pool,
+			    and showing a cadence would be showing one the server ignores. */}
+			{engine.voicesCadence && (
 			<div className="ss-ed-card-grid">
 				<Field label="Interval" lints={lintAt('voices.interval')} hint="ms">
 					<NumberField
@@ -59,8 +65,9 @@ export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 					/>
 				</Field>
 			</div>
+			)}
 
-			{!silent && voices.interval > 0 && (
+			{engine.voicesCadence && !silent && voices.interval > 0 && (
 				<div className="ss-ed-field-note">
 					≈ {perMinute >= 10 ? Math.round(perMinute) : perMinute.toFixed(1)} voices per minute — a {voices.chance}
 					% roll every {secondsText}.

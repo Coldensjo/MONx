@@ -68,6 +68,9 @@ import { loadPresets, savePresets, upsertPreset, type LootPreset } from './lootp
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
+
+/** Scoped to the corpus, like the patch-notes cut-off. */
+const lastMonsterKey = (monstersPath: string) => `monx.lastMonster.${monstersPath}`;
 import MonsterList, { type ListActions } from './MonsterList';
 import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
@@ -136,9 +139,14 @@ export default function Workspace({
 	const [hotkeysOpen, setHotkeysOpen] = useState(false);
 	/** The monster list's own actions, so a hotkey can reach its dialogs. */
 	const listActions = useRef<ListActions | null>(null);
-	const [selected, setSelected] = useState<string | null>(() =>
-		loadSetting('monx.lastMonster', null)
-	);
+	// Per workspace. A single global key restored one corpus's file into
+	// another, which used to be a harmless miss and is now an error toast: the
+	// file key carries a subfolder on the nested corpora, so "monsters/amazon.xml"
+	// is a real path in one workspace and nonsense in the next.
+	const [selected, setSelected] = useState<string | null>(() => {
+		const last = loadSetting(lastMonsterKey(info.paths.monsters), null);
+		return last && info.monsterCount > 0 ? last : null;
+	});
 	const [doc, setDoc] = useState<MonsterDoc | null>(null);
 	const [monsterLints, setMonsterLints] = useState<Lint[]>([]);
 	const [workspaceLints, setWorkspaceLints] = useState<Lint[]>(info.lints);
@@ -268,7 +276,7 @@ export default function Workspace({
 			redoRef.current = [];
 			return;
 		}
-		saveSetting('monx.lastMonster', selected);
+		saveSetting(lastMonsterKey(info.paths.monsters), selected);
 		onOpenFile(selected);
 		// A fresh buffer starts a fresh history — undo must never cross files.
 		undoRef.current = [];

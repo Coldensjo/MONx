@@ -103,13 +103,25 @@ export function meleeDamageRange(skill: number, attack: number): { min: number; 
 	return { min: 0, max: maxMeleeDamage(skill, attack) };
 }
 
-/** Max melee across every `melee` block in `<attacks>`, or null when the monster has none. */
+/**
+ * Max melee across every `melee` block in `<attacks>`, or null when the monster
+ * has none.
+ *
+ * A block that omits `skill` or `attack` contributes nothing: the loader only
+ * derives damage when both are written, and states it as min/max otherwise.
+ * Nostalrius keeps the pair on the `<attacks>` container instead, which is read
+ * here too — its melee is a monster property, not a spell.
+ */
 export function monsterMaxMelee(doc: MonsterDoc): number | null {
 	let best: number | null = null;
-	for (const spell of doc.attacks) {
-		if (!spell.melee) continue;
-		const dmg = maxMeleeDamage(spell.melee.skill, spell.melee.attack);
+	const consider = (skill: number | null, attack: number | null) => {
+		if (skill === null || attack === null) return;
+		const dmg = maxMeleeDamage(skill, attack);
 		if (best === null || dmg > best) best = dmg;
+	};
+	if (doc.attacksStats) consider(doc.attacksStats.skill, doc.attacksStats.attack);
+	for (const spell of doc.attacks) {
+		if (spell.melee) consider(spell.melee.skill, spell.melee.attack);
 	}
 	return best;
 }
@@ -344,14 +356,26 @@ export function balanceHint(doc: MonsterDoc, bands: BalanceBand[]): BalanceHint 
 
 // ---------- Spell card helpers ----------
 
-/** The damage range a spell block declares, or null when it deals none. */
+/**
+ * The damage range a spell block declares, or null when it deals none.
+ *
+ * A melee block only derives its range from skill × attack when the loader
+ * would — that is, when both attributes are written. With either missing it
+ * falls through to the block's own min/max, which is exactly what the engine
+ * reads in that case.
+ */
 export function spellDamageRange(spell: SpellBlock): { min: number; max: number } | null {
-	if (spell.melee) return meleeDamageRange(spell.melee.skill, spell.melee.attack);
+	const m = spell.melee;
+	if (m && m.skill !== null && m.attack !== null) return meleeDamageRange(m.skill, m.attack);
 	if (spell.min === 0 && spell.max === 0) return null;
 	return { min: Math.abs(spell.min), max: Math.abs(spell.max) };
 }
 
-/** Casts per minute at a spell's `interval`, for comparing sustained output. */
+/**
+ * Casts per minute at a spell's `interval`, for comparing sustained output.
+ * Null on Nostalrius, whose spells carry no cadence attribute at all — showing
+ * a rate there would be inventing one.
+ */
 export function castsPerMinute(interval: number): number | null {
 	if (interval <= 0) return null;
 	return 60000 / interval;

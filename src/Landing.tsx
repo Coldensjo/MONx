@@ -11,10 +11,13 @@ import {
 	Skull,
 	Sparkles
 } from 'lucide-react';
+import { ENGINES } from './engine';
 import { probeWorkspace, type SlotStatus, type WorkspacePaths, type WorkspaceProbe } from './monster';
 import type { RecentWorkspace } from './settings';
 
-type SlotKey = keyof WorkspacePaths;
+/** The four folder rows. `engine` is on `WorkspacePaths` too, but it is a
+ *  choice rather than a path and gets its own control below the rows. */
+type SlotKey = 'monsters' | 'items' | 'client' | 'spells';
 
 const SLOTS: { key: SlotKey; label: string; hint: string; icon: JSX.Element; optional?: boolean }[] = [
 	{ key: 'monsters', label: 'Monsters folder', hint: 'data/monster', icon: <Skull size={16} /> },
@@ -34,7 +37,7 @@ const SLOTS: { key: SlotKey; label: string; hint: string; icon: JSX.Element; opt
 	}
 ];
 
-const EMPTY: WorkspacePaths = { monsters: '', items: '', client: '', spells: null };
+const EMPTY: WorkspacePaths = { monsters: '', items: '', client: '', spells: null, engine: null };
 
 interface Props {
 	error: string | null;
@@ -74,7 +77,10 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 					monsters: result.monsters.path ?? prev.monsters,
 					items: result.items.path ?? prev.items,
 					client: result.client.path ?? prev.client,
-					spells: result.spells.path ?? prev.spells
+					spells: result.spells.path ?? prev.spells,
+					// Never overwritten by the probe: once the user has picked an
+					// engine it stays picked, even as they keep editing paths.
+					engine: prev.engine
 				}));
 			})
 			.catch(() => {
@@ -147,6 +153,31 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 					);
 				})}
 			</div>
+
+			{probe?.monsters.ok && (
+				<label className="mx-engine-pick">
+					<span className="mx-engine-pick-label">Engine</span>
+					<select
+						value={paths.engine ?? probe.engine.best}
+						onChange={e => setPaths(p => ({ ...p, engine: e.target.value }))}
+					>
+						{ENGINES.map(e => (
+							<option key={e.key} value={e.key}>
+								{e.label} — {e.blurb}
+							</option>
+						))}
+					</select>
+					{/* Say when the guess was a guess. Getting this wrong mislabels
+					    every lint at once, so a close call is worth a sentence. */}
+					<span className="mx-engine-pick-note" data-weak={probe.engine.confident ? undefined : 'true'}>
+						{paths.engine
+							? 'chosen'
+							: probe.engine.confident
+								? `detected from ${probe.engine.candidates.find(c => c.key === probe.engine.best)?.evidence[0] ?? 'the corpus'}`
+								: 'could not tell confidently — check this'}
+					</span>
+				</label>
+			)}
 
 			<button className="ss-btn ss-btn-primary" disabled={!ready} onClick={() => onOpen(paths)}>
 				{opening || probing ? <Loader2 size={15} className="ss-spin" /> : <FolderOpen size={15} />}

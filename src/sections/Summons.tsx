@@ -4,6 +4,7 @@ import { Field } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
 import { EffectSelect } from '../fields/EffectSelect';
+import { engineInfo } from '../engine';
 import { Toggle } from '../fields/Toggle';
 import { SortableList } from '../fields/SortableList';
 import { useDropTarget } from '../dnd';
@@ -15,10 +16,11 @@ interface Props extends SectionProps {
 }
 
 function blankSummon(name: string): SummonEntry {
-	return { name, interval: 2000, chance: 30, max: 1, force: false, effect: null, masterEffect: null };
+	return { name, interval: 2000, chance: 30, delay: null, max: 1, force: false, effect: null, masterEffect: null };
 }
 
 export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed, onToggle }: Props) {
+	const engine = engineInfo(doc.engine);
 	const summons = doc.summons;
 	const setEntries = (entries: SummonEntry[]) => patch({ summons: { ...summons, entries } });
 
@@ -84,9 +86,13 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 									</span>
 								</Field>
 								<div className="ss-ed-card-grid">
-									<Field label="Interval" hint="ms">
-										<NumberField value={entry.interval} onChange={v => update({ interval: v })} min={1} width={100} disabled={readOnly} />
-									</Field>
+									{/* Nostalrius summons take only name, chance, max and
+									    force — there is no interval to set. */}
+									{engine.summonInterval && (
+										<Field label="Interval" hint="ms">
+											<NumberField value={entry.interval} onChange={v => update({ interval: v })} min={1} width={100} disabled={readOnly} />
+										</Field>
+									)}
 									<Field label="Chance" hint="%">
 										<NumberField value={entry.chance} onChange={v => update({ chance: v })} min={0} max={100} width={100} disabled={readOnly} />
 									</Field>
@@ -101,18 +107,25 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 									disabled={readOnly}
 									onChange={v => update({ force: v })}
 								/>
+								{/* Only Ironcore and TFS iterate a summon's children; on the
+								    7.x engines an <attribute> there is never read. */}
+								{engine.summonEffects && (
+								<>
 								<Field label="Effect at the summon" note="Defaults to a teleport effect.">
 									<EffectSelect
 										kind="area"
+										engine={doc.engine}
 										value={entry.effect}
 										onChange={v => update({ effect: v })}
 										disabled={readOnly}
 										noneLabel="(default teleport)"
 									/>
 								</Field>
-								<Field label="Effect at the summoner" note="Ironcore — a casting telegraph on the summoner's own tile.">
-									<EffectSelect kind="area" value={entry.masterEffect} onChange={v => update({ masterEffect: v })} disabled={readOnly} />
+								<Field label="Effect at the summoner" note="A casting telegraph on the summoner's own tile.">
+									<EffectSelect kind="area" engine={doc.engine} value={entry.masterEffect} onChange={v => update({ masterEffect: v })} disabled={readOnly} />
 								</Field>
+								</>
+								)}
 							</div>
 						);
 					}}

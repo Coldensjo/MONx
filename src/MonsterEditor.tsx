@@ -3,7 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { tauriItemIndex, type ItemIndex, type Lint, type MonsterDoc, type SpellName } from './monster';
 import { loadSetting, saveSetting } from './settings';
 import { PreviewProvider, ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
-import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
+import { SECTION_ENGINE_FLAG, SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
 import { DEFAULT_PREFS, landingSection, visibleSectionIds, type Prefs } from './prefs';
 import {
 	applyBlock,
@@ -24,6 +24,9 @@ import { Loot } from './sections/Loot';
 import { Summons } from './sections/Summons';
 import { Voices } from './sections/Voices';
 import { PacifistEvents } from './sections/PacifistEvents';
+import { BestiarySection } from './sections/BestiarySection';
+import { TargetStrategySection } from './sections/TargetStrategySection';
+import { engineInfo } from './engine';
 
 const STATE_KEY = 'monx.editor';
 
@@ -103,7 +106,16 @@ export function MonsterEditor({
 	const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => new Set(loadState().collapsed));
 	const [active, setActive] = useState<SectionId>(() => landingSection(prefs) ?? 'identity');
 	const scrollRef = useRef<HTMLDivElement>(null);
-	const visible = useMemo(() => visibleSectionIds(prefs), [prefs]);
+	const engine = useMemo(() => engineInfo(doc.engine), [doc.engine]);
+	// Preference order, then engine reality. A tab the server has never heard of
+	// is not shown even if an older preference still lists it.
+	const visible = useMemo(
+		() => visibleSectionIds(prefs).filter(id => {
+			const flag = SECTION_ENGINE_FLAG[id];
+			return flag ? engine[flag] : true;
+		}),
+		[prefs, engine]
+	);
 	const shown = useCallback((id: SectionId) => visible.includes(id), [visible]);
 
 	useEffect(() => {
@@ -276,7 +288,13 @@ export function MonsterEditor({
 						    because the document is written whole from the model either way. */}
 						{shown('identity') && <Identity {...common} collapsed={collapsed.has('identity')} onToggle={toggle} />}
 						{shown('look') && <LookSection {...common} collapsed={collapsed.has('look')} onToggle={toggle} />}
+						{shown('bestiary') && (
+							<BestiarySection {...common} collapsed={collapsed.has('bestiary')} onToggle={toggle} />
+						)}
 						{shown('combat') && <Combat {...common} collapsed={collapsed.has('combat')} onToggle={toggle} />}
+						{shown('strategy') && (
+							<TargetStrategySection {...common} collapsed={collapsed.has('strategy')} onToggle={toggle} />
+						)}
 						{shown('attacks') && (
 							<Spells {...common} which="attacks" collapsed={collapsed.has('attacks')} onToggle={toggle} />
 						)}

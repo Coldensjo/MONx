@@ -13,6 +13,27 @@ export interface WorkspacePaths {
 	client: string;
 	/** Optional data/spells folder; enables ### spell verification (DESIGN §6.5). */
 	spells: string | null;
+	/** Engine profile key. Null means "detect it"; the Landing picker sends an
+	 *  explicit key once the user has chosen, so a reopened workspace never
+	 *  re-guesses. */
+	engine: string | null;
+}
+
+export interface EngineCandidate {
+	key: string;
+	label: string;
+	blurb: string;
+	score: number;
+	/** The signals that fired, for the picker tooltip. */
+	evidence: string[];
+}
+
+export interface EngineDetection {
+	candidates: EngineCandidate[];
+	/** Best guess, always populated. */
+	best: string;
+	/** False when nothing scored, or the top two are too close to call. */
+	confident: boolean;
 }
 
 export interface SlotStatus {
@@ -28,6 +49,7 @@ export interface WorkspaceProbe {
 	items: SlotStatus;
 	client: SlotStatus;
 	spells: SlotStatus;
+	engine: EngineDetection;
 }
 
 export interface WorkspaceInfo {
@@ -43,6 +65,12 @@ export interface WorkspaceInfo {
 	/** From the sibling `.otfi`. The inherited `/thing.png` and `/things.png`
 	 *  routes take it as a query param; the MONx routes read it server-side. */
 	transparent: boolean;
+	/** The engine whose rules are in force, and how it was arrived at. Shown in
+	 *  the titlebar: editing a TVP corpus under Ironcore's rules is the failure
+	 *  mode this exists to prevent, so it must never be ambiguous. */
+	engine: string;
+	engineLabel: string;
+	engineDetection: EngineDetection;
 	/** Workspace-scope lints only (duplicate raceids, orphans, …). */
 	lints: Lint[];
 }
@@ -98,8 +126,12 @@ export interface SpellBlock {
 	kind: SpellKind;
 	name: string | null;
 	script: string | null;
+	/** Zero on Nostalrius, which has no cadence attribute at all. */
 	interval: number;
 	chance: number;
+	/** TVP's alternative to `chance`, and an `else if`: with both written, the
+	 *  loader silently ignores this one. */
+	delay: number | null;
 	range: number;
 	min: number;
 	max: number;
@@ -107,16 +139,36 @@ export interface SpellBlock {
 	direction: boolean;
 	area: SpellArea | null;
 	melee: {
-		skill: number;
-		attack: number;
+		/** Null means the attribute was absent, which is not the same as 0: the
+		 *  loader only derives melee damage when both are written. */
+		skill: number | null;
+		attack: number | null;
 		condition: { type: string; value: number; tick: number } | null;
+		/** TVP: monster-scope skill progression, written on the melee node. */
+		skillfactor: number | null;
+		skillnextlevel: number | null;
+		skilladdcount: number | null;
+		poisoncycles: number | null;
 	} | null;
-	condition: { tick: number; start: number } | null;
+	condition: {
+		tick: number;
+		start: number;
+		/** TVP: when set, the loader takes a different branch and ignores
+		 *  min/max/start/tick entirely. */
+		cycle: number | null;
+		mincycle: number | null;
+		/** Nostalrius: required — the spell is dropped without it. */
+		count: number | null;
+	} | null;
 	status: {
 		duration: number;
 		speedchange: number | null;
 		minspeedchange: number | null;
 		maxspeedchange: number | null;
+		/** TVP takes the speed delta from `speed=` — the same attribute it read
+		 *  as the cast cadence — plus this. Nostalrius spells it `variation`. */
+		speedvariation: number | null;
+		variation: number | null;
 		drunkenness: number | null;
 		outfitMonster: string | null;
 		outfitItem: number | null;
@@ -140,6 +192,8 @@ export interface SummonEntry {
 	name: string;
 	interval: number;
 	chance: number;
+	/** TVP's alternative to `chance` on a summon; same else-if trap. */
+	delay: number | null;
 	max: number;
 	force: boolean;
 	effect: string | null;
@@ -163,9 +217,41 @@ export interface Voices {
 	leash: string | null;
 }
 
+/** Nostalrius keeps the monster's melee on the `<attacks>` container itself —
+ *  there is no `melee` spell in its loader at all. */
+export interface AttacksStats {
+	attack: number;
+	skill: number;
+	poison: number | null;
+}
+
+/** TFS `<bestiary>`. `occurrence` is a string because the shipped corpus writes
+ *  `occurrence="common"`, which the loader casts to 0. */
+export interface Bestiary {
+	class: string | null;
+	prowess: number;
+	expertise: number;
+	mastery: number;
+	charmPoints: number;
+	difficulty: string | null;
+	occurrence: string | null;
+	locations: string | null;
+}
+
+/** TVP / Nostalrius `<targetstrategy>`. Not Ironcore's `<targetstrategies>`,
+ *  which spells the middle two keys `health` and `damage`. */
+export interface TargetStrategy {
+	nearest: number;
+	weakest: number;
+	mostdamage: number;
+	random: number;
+}
+
 export interface MonsterDoc {
 	file: string;
 	registered: boolean;
+	/** The engine profile this document was read under. */
+	engine: string;
 	name: string;
 	nameDescription: string | null;
 	race: string | null;
@@ -179,6 +265,12 @@ export interface MonsterDoc {
 	health: { now: number; max: number };
 	look: Look;
 	targetchange: { interval: number; chance: number };
+	/** TVP / Nostalrius only. */
+	targetStrategy: TargetStrategy | null;
+	/** TFS only. */
+	bestiary: Bestiary | null;
+	/** Nostalrius only — the monster's melee, read off `<attacks>`. */
+	attacksStats: AttacksStats | null;
 	flags: Record<string, boolean | number>;
 	immunities: Record<string, boolean>;
 	elements: Record<string, number>;

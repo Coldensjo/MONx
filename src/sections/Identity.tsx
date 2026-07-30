@@ -1,4 +1,5 @@
 import { RACES, SKULLS } from '../catalog';
+import { engineInfo } from '../engine';
 import { Field } from '../fields/Field';
 import { EnumSelect, type EnumOption } from '../fields/EnumSelect';
 import { NumberField } from '../fields/NumberField';
@@ -23,6 +24,7 @@ const SKULL_OPTIONS: EnumOption<string>[] = SKULLS.map(s => ({
 }));
 
 export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, collapsed, onToggle }: Props) {
+	const engine = engineInfo(doc.engine);
 	const raceidLints = lintAt('raceid');
 	const duplicate = raceidLints.some(l => l.code === 'raceid.duplicate');
 
@@ -52,6 +54,9 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 					/>
 				</Field>
 
+				{/* Ironcore-only editor metadata. Elsewhere it is an attribute no
+				    loader reads, kept verbatim but not worth a field. */}
+				{engine.species && (
 				<Field
 					label="Species"
 					lints={lintAt('species')}
@@ -64,6 +69,7 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 						disabled={readOnly}
 					/>
 				</Field>
+				)}
 			</div>
 
 			<div className="ss-ed-card-grid">
@@ -91,8 +97,10 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 					<NumberField value={doc.manacost} onChange={v => patch({ manacost: v })} min={0} width={120} disabled={readOnly} />
 				</Field>
 
+				{/* TVP and Nostalrius have no bestiary and no id for one. */}
+				{engine.raceidAttr !== null && (
 				<Field
-					label="Race id"
+					label={engine.raceidAttr === 'raceId' ? 'Race id (raceId)' : 'Race id'}
 					lints={raceidLints}
 					hint={nextRaceid !== null ? `next free: ${nextRaceid}` : undefined}
 					note={duplicate ? 'Another monster already uses this raceid.' : undefined}
@@ -117,6 +125,7 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 						</button>
 					)}
 				</Field>
+				)}
 			</div>
 
 			<div className="ss-ed-card-grid">
@@ -124,7 +133,7 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 					<EnumSelect
 						value={doc.race ?? 'blood'}
 						onChange={v => patch({ race: v })}
-						options={RACE_OPTIONS}
+						options={RACE_OPTIONS.filter(o => engine.races.includes(o.value))}
 						disabled={readOnly}
 						width={200}
 					/>
@@ -134,7 +143,7 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 					<EnumSelect
 						value={doc.skull === '' ? 'none' : doc.skull}
 						onChange={v => patch({ skull: v === 'none' ? '' : v })}
-						options={SKULL_OPTIONS}
+						options={SKULL_OPTIONS.filter(o => engine.skulls.includes(o.value))}
 						disabled={readOnly}
 						width={200}
 					/>

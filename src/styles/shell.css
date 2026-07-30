@@ -890,3 +890,54 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* ---------- Engine profile ---------- */
+
+/* Which server's rules a workspace is being edited under. Always on screen:
+   silently editing one engine's corpus under another's rules is the mistake
+   the whole engine-profile system exists to make impossible. */
+.mx-engine-badge {
+	margin-left: 8px;
+	padding: 1px 6px;
+	border: 1px solid var(--ss-border);
+	border-radius: 3px;
+	font-size: 10px;
+	line-height: 15px;
+	color: var(--ss-text-dim);
+	white-space: nowrap;
+}
+
+/* A guess that was close deserves to look like one. */
+.mx-engine-badge[data-weak='true'] {
+	border-color: var(--ss-warn, #b58900);
+	color: var(--ss-warn, #b58900);
+}
+
+.mx-engine-pick {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	margin: 4px 0 2px;
+	font-size: 12px;
+}
+
+.mx-engine-pick-label {
+	flex: 0 0 auto;
+	color: var(--ss-text-dim);
+}
+
+.mx-engine-pick select {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.mx-engine-pick-note {
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--ss-text-dim);
+}
+
+.mx-engine-pick-note[data-weak='true'] {
+	color: var(--ss-warn, #b58900);
+}

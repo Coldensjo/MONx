@@ -209,6 +209,20 @@ export default function App() {
 							{dirty && <span className="mx-dirty" title="Unsaved changes"> •</span>}
 						</span>
 					)}
+					{/* Which engine's rules are in force. Editing one server's corpus
+					    under another's rules is the failure this whole feature exists
+					    to prevent, so it should never take a click to find out. */}
+					{info && (
+						<span
+							className="mx-engine-badge"
+							title={`Editing under ${info.engineLabel} rules${
+								info.engineDetection.confident ? '' : ' — detection was not confident'
+							}`}
+							data-weak={info.engineDetection.confident ? undefined : 'true'}
+						>
+							{info.engineLabel}
+						</span>
+					)}
 				</div>
 				<div className="ss-titlebar-spacer" data-tauri-drag-region />
 				<button

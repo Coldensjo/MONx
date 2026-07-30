@@ -13,6 +13,7 @@ import { maxMeleeDamage } from '../derive';
 import { Field } from '../fields/Field';
 import { EnumSelect, type EnumOption } from '../fields/EnumSelect';
 import { EffectSelect } from '../fields/EffectSelect';
+import { engineInfo } from '../engine';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
@@ -47,6 +48,9 @@ interface Props {
 	parent: 'attacks' | 'defenses';
 	/** The monster's own look, so the re-enactment casts with the right sprite. */
 	look: Look;
+	/** Engine key, from the document. Decides which fields the loader reads at
+	 *  all and how effect values are spelled. */
+	engine: string;
 }
 
 /**
@@ -54,7 +58,8 @@ interface Props {
  * actually reads — picking a different name reshapes it — because every other
  * field is silently ignored by the loader (§8.1, §9).
  */
-export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, look }: Props) {
+export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, look, engine }: Props) {
+	const info = engineInfo(engine);
 	const [staged, setStaged] = useState(false);
 	const family = familyOf(block);
 	const registered = family === 'registered';
@@ -97,8 +102,22 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 			script: null,
 			// Melee is forced to range 1 by the loader; say so in the document.
 			range: name === 'melee' ? 1 : block.range,
-			melee: nextFamily === 'melee' ? block.melee ?? { skill: 0, attack: 0, condition: null } : null,
-			condition: nextFamily === 'condition' ? block.condition ?? { tick: 0, start: 0 } : null,
+			melee:
+				nextFamily === 'melee'
+					? block.melee ?? {
+							skill: 0,
+							attack: 0,
+							condition: null,
+							skillfactor: null,
+							skillnextlevel: null,
+							skilladdcount: null,
+							poisoncycles: null
+						}
+					: null,
+			condition:
+				nextFamily === 'condition'
+					? block.condition ?? { tick: 0, start: 0, cycle: null, mincycle: null, count: null }
+					: null,
 			status:
 				nextFamily === 'status'
 					? block.status ?? {
@@ -106,6 +125,8 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 							speedchange: null,
 							minspeedchange: null,
 							maxspeedchange: null,
+							speedvariation: null,
+							variation: null,
 							drunkenness: null,
 							outfitMonster: null,
 							outfitItem: null
@@ -183,9 +204,22 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 			)}
 
 			<div className="ss-ed-card-grid">
-				<Field label="Interval" lints={lintAt('interval')} hint="ms" note="Ironcore tracks the cooldown per spell, so a long ultimate does not block the other attacks.">
-					<NumberField value={block.interval} onChange={v => set({ interval: v })} min={1} width={100} disabled={readOnly} />
-				</Field>
+				{/* Nostalrius spells carry no cadence attribute at all — chance
+				    alone gates a cast — so an interval box there would be a field
+				    the server never reads. */}
+				{info.spellInterval && (
+					<Field label="Interval" lints={lintAt('interval')} hint="ms" note={info.key === 'ironcore' ? 'Ironcore tracks the cooldown per spell, so a long ultimate does not block the other attacks.' : undefined}>
+						<NumberField value={block.interval} onChange={v => set({ interval: v })} min={1} width={100} disabled={readOnly} />
+					</Field>
+				)}
+				{/* TVP reads `delay` only when `chance` is absent. Offering it as a
+				    second box beside chance would invite writing both, which
+				    silently discards this one. */}
+				{info.spellDelay && block.delay !== null && (
+					<Field label="Delay" lints={lintAt('delay')} note="Read in place of chance — writing both means this one is ignored.">
+						<NumberField value={block.delay} onChange={v => set({ delay: v })} min={0} width={100} disabled={readOnly} />
+					</Field>
+				)}
 				<Field
 					label="Chance"
 					lints={lintAt('chance')}
@@ -220,7 +254,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					<div className="ss-ed-card-grid">
 						<Field label="Skill" lints={lintAt('melee.skill')}>
 							<NumberField
-								value={block.melee.skill}
+								value={block.melee.skill ?? 0}
 								onChange={v => set({ melee: { ...block.melee!, skill: v } })}
 								min={0}
 								width={100}
@@ -229,7 +263,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 						</Field>
 						<Field label="Attack" lints={lintAt('melee.attack')}>
 							<NumberField
-								value={block.melee.attack}
+								value={block.melee.attack ?? 0}
 								onChange={v => set({ melee: { ...block.melee!, attack: v } })}
 								min={0}
 								width={100}
@@ -237,9 +271,39 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 							/>
 						</Field>
 						<Field label="Max damage" hint="derived">
-							<span className="ss-ed-derived">{maxMeleeDamage(block.melee.skill, block.melee.attack)}</span>
+							{/* The loader only derives damage when both are written; with
+							    either missing it reads the block's own min/max instead. */}
+							<span className="ss-ed-derived">
+								{block.melee.skill === null || block.melee.attack === null
+									? '—'
+									: maxMeleeDamage(block.melee.skill, block.melee.attack)}
+							</span>
 						</Field>
 					</div>
+
+					{/* TVP grows a monster's melee skill as it fights. The three
+					    attributes sit on this node but are written to the monster, so
+					    they apply to it as a whole rather than to this block. */}
+					{info.meleeSkillProgression && (
+						<div className="ss-ed-card-grid">
+							{([
+								['skillfactor', 'Skill factor', 'Per-level multiplier, in thousandths. Clamped up to 1000.'],
+								['skillnextlevel', 'Next level at', 'Hits needed for the next skill level.'],
+								['skilladdcount', 'Level step', 'Skill gained per level.'],
+								['poisoncycles', 'Poison cycles', 'Adds a poison condition alongside any other.']
+							] as const).map(([key, label, note]) => (
+								<Field key={key} label={label} note={note}>
+									<NumberField
+										value={block.melee![key] ?? 0}
+										onChange={v => set({ melee: { ...block.melee!, [key]: v || null } })}
+										min={0}
+										width={110}
+										disabled={readOnly}
+									/>
+								</Field>
+							))}
+						</div>
+					)}
 
 					<Field
 						label="Condition on hit"
@@ -324,7 +388,24 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					>
 						<NumberField value={block.max} onChange={v => set({ max: v })} width={100} disabled={readOnly} />
 					</Field>
-					{family === 'condition' && block.condition && (
+					{/* Nostalrius states a condition as a required `count` and has no
+					    tick or start at all — without it the loader drops the spell. */}
+					{family === 'condition' && block.condition && info.conditionStyle === 'count' && (
+						<Field
+							label="Count"
+							lints={lintAt('condition.count')}
+							note="Required — a condition spell without it is rejected and never loads."
+						>
+							<NumberField
+								value={block.condition.count ?? 0}
+								onChange={v => set({ condition: { ...block.condition!, count: v } })}
+								min={0}
+								width={100}
+								disabled={readOnly}
+							/>
+						</Field>
+					)}
+					{family === 'condition' && block.condition && info.conditionStyle !== 'count' && (
 						<>
 							<Field label="Tick" hint="ms" note="Per-tick damage above; this is the interval between ticks.">
 								<NumberField
@@ -387,22 +468,49 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 										disabled={readOnly}
 									/>
 								</Field>
-								<Field label="Min" lints={lintAt('status.minspeedchange')} note="A min of 0 with no speedchange is a hard error — the block fails to load.">
-									<NumberField
-										value={block.status.minspeedchange ?? 0}
-										onChange={v => set({ status: { ...block.status!, minspeedchange: v, speedchange: null } })}
-										width={110}
-										disabled={readOnly}
-									/>
-								</Field>
-								<Field label="Max" lints={lintAt('status.maxspeedchange')} note="Defaults to min when absent.">
-									<NumberField
-										value={block.status.maxspeedchange ?? 0}
-										onChange={v => set({ status: { ...block.status!, maxspeedchange: v, speedchange: null } })}
-										width={110}
-										disabled={readOnly}
-									/>
-								</Field>
+								{/* Only Ironcore and TFS take a random min–max range. The
+								    7.x engines spread the delta with a single variation
+								    figure instead, under two different attribute names. */}
+								{info.speedSpell === 'speedChange' && (
+									<>
+										<Field label="Min" lints={lintAt('status.minspeedchange')} note="A min of 0 with no speedchange is a hard error — the block fails to load.">
+											<NumberField
+												value={block.status.minspeedchange ?? 0}
+												onChange={v => set({ status: { ...block.status!, minspeedchange: v, speedchange: null } })}
+												width={110}
+												disabled={readOnly}
+											/>
+										</Field>
+										<Field label="Max" lints={lintAt('status.maxspeedchange')} note="Defaults to min when absent.">
+											<NumberField
+												value={block.status.maxspeedchange ?? 0}
+												onChange={v => set({ status: { ...block.status!, maxspeedchange: v, speedchange: null } })}
+												width={110}
+												disabled={readOnly}
+											/>
+										</Field>
+									</>
+								)}
+								{info.speedSpell === 'speedVariation' && (
+									<Field label="Variation" lints={lintAt('status.speedvariation')} note="Spread around the delta above.">
+										<NumberField
+											value={block.status.speedvariation ?? 0}
+											onChange={v => set({ status: { ...block.status!, speedvariation: v } })}
+											width={110}
+											disabled={readOnly}
+										/>
+									</Field>
+								)}
+								{info.speedSpell === 'changeVariation' && (
+									<Field label="Variation" lints={lintAt('status.variation')} note="Spread around the delta above.">
+										<NumberField
+											value={block.status.variation ?? 0}
+											onChange={v => set({ status: { ...block.status!, variation: v } })}
+											width={110}
+											disabled={readOnly}
+										/>
+									</Field>
+								)}
 							</div>
 						</>
 					)}
@@ -459,7 +567,11 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 							{ value: 'none', label: 'Single target' },
 							{ value: 'beam', label: 'Beam', title: 'Fires along the monster’s facing' },
 							{ value: 'radius', label: 'Radius', title: 'Filled circle' },
-							{ value: 'ring', label: 'Ring', title: 'Hollow ring' }
+							// The 7.x loaders never read `ring`; offering it would
+							// produce a spell that quietly hits one tile.
+							...(info.geometryRing
+								? [{ value: 'ring', label: 'Ring', title: 'Hollow ring' }]
+								: [])
 						]}
 						disabled={readOnly}
 					/>
@@ -524,6 +636,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 						<Field label="Projectile" lints={lintAt('effects.shootEffect')}>
 							<EffectSelect
 								kind="shoot"
+								engine={engine}
 								value={block.effects.shootEffect}
 								onChange={v => set({ effects: { ...block.effects, shootEffect: v } })}
 								disabled={readOnly}
@@ -532,18 +645,23 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 						<Field label="Magic effect" lints={lintAt('effects.areaEffect')}>
 							<EffectSelect
 								kind="area"
+								engine={engine}
 								value={block.effects.areaEffect}
 								onChange={v => set({ effects: { ...block.effects, areaEffect: v } })}
 								disabled={readOnly}
 							/>
 						</Field>
 					</div>
-					<Toggle
-						label="Draw the projectile to every tile of the area"
-						checked={block.effects.aoeShootEffect}
-						disabled={readOnly}
-						onChange={v => set({ effects: { ...block.effects, aoeShootEffect: v } })}
-					/>
+					{/* Only Ironcore implements this key; the others log "Effect type
+					    does not exist" and carry on without it. */}
+					{info.aoeShootEffect && (
+						<Toggle
+							label="Draw the projectile to every tile of the area"
+							checked={block.effects.aoeShootEffect}
+							disabled={readOnly}
+							onChange={v => set({ effects: { ...block.effects, aoeShootEffect: v } })}
+						/>
+					)}
 				</SubGroup>
 			)}
 
