@@ -1,0 +1,5 @@
+{
+	// Use the workspace TypeScript 7 so the editor reports the same errors as
+	// `bun run build` — the bundled 5.x checks differently.
+	"typescript.tsdk": "node_modules/typescript/lib"
+}
