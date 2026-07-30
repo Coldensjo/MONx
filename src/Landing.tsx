@@ -42,14 +42,14 @@ const SLOTS: { key: SlotKey; label: string; hint: string; icon: JSX.Element; opt
 	{
 		key: 'items',
 		label: 'Items folder',
-		hint: 'data/items — items.otb + items.xml',
+		hint: 'data/items — items.otb + items.xml|toml|srv',
 		icon: <Package size={16} />
 	},
 	{ key: 'client', label: 'Client folder', hint: 'Tibia.dat + Tibia.spr', icon: <Image size={16} /> },
 	{
 		key: 'spells',
 		label: 'Spells folder',
-		hint: 'data/spells — optional, enables ### spell verification',
+		hint: 'data/spells',
 		icon: <Sparkles size={16} />,
 		optional: true
 	}

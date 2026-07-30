@@ -17,7 +17,6 @@ import {
 	listMonsterScripts,
 	listMonsters,
 	listSpellNames,
-	nextFreeRaceid,
 	revealMonster,
 	saveMonster,
 	searchItems,
@@ -190,7 +189,6 @@ export default function Workspace({
 	const [reloadKey, setReloadKey] = useState(0);
 	const [spells, setSpells] = useState<SpellName[]>([]);
 	const [scripts, setScripts] = useState<string[]>([]);
-	const [nextRaceid, setNextRaceid] = useState<number | null>(null);
 	const [things, setThings] = useState<Record<'outfit' | 'effect' | 'missile', ThingSummary[]>>({
 		outfit: [],
 		effect: [],
@@ -434,13 +432,26 @@ export default function Workspace({
 		listMonsterScripts().then(setScripts).catch(() => setScripts([]));
 	}, []);
 
-	// Recomputed per selection: creating or deleting a monster moves the next
-	// free id, and the Identity section shows it beside the raceid field.
-	useEffect(() => {
-		nextFreeRaceid()
-			.then(setNextRaceid)
-			.catch(() => setNextRaceid(null));
-	}, [monsters]);
+	// The lowest unused raceid, shown beside the field and behind its "Use n"
+	// button. Derived here rather than asked of the backend (`next_free_raceid`)
+	// because the backend only knows what is on disk: taking the suggestion in
+	// one monster has to move it for the next one, before either is saved. A
+	// dirty buffer therefore overrides its summary, and the open document
+	// overrides its own buffer, which lags a keystroke behind.
+	const nextRaceid = useMemo(() => {
+		const used = new Set<number>();
+		const add = (id: number | null | undefined) => {
+			if (id !== null && id !== undefined) used.add(id);
+		};
+		for (const m of monsters) {
+			if (doc && doc.file === m.file) add(doc.raceid);
+			else if (dirtyFiles.has(m.file)) add(buffersRef.current.get(m.file)?.doc.raceid ?? m.raceid);
+			else add(m.raceid);
+		}
+		let id = 1;
+		while (used.has(id)) id++;
+		return id;
+	}, [monsters, dirtyFiles, doc]);
 
 	/** Client things for the editor's effect, missile and outfit previews. */
 	const previewUrl = useCallback<PreviewUrl>(
