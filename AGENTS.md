@@ -133,6 +133,8 @@ src/
   PinLootDialog.tsx    Corpus-wide loot id pinning (Tools menu)
   ScaleLootDialog.tsx  Corpus-wide loot chance scaling, per item or corpus-wide
   BatchEditDialog.tsx  Filter the corpus, then set/scale/clear one field (Tools menu)
+  CompareDialog.tsx    Two monsters side by side (Tools menu)
+  QuickOpenDialog.tsx  Ctrl+P fuzzy jump to a monster
   PatchNotesDialog.tsx Patch notes since the user's cut-off point (Tools menu)
   HotkeysDialog.tsx    The hotkey manager (Preferences menu)
   PreferencesDialog.tsx  Editor tab visibility + default tab (Preferences menu)
@@ -144,6 +146,10 @@ src/
                        and ignored codes (monx.lint)
   hotkeys.ts           Command type, chord parsing, defaults, dispatch hook (monx.hotkeys)
   patchnotes.ts        Cut-off storage + the mark diff (monx.patchCutoff.*)
+  blocks.ts            Section-block clipboard + merge rules (monx.blockClipboard)
+  compare.ts           Two docs → grouped rows with deltas
+  favourites.ts        Starred item ids (monx.favourites)
+  lootpresets.ts       Named loot-tray sets (monx.lootPresets)
   fixtures.ts          Fixture data for component development
   catalog.ts  derive.ts  dnd.ts  spellsim.ts
   index.css            SPRx base stylesheet — frozen
