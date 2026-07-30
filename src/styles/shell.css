@@ -308,6 +308,55 @@
 	font-size: 11px;
 }
 
+/* ---------- Corpus tools: patch notes ---------- */
+
+.mx-patch-modal {
+	width: 680px;
+}
+
+.mx-patch-ago {
+	color: var(--text-muted);
+}
+
+.mx-patch-list {
+	max-height: 320px;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.mx-patch-group + .mx-patch-group {
+	margin-top: 8px;
+	padding-top: 6px;
+	border-top: 1px solid var(--border);
+}
+
+.mx-patch-monster {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+}
+
+.mx-patch-kind {
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-muted);
+}
+
+.mx-patch-added {
+	color: var(--accent);
+}
+
+.mx-patch-removed {
+	color: var(--warn);
+}
+
+.mx-patch-line {
+	padding-left: 12px;
+	color: var(--text-muted);
+}
+
 /* ---------- Landing: the three workspace slots ---------- */
 
 .mx-slots {

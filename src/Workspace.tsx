@@ -49,6 +49,8 @@ import {
 	type Prefs
 } from './prefs';
 import ScaleLootDialog from './ScaleLootDialog';
+import PatchNotesDialog from './PatchNotesDialog';
+import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
 import { getThing, getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
@@ -393,13 +395,19 @@ export default function Workspace({
 
 	const monsterNames = useMemo(() => monsters.map(m => m.name), [monsters]);
 
-	// Baseline for patch notes: the corpus as it stood when the workspace opened.
-	const baselineRef = useRef<Map<string, MonsterSummary> | null>(null);
+	// Patch notes run from a cut-off point the user sets, stored per workspace.
+	// A workspace that has never had one gets it at open, which is where the old
+	// baseline lived — the difference is that this one survives the session.
+	const [patchOpen, setPatchOpen] = useState(false);
 	useEffect(() => {
-		if (!baselineRef.current && monsters.length > 0) {
-			baselineRef.current = new Map(monsters.map(m => [m.file, m]));
-		}
-	}, [monsters]);
+		if (loadCutoff(info.paths.monsters)) return;
+		patchMarks()
+			.then(marks => saveCutoff(info.paths.monsters, marks))
+			.catch(() => {
+				// No cut-off point yet is a state the dialog handles; failing to set
+				// one at open is not worth a toast.
+			});
+	}, [info.paths.monsters]);
 
 	/** The loot-chance scaler: null when closed, else the item it opens on
 	 *  (`null` item id = the whole corpus, as the Tools menu opens it). */
@@ -424,51 +432,20 @@ export default function Workspace({
 		}
 	}, [label, showToast]);
 
-	// Patch notes: the current summaries diffed against the workspace-open
-	// baseline — "Updated the health of Demon from 8200 to 9000".
-	const exportPatchNotes = useCallback(async () => {
-		const baseline = baselineRef.current;
-		if (!baseline) return;
+	// Moves the cut-off point to now without going through the dialog, for a user
+	// who knows they are starting a span rather than ending one.
+	const setPatchCutoff = useCallback(async () => {
 		try {
-			const notes: string[] = [];
-			const seen = new Set<string>();
-			const fields: { key: 'health' | 'experience' | 'speed'; label: string }[] = [
-				{ key: 'health', label: 'health' },
-				{ key: 'experience', label: 'experience' },
-				{ key: 'speed', label: 'speed' }
-			];
-			for (const m of monsters) {
-				seen.add(m.file);
-				const was = baseline.get(m.file);
-				if (!was) {
-					notes.push(`- Added new monster ${m.name}.`);
-					continue;
-				}
-				if (was.name !== m.name) notes.push(`- Renamed ${was.name} to ${m.name}.`);
-				for (const f of fields) {
-					if (was[f.key] !== m[f.key]) {
-						notes.push(
-							`- Updated the ${f.label} of ${m.name} from ${was[f.key].toLocaleString()} to ${m[f.key].toLocaleString()}.`
-						);
-					}
-				}
-				if (was.raceid !== m.raceid) notes.push(`- Updated the raceid of ${m.name} from ${was.raceid ?? 'none'} to ${m.raceid ?? 'none'}.`);
-			}
-			for (const [file, was] of baseline) {
-				if (!seen.has(file)) notes.push(`- Removed ${was.name}.`);
-			}
-			if (notes.length === 0) {
-				showToast('ok', 'No changes since the workspace was opened');
+			const marks = await patchMarks();
+			if (!saveCutoff(info.paths.monsters, marks)) {
+				showToast('error', 'Could not store the cut-off point');
 				return;
 			}
-			const path = await saveDialog({ defaultPath: 'monx-patch-notes.md' });
-			if (!path) return;
-			await writeTextFile(path, `# Patch notes — ${label}\n\n${notes.join('\n')}\n`);
-			showToast('ok', `Exported ${notes.length} ${notes.length === 1 ? 'change' : 'changes'}`);
+			showToast('ok', `Cut-off point set — ${marks.length} monsters marked`);
 		} catch (e) {
 			showToast('error', String(e));
 		}
-	}, [monsters, label, showToast]);
+	}, [info.paths.monsters, showToast]);
 
 	const reveal = useCallback(
 		(file: string) => {
@@ -820,6 +797,13 @@ export default function Workspace({
 		setPrefs(next);
 		savePrefs(next);
 	};
+
+	// How old the patch-notes cut-off point is, in the menu label. Re-read when
+	// the dialog closes, because that is where it usually moves.
+	const patchCutoffAge = useMemo(() => {
+		const c = loadCutoff(info.paths.monsters);
+		return c ? ` — last set ${relativeWhen(c.at)}` : '';
+	}, [info.paths.monsters, patchOpen]);
 	const menus: Menu[] = [
 		{
 			label: 'File',
@@ -860,7 +844,11 @@ export default function Workspace({
 				},
 				{
 					label: 'Export patch notes…',
-					onSelect: () => void exportPatchNotes()
+					onSelect: () => setPatchOpen(true)
+				},
+				{
+					label: `Set patch notes cut-off point${patchCutoffAge}`,
+					onSelect: () => void setPatchCutoff()
 				}
 			]
 		},
@@ -1752,6 +1740,16 @@ export default function Workspace({
 						</div>
 					</div>
 				</div>
+			)}
+
+			{patchOpen && (
+				<PatchNotesDialog
+					label={label}
+					monstersPath={info.paths.monsters}
+					dirty={dirty}
+					onClose={() => setPatchOpen(false)}
+					onToast={showToast}
+				/>
 			)}
 
 			{scaling && (

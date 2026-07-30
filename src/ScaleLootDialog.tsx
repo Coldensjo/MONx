@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { scaleLootChances, tauriItemIndex, type ScaleOptions, type ScaleReport, type ScaledEntry } from './monster';
 import { NumberField } from './fields/NumberField';
 import { ItemPicker, ItemSprite } from './fields/ItemPicker';
@@ -60,6 +60,12 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 		[set, percent, itemId, keepNonzero]
 	);
 
+	// Held in a ref so the preview does not depend on a callback the parent
+	// re-creates every render — it would re-run the walk and, worse, wipe the
+	// ticks the user had just set.
+	const onErrorRef = useRef(onError);
+	onErrorRef.current = onError;
+
 	// Re-preview (debounced) whenever anything the walk reads changes.
 	useEffect(() => {
 		setExcluded(new Set());
@@ -71,13 +77,13 @@ export default function ScaleLootDialog({ initialItemId = null, onClose, onAppli
 		const t = setTimeout(() => {
 			scaleLootChances(opts, false)
 				.then(r => live && setReport(r))
-				.catch(e => onError(String(e)));
+				.catch(e => onErrorRef.current(String(e)));
 		}, 300);
 		return () => {
 			live = false;
 			clearTimeout(t);
 		};
-	}, [opts, noop, onError]);
+	}, [opts, noop]);
 
 	const groups = useMemo(() => group(report?.sample ?? []), [report]);
 
