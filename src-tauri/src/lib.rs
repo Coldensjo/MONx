@@ -1178,6 +1178,45 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| format!("write {path}: {e}"))
 }
 
+/// Hands a URL to the OS browser. The webview refuses to navigate away from
+/// the app, so a plain `<a href>` does nothing in a Tauri window.
+///
+/// Only `https://` is accepted, which is the whole security model here: the
+/// argument reaches a shell on Windows, and anything else — `file:`, a bare
+/// path, a flag — would be a way to run something. There is exactly one caller
+/// and it passes a literal.
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") || url.contains(['"', '\'', '\n', '\r', '&', '|']) {
+        return Err(format!("refusing to open {url}"));
+    }
+
+    #[cfg(target_os = "windows")]
+    // `start` is a cmd builtin, not an exe. The empty string is its window
+    // title argument: without it `start` reads the URL as the title and opens
+    // nothing.
+    let mut cmd = {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", "", &url]);
+        c
+    };
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg(&url);
+        c
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&url);
+        c
+    };
+
+    cmd.spawn().map_err(|e| format!("open {url}: {e}"))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let spr_manager: SprManagerState = Arc::new(RwLock::new(SprManager::new()));
@@ -1191,6 +1230,7 @@ pub fn run() {
         .manage(dat_manager)
         .manage(workspace)
         .invoke_handler(tauri::generate_handler![
+            open_external,
             open_spr,
             close_spr,
             open_dat,

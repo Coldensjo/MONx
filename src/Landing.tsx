@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import {
 	AlertCircle,
@@ -390,6 +391,24 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 						)}
 					</div>
 				)}
+			</div>
+
+			{/* The only place the app states its own version. `open_external` hands
+			    the URL to the OS browser — the webview will not navigate away from
+			    the app, so a plain href here does nothing. */}
+			<div className="mx-credit">
+				MONx {__APP_VERSION__} — {t('by')}{' '}
+				<button
+					className="mx-credit-link"
+					onClick={() => {
+						// No browser, or the shell refused: not worth a toast on the
+						// landing screen, where there is nothing to interrupt.
+						invoke('open_external', { url: 'https://github.com/Coldensjo' }).catch(() => {});
+					}}
+				>
+					Siz
+				</button>
+				, {t('built with Claude')}
 			</div>
 		</div>
 	);

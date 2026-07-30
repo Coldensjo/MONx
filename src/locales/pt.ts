@@ -1263,7 +1263,11 @@ const pt: Record<string, string> = {
 
 	// --- UI inspector ---------------------------------------------------------------------------------------------------------------------------------
 	Copied: 'Copiado',
-	'Hold {{key}} · click to copy': 'Segure {{key}} · clique para copiar'
+	'Hold {{key}} · click to copy': 'Segure {{key}} · clique para copiar',
+
+	// --- Landing credit -------------------------------------------------------------------------------------------------------------------------------
+	by: 'por',
+	'built with Claude': 'construído com Claude'
 };
 
 export default pt;

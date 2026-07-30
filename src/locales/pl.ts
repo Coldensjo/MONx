@@ -1334,7 +1334,11 @@ const pl: Record<string, string> = {
 
 	// --- UI inspector -----------------------------------------------------------------------
 	Copied: 'Skopiowano',
-	'Hold {{key}} · click to copy': 'Przytrzymaj {{key}} · kliknij, aby skopiować'
+	'Hold {{key}} · click to copy': 'Przytrzymaj {{key}} · kliknij, aby skopiować',
+
+	// --- Landing credit ---------------------------------------------------------------------
+	by: 'autor:',
+	'built with Claude': 'zbudowane z Claude'
 };
 
 export default pl;

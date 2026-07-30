@@ -1,8 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// The landing screen shows the version, and there is only one place it can come
+// from without drifting: the manifest the build already reads.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+
 export default defineConfig({
 	plugins: [react()],
+	define: { __APP_VERSION__: JSON.stringify(pkg.version) },
 	server: {
 		port: 8090,
 		strictPort: true,
