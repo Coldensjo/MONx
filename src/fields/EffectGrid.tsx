@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Ban, ChevronDown, Search } from 'lucide-react';
 import type { EffectEntry } from '../catalog';
@@ -69,6 +70,7 @@ function Cell({
  * the rest of the card.
  */
 export function EffectGrid({ entries, kind, value, onChange, disabled, noneLabel = '(none)' }: Props) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const [up, setUp] = useState(false);
 	const [query, setQuery] = useState('');
@@ -147,7 +149,7 @@ export function EffectGrid({ entries, kind, value, onChange, disabled, noneLabel
 						<input
 							autoFocus
 							value={query}
-							placeholder="Search…"
+							placeholder={t('Search…')}
 							onChange={e => setQuery(e.target.value)}
 						/>
 					</div>
@@ -155,7 +157,7 @@ export function EffectGrid({ entries, kind, value, onChange, disabled, noneLabel
 						<button
 							type="button"
 							className={value ? 'ss-ed-effect-cell' : 'ss-ed-effect-cell ss-ed-effect-cell-active'}
-							title={noneLabel}
+							title={t(noneLabel)}
 							onClick={() => pick(null)}
 						>
 							<span className="ss-ed-effect-none">
@@ -178,7 +180,7 @@ export function EffectGrid({ entries, kind, value, onChange, disabled, noneLabel
 			{current?.unreachable && <div className="ss-ed-field-note ss-ed-note-warn">{current.unreachable}</div>}
 			{current?.mislabeled && <div className="ss-ed-field-note ss-ed-note-warn">{current.mislabeled}</div>}
 			{current?.ironcore && (
-				<div className="ss-ed-field-note">Ironcore-only effect — a stock client renders nothing.</div>
+				<div className="ss-ed-field-note">{t('Ironcore-only effect — a stock client renders nothing.')}</div>
 			)}
 		</div>
 	);

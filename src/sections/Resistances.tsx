@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { COMMON_IMMUNITY_PRESET, CONDITION_IMMUNITIES, DAMAGE_TYPES, type DamageType } from '../catalog';
 import { elementPercent, isImmune, type DamageType as CombatType } from '../derive';
@@ -24,6 +25,7 @@ function elementKey(elements: Record<string, number>, d: DamageType): string {
 }
 
 export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	// Mode is otherwise derived from the value, so a slider dragged through 0
 	// would flip the row to Normal and unmount the slider mid-gesture. Types
 	// the user has put (or edited) in percent mode stay there until they pick
@@ -74,7 +76,7 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 			id="resistances"
 			collapsed={collapsed}
 			onToggle={() => onToggle('resistances')}
-			summary={`${immuneCount} immune`}
+			summary={t('{{count}} immune', { count: immuneCount })}
 		>
 			<div className="ss-ed-resists">
 				{DAMAGE_TYPES.map(d => {
@@ -92,35 +94,35 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 								value={mode}
 								onChange={m => setMode(d, m as Mode)}
 								options={[
-									{ value: 'normal', label: 'Normal' },
-									{ value: 'immune', label: 'Immune', title: 'Bundles the matching condition immunity too' },
-									{ value: 'percent', label: 'Percent' }
+									{ value: 'normal', label: t('Normal') },
+									{ value: 'immune', label: t('Immune'), title: t('Bundles the matching condition immunity too') },
+									{ value: 'percent', label: t('Percent') }
 								]}
 								disabled={readOnly}
 							/>
 							{mode === 'percent' && (
 								<PercentSlider value={percent} onChange={v => setPercent(d, v)} disabled={readOnly} />
 							)}
-							{mode === 'immune' && <span className="ss-ed-resist-note">takes 0 — and the matching condition too</span>}
+							{mode === 'immune' && <span className="ss-ed-resist-note">{t('takes 0 — and the matching condition too')}</span>}
 						</div>
 					);
 				})}
 			</div>
 
 			<SubGroup
-				title="Condition immunities"
-				note="These have no element equivalent — the only way to grant them is here."
+				title={t('Condition immunities')}
+				note={t('These have no element equivalent — the only way to grant them is here.')}
 			>
 				{!presetApplied && (
 					<button type="button" className="ss-btn" disabled={readOnly} onClick={applyPreset}>
-						Apply the usual set
+						{t('Apply the usual set')}
 					</button>
 				)}
 				<div className="ss-ed-flags">
 					{CONDITION_IMMUNITIES.map(c => (
 						<Toggle
 							key={c.key}
-							label={c.key === 'invisible' ? 'Can see invisible creatures' : c.label}
+							label={c.key === 'invisible' ? t('Can see invisible creatures') : c.label}
 							title={c.note}
 							checked={doc.immunities[c.key] === true}
 							disabled={readOnly}
@@ -131,8 +133,7 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 			</SubGroup>
 
 			<div className="ss-ed-field-note">
-				Positive resists, negative takes extra. Element percent is applied after armour, and magic penetration eats
-				into positive values for energy, fire, earth, ice, holy and death only.
+				{t('Positive resists, negative takes extra. Element percent is applied after armour, and magic penetration eats into positive values for energy, fire, earth, ice, holy and death only.')}
 			</div>
 		</Section>
 	);

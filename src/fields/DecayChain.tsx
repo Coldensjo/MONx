@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { getItem, type ItemInfo } from '../monster';
@@ -60,6 +61,7 @@ async function walkChain(serverId: number): Promise<Chain> {
 /** The corpse's full decay cycle: every stage from items.xml with its duration,
     and the total time until the corpse is gone (or stops decaying). */
 export function DecayChain({ serverId }: { serverId: number | null }) {
+	const { t } = useTranslation();
 	const [chain, setChain] = useState<Chain | null>(null);
 
 	useEffect(() => {
@@ -80,12 +82,12 @@ export function DecayChain({ serverId }: { serverId: number | null }) {
 
 	return (
 		<Field
-			label="Decay cycle"
-			hint={`${total > 0 ? formatSeconds(total) : '?'}${known ? '' : ' + ?'} total`}
+			label={t('Decay cycle')}
+			hint={t('{{time}} total', { time: `${total > 0 ? formatSeconds(total) : '?'}${known ? '' : ' + ?'}` })}
 			note={
 				chain.vanishes
 					? undefined
-					: 'The last stage has no decayTo — it stays on the ground forever.'
+					: t('The last stage has no decayTo — it stays on the ground forever.')
 			}
 		>
 			<div className="ss-ed-decay">
@@ -108,7 +110,7 @@ export function DecayChain({ serverId }: { serverId: number | null }) {
 				{chain.vanishes && (
 					<>
 						<ArrowRight size={12} className="ss-ed-decay-arrow" />
-						<span className="ss-ed-decay-gone">gone</span>
+						<span className="ss-ed-decay-gone">{t('gone')}</span>
 					</>
 				)}
 			</div>

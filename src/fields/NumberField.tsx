@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 
 interface Props {
@@ -40,6 +41,7 @@ export function NumberField({
 	title,
 	onDraft
 }: Props) {
+	const { t } = useTranslation();
 	const [text, setText] = useState(String(value));
 	const [editing, setEditing] = useState(false);
 
@@ -84,7 +86,7 @@ export function NumberField({
 				<button
 					type="button"
 					className="ss-ed-default-mark"
-					title={`Corpus default is ${corpusDefault} — click to use it`}
+					title={t('Corpus default is {{value}} — click to use it', { value: corpusDefault })}
 					disabled={disabled}
 					onClick={() => onChange(corpusDefault)}
 				>

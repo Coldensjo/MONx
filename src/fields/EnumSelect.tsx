@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 
@@ -65,6 +66,7 @@ export function EnumSelect<T extends string | number>({
 	searchThreshold = 14,
 	width
 }: Props<T>) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState('');
 	const wrapRef = useRef<HTMLDivElement>(null);
@@ -106,7 +108,7 @@ export function EnumSelect<T extends string | number>({
 					if (match) onChange(match.value);
 				}}
 			>
-				{value === null && <option value="">{placeholder}</option>}
+				{value === null && <option value="">{t(placeholder)}</option>}
 				{grouped.map(([group, list]) =>
 					group ? (
 						<optgroup key={group} label={group}>
@@ -147,7 +149,7 @@ export function EnumSelect<T extends string | number>({
 				}}
 			>
 				{selected?.preview}
-				<span className="ss-ed-combo-value">{selected ? selected.label : placeholder}</span>
+				<span className="ss-ed-combo-value">{selected ? selected.label : t(placeholder)}</span>
 				<ChevronDown size={14} />
 			</button>
 			{open && (
@@ -158,13 +160,13 @@ export function EnumSelect<T extends string | number>({
 							<input
 								autoFocus
 								value={query}
-								placeholder="Search…"
+								placeholder={t('Search…')}
 								onChange={e => setQuery(e.target.value)}
 							/>
 						</div>
 					)}
 					<div className="ss-ed-popover-list">
-						{filtered.length === 0 && <div className="ss-ed-popover-empty">No match</div>}
+						{filtered.length === 0 && <div className="ss-ed-popover-empty">{t('No match')}</div>}
 						{filtered.map(([group, list]) => (
 							<div key={group || '_'}>
 								{group && <div className="ss-ed-popover-group">{group}</div>}

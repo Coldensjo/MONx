@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { tauriItemIndex, type ItemIndex, type Lint, type MonsterDoc, type SpellName } from './monster';
@@ -103,6 +104,7 @@ export function MonsterEditor({
 	onJumped,
 	onToast
 }: MonsterEditorProps) {
+	const { t } = useTranslation();
 	const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => new Set(loadState().collapsed));
 	const [active, setActive] = useState<SectionId>(() => landingSection(prefs) ?? 'identity');
 	const scrollRef = useRef<HTMLDivElement>(null);
@@ -161,25 +163,42 @@ export function MonsterEditor({
 				const block = readBlock(doc, kind);
 				saveBlock(block);
 				setClipboard(block);
-				onToast?.('ok', `Copied ${block.count} ${BLOCK_LABEL[kind]} from ${doc.name}`);
+				onToast?.(
+					'ok',
+					t('Copied {{count}} {{block}} from {{monster}}', {
+						count: block.count,
+						block: t(BLOCK_LABEL[kind]),
+						monster: doc.name
+					})
+				);
 			},
 			paste: (kind, mode) => {
 				if (readOnly || !clipboard || clipboard.kind !== kind) return;
 				const p = applyBlock(doc, clipboard, mode);
 				if (!p) {
-					onToast?.('error', `That ${BLOCK_LABEL[kind]} block could not be read`);
+					onToast?.('error', t('That {{block}} block could not be read', { block: t(BLOCK_LABEL[kind]) }));
 					return;
 				}
 				patch(p);
+				// Replace and merge are separate messages: "Replaced"/"Added" is not a
+				// word that can be swapped into one sentence in every language.
 				onToast?.(
 					'ok',
-					`${mode === 'replace' ? 'Replaced' : 'Added'} ${clipboard.count} ${BLOCK_LABEL[kind]} from ${
-						clipboard.from
-					}`
+					mode === 'replace'
+						? t('Replaced with {{count}} {{block}} from {{monster}}', {
+								count: clipboard.count,
+								block: t(BLOCK_LABEL[kind]),
+								monster: clipboard.from
+							})
+						: t('Added {{count}} {{block}} from {{monster}}', {
+								count: clipboard.count,
+								block: t(BLOCK_LABEL[kind]),
+								monster: clipboard.from
+							})
 				);
 			}
 		}),
-		[clipboard, doc, patch, readOnly, onToast]
+		[clipboard, doc, patch, readOnly, onToast, t]
 	);
 
 	const toggle = useCallback((id: SectionId) => {
@@ -263,7 +282,7 @@ export function MonsterEditor({
 							className={id === active ? 'ss-ed-tab ss-ed-tab-active' : 'ss-ed-tab'}
 							onClick={() => jump(id)}
 						>
-							{SECTION_LABEL[id]}
+							{t(SECTION_LABEL[id])}
 						</button>
 					))}
 					{(lintCounts.error > 0 || lintCounts.warning > 0) && (
@@ -279,8 +298,7 @@ export function MonsterEditor({
 						{readOnly && (
 							<div className="ss-ed-banner ss-ed-banner-warn ss-ed-readonly">
 								<AlertTriangle size={14} />
-								Read-only — this file cannot be written back without losing something. Fix the reported problems to
-								enable editing.
+								{t('Read-only — this file cannot be written back without losing something. Fix the reported problems to enable editing.')}
 							</div>
 						)}
 

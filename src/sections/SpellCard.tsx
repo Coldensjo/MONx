@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useMemo, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import {
@@ -59,6 +60,7 @@ interface Props {
  * field is silently ignored by the loader (§8.1, §9).
  */
 export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, look, engine }: Props) {
+	const { t } = useTranslation();
 	const info = engineInfo(engine);
 	const [staged, setStaged] = useState(false);
 	const family = familyOf(block);
@@ -73,11 +75,14 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 				const shadowed = registeredNames.some(r => r.name.toLowerCase() === s.name.toLowerCase());
 				return {
 					value: s.name,
-					label: shadowed ? `${s.label} — shadowed` : s.label,
+					label: shadowed ? t('{{spell}} — shadowed', { spell: s.label }) : s.label,
 					group: s.group,
 					usage: s.usage,
 					note: shadowed
-						? `A registered spell named "${s.name}" exists and wins the lookup — this no longer means ${s.label}.`
+						? t('A registered spell named “{{name}}” exists and wins the lookup — this no longer means {{spell}}.', {
+								name: s.name,
+								spell: s.label
+							})
 						: s.note
 				};
 			}),
@@ -86,7 +91,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 				label: s.words ? `${s.name} — ${s.words}` : s.name,
 				group: REGISTERED_GROUP,
 				usage: s.usage,
-				note: s.shadows ? 'This name also exists as a built-in; the registered spell wins.' : undefined
+				note: s.shadows ? t('This name also exists as a built-in; the registered spell wins.') : undefined
 			}))
 		];
 	}, [spells]);
@@ -149,7 +154,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 		<div className="ss-ed-card">
 			<div className="ss-ed-card-head">
 				{scripted ? (
-					<Field label="Script">
+					<Field label={t('Script')}>
 						<TextField
 							value={block.script ?? ''}
 							onChange={v => set({ script: v })}
@@ -159,7 +164,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 						/>
 					</Field>
 				) : (
-					<Field label="Spell" lints={lintAt('name')}>
+					<Field label={t('Spell')} lints={lintAt('name')}>
 						<EnumSelect
 							value={block.name ?? ''}
 							onChange={pickName}
@@ -175,10 +180,10 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					type="button"
 					className={staged ? 'ss-btn mx-stage-open mx-stage-open-on' : 'ss-btn mx-stage-open'}
 					onClick={() => setStaged(s => !s)}
-					title="Watch this spell play out"
+					title={t('Watch this spell play out')}
 				>
 					{staged ? <EyeOff size={13} /> : <Eye size={13} />}
-					Visualize
+					{t('Visualize')}
 				</button>
 			</div>
 
@@ -187,19 +192,22 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 			{builtin?.note &&<div className="ss-ed-field-note">{builtin.note}</div>}
 			{builtin?.aliasOf && (
 				<div className="ss-ed-field-note">
-					Identical to <code>{builtin.aliasOf}</code> — two spellings of one spell.
+					{t('Identical to {{spell}} — two spellings of one spell.', { spell: builtin.aliasOf })}
 				</div>
 			)}
 
 			{registered && (
 				<Banner kind="info">
-					Registered spell — the loader takes it from <code>spells.xml</code> and ignores geometry and effects. Only
-					interval, chance, range, min and max still apply.
+					{t('Registered spell — the loader takes it from {{file}} and ignores geometry and effects. Only interval, chance, range, min and max still apply.', {
+						file: 'spells.xml'
+					})}
 				</Banner>
 			)}
 			{scripted && (
 				<Banner kind="info">
-					Scripted spell — <code>name</code> is ignored and the Lua file decides the behaviour.
+					{t('Scripted spell — {{attr}} is ignored and the Lua file decides the behaviour.', {
+						attr: 'name'
+					})}
 				</Banner>
 			)}
 
@@ -208,7 +216,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 				    alone gates a cast — so an interval box there would be a field
 				    the server never reads. */}
 				{info.spellInterval && (
-					<Field label="Interval" lints={lintAt('interval')} hint="ms" note={info.key === 'ironcore' ? 'Ironcore tracks the cooldown per spell, so a long ultimate does not block the other attacks.' : undefined}>
+					<Field label={t('Interval')} lints={lintAt('interval')} hint={t('ms')} note={info.key === 'ironcore' ? t('Ironcore tracks the cooldown per spell, so a long ultimate does not block the other attacks.') : undefined}>
 						<NumberField value={block.interval} onChange={v => set({ interval: v })} min={1} width={100} disabled={readOnly} />
 					</Field>
 				)}
@@ -216,24 +224,24 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 				    second box beside chance would invite writing both, which
 				    silently discards this one. */}
 				{info.spellDelay && block.delay !== null && (
-					<Field label="Delay" lints={lintAt('delay')} note="Read in place of chance — writing both means this one is ignored.">
+					<Field label={t('Delay')} lints={lintAt('delay')} note={t('Read in place of chance — writing both means this one is ignored.')}>
 						<NumberField value={block.delay} onChange={v => set({ delay: v })} min={0} width={100} disabled={readOnly} />
 					</Field>
 				)}
 				<Field
-					label="Chance"
+					label={t('Chance')}
 					lints={lintAt('chance')}
 					hint="%"
-					note={block.name !== 'melee' && block.chance === 0 ? 'A non-melee spell without a chance logs a warning.' : undefined}
+					note={block.name !== 'melee' && block.chance === 0 ? t('A non-melee spell without a chance logs a warning.') : undefined}
 				>
 					<NumberField value={block.chance} onChange={v => set({ chance: v })} min={0} max={100} width={100} disabled={readOnly} />
 				</Field>
 				<Field
-					label="Range"
+					label={t('Range')}
 					lints={lintAt('range')}
-					hint="tiles"
+					hint={t('tiles')}
 					ignored={block.name === 'melee'}
-					note={block.name === 'melee' ? 'Forced to 1 for melee.' : block.range === 0 ? 'Zero means line of sight only. Clamped to 22.' : undefined}
+					note={block.name === 'melee' ? t('Forced to 1 for melee.') : block.range === 0 ? t('Zero means line of sight only. Clamped to 22.') : undefined}
 				>
 					<NumberField
 						value={block.range}
@@ -248,11 +256,11 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 
 			{family === 'melee' && block.melee && (
 				<SubGroup
-					title="Melee damage"
-					note="Skill and attack replace min/max: max = ceil(skill × attack × 0.05 + attack × 0.5)."
+					title={t('Melee damage')}
+					note={t('Skill and attack replace min/max: max = ceil(skill × attack × 0.05 + attack × 0.5).')}
 				>
 					<div className="ss-ed-card-grid">
-						<Field label="Skill" lints={lintAt('melee.skill')}>
+						<Field label={t('Skill')} lints={lintAt('melee.skill')}>
 							<NumberField
 								value={block.melee.skill ?? 0}
 								onChange={v => set({ melee: { ...block.melee!, skill: v } })}
@@ -261,7 +269,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 								disabled={readOnly}
 							/>
 						</Field>
-						<Field label="Attack" lints={lintAt('melee.attack')}>
+						<Field label={t('Attack')} lints={lintAt('melee.attack')}>
 							<NumberField
 								value={block.melee.attack ?? 0}
 								onChange={v => set({ melee: { ...block.melee!, attack: v } })}
@@ -270,7 +278,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 								disabled={readOnly}
 							/>
 						</Field>
-						<Field label="Max damage" hint="derived">
+						<Field label={t('Max damage')} hint={t('derived')}>
 							{/* The loader only derives damage when both are written; with
 							    either missing it reads the block's own min/max instead. */}
 							<span className="ss-ed-derived">
@@ -292,7 +300,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 								['skilladdcount', 'Level step', 'Skill gained per level.'],
 								['poisoncycles', 'Poison cycles', 'Adds a poison condition alongside any other.']
 							] as const).map(([key, label, note]) => (
-								<Field key={key} label={label} note={note}>
+								<Field key={key} label={t(label)} note={t(note)}>
 									<NumberField
 										value={block.melee![key] ?? 0}
 										onChange={v => set({ melee: { ...block.melee!, [key]: v || null } })}
@@ -306,8 +314,8 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					)}
 
 					<Field
-						label="Condition on hit"
-						note="One condition per melee block — the loader takes the first it finds, in the order fire, poison, energy, drown, freeze, dazzle, curse, bleed."
+						label={t('Condition on hit')}
+						note={t('One condition per melee block — the loader takes the first it finds, in the order fire, poison, energy, drown, freeze, dazzle, curse, bleed.')}
 					>
 						<EnumSelect
 							value={block.melee.condition?.type ?? ''}
@@ -340,10 +348,10 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					{block.melee.condition && (
 						<div className="ss-ed-card-grid">
 							<Field
-								label="Damage per tick"
+								label={t('Damage per tick')}
 								note={
 									block.melee.condition.type === 'bleed' || block.melee.condition.type === 'physical'
-										? 'Bleed ignores the value — the loader never reads it, so this produces a zero-damage bleed.'
+										? t('Bleed ignores the value — the loader never reads it, so this produces a zero-damage bleed.')
 										: undefined
 								}
 							>
@@ -354,7 +362,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 									disabled={readOnly}
 								/>
 							</Field>
-							<Field label="Tick" hint="ms">
+							<Field label={t('Tick')} hint={t('ms')}>
 								<NumberField
 									value={block.melee.condition.tick}
 									onChange={v => set({ melee: { ...block.melee!, condition: { ...block.melee!.condition!, tick: v } } })}
@@ -371,14 +379,14 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 			{showDamage && family !== 'melee' && (
 				<div className="ss-ed-card-grid">
 					<Field
-						label={healing ? 'Min healed' : 'Min damage'}
+						label={healing ? t('Min healed') : t('Min damage')}
 						lints={lintAt('min')}
-						note={healing ? 'Healing takes positive values.' : 'Damage is negative.'}
+						note={healing ? t('Healing takes positive values.') : t('Damage is negative.')}
 					>
 						<NumberField value={block.min} onChange={v => set({ min: v })} width={100} disabled={readOnly} />
 					</Field>
 					<Field
-						label={healing ? 'Max healed' : 'Max damage'}
+						label={healing ? t('Max healed') : t('Max damage')}
 						lints={lintAt('max')}
 						note={
 							Math.abs(block.min) > Math.abs(block.max)
@@ -392,9 +400,9 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					    tick or start at all — without it the loader drops the spell. */}
 					{family === 'condition' && block.condition && info.conditionStyle === 'count' && (
 						<Field
-							label="Count"
+							label={t('Count')}
 							lints={lintAt('condition.count')}
-							note="Required — a condition spell without it is rejected and never loads."
+							note={t('Required — a condition spell without it is rejected and never loads.')}
 						>
 							<NumberField
 								value={block.condition.count ?? 0}
@@ -407,7 +415,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					)}
 					{family === 'condition' && block.condition && info.conditionStyle !== 'count' && (
 						<>
-							<Field label="Tick" hint="ms" note="Per-tick damage above; this is the interval between ticks.">
+							<Field label={t('Tick')} hint={t('ms')} note={t('Per-tick damage above; this is the interval between ticks.')}>
 								<NumberField
 									value={block.condition.tick}
 									onChange={v => set({ condition: { ...block.condition!, tick: v } })}
@@ -417,7 +425,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 								/>
 							</Field>
 							<Field
-								label="First tick"
+								label={t('First tick')}
 								lints={lintAt('condition.start')}
 								note={
 									block.condition.start > Math.abs(block.min)
@@ -439,8 +447,8 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 			)}
 
 			{family === 'status' && block.status && (
-				<SubGroup title="Status">
-					<Field label="Duration" hint="ms">
+				<SubGroup title={t('Status')}>
+					<Field label={t('Duration')} hint={t('ms')}>
 						<NumberField
 							value={block.status.duration}
 							onChange={v => set({ status: { ...block.status!, duration: v } })}
@@ -453,14 +461,16 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					{block.name === 'speed' && (
 						<>
 							<Banner kind="info">
-								Positive hastes and turns the spell non-aggressive — a self-buff that belongs in Defenses. Negative
-								paralyses, and is clamped at −1000 (−100% speed).
-								{parent === 'attacks' && (block.status.speedchange ?? block.status.minspeedchange ?? 0) > 0
-									? ' This one is positive but sits in Attacks.'
-									: ''}
+								{/* The trailing caveat is its own sentence rather than a
+								    fragment concatenated onto the first. */}
+								{t('Positive hastes and turns the spell non-aggressive — a self-buff that belongs in Defenses. Negative paralyses, and is clamped at −1000 (−100% speed).')}
+								{parent === 'attacks' &&
+									(block.status.speedchange ?? block.status.minspeedchange ?? 0) > 0 && (
+										<> {t('This one is positive but sits in Attacks.')}</>
+									)}
 							</Banner>
 							<div className="ss-ed-card-grid">
-								<Field label="Speed change" lints={lintAt('status.speedchange')} note="Leave blank to use a random min–max range instead.">
+								<Field label={t('Speed change')} lints={lintAt('status.speedchange')} note={t('Leave blank to use a random min–max range instead.')}>
 									<NumberField
 										value={block.status.speedchange ?? 0}
 										onChange={v => set({ status: { ...block.status!, speedchange: v, minspeedchange: null, maxspeedchange: null } })}
@@ -473,7 +483,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 								    figure instead, under two different attribute names. */}
 								{info.speedSpell === 'speedChange' && (
 									<>
-										<Field label="Min" lints={lintAt('status.minspeedchange')} note="A min of 0 with no speedchange is a hard error — the block fails to load.">
+										<Field label={t('Min')} lints={lintAt('status.minspeedchange')} note={t('A min of 0 with no speedchange is a hard error — the block fails to load.')}>
 											<NumberField
 												value={block.status.minspeedchange ?? 0}
 												onChange={v => set({ status: { ...block.status!, minspeedchange: v, speedchange: null } })}
@@ -481,7 +491,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 												disabled={readOnly}
 											/>
 										</Field>
-										<Field label="Max" lints={lintAt('status.maxspeedchange')} note="Defaults to min when absent.">
+										<Field label={t('Max')} lints={lintAt('status.maxspeedchange')} note={t('Defaults to min when absent.')}>
 											<NumberField
 												value={block.status.maxspeedchange ?? 0}
 												onChange={v => set({ status: { ...block.status!, maxspeedchange: v, speedchange: null } })}
@@ -492,7 +502,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 									</>
 								)}
 								{info.speedSpell === 'speedVariation' && (
-									<Field label="Variation" lints={lintAt('status.speedvariation')} note="Spread around the delta above.">
+									<Field label={t('Variation')} lints={lintAt('status.speedvariation')} note={t('Spread around the delta above.')}>
 										<NumberField
 											value={block.status.speedvariation ?? 0}
 											onChange={v => set({ status: { ...block.status!, speedvariation: v } })}
@@ -502,7 +512,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 									</Field>
 								)}
 								{info.speedSpell === 'changeVariation' && (
-									<Field label="Variation" lints={lintAt('status.variation')} note="Spread around the delta above.">
+									<Field label={t('Variation')} lints={lintAt('status.variation')} note={t('Spread around the delta above.')}>
 										<NumberField
 											value={block.status.variation ?? 0}
 											onChange={v => set({ status: { ...block.status!, variation: v } })}
@@ -516,7 +526,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					)}
 
 					{block.name === 'drunk' && (
-						<Field label="Drunkenness" note="Default 25.">
+						<Field label={t('Drunkenness')} note={t('Default 25.')}>
 							<NumberField
 								value={block.status.drunkenness ?? 25}
 								onChange={v => set({ status: { ...block.status!, drunkenness: v } })}
@@ -531,17 +541,17 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					{block.name === 'outfit' && (
 						<>
 							<Banner kind="warn">
-								The monster name is resolved at load time — an unknown name silently produces no condition at all.
+								{t('The monster name is resolved at load time — an unknown name silently produces no condition at all.')}
 							</Banner>
-							<Field label="Look like monster">
+							<Field label={t('Look like monster')}>
 								<TextField
 									value={block.status.outfitMonster ?? ''}
 									onChange={v => set({ status: { ...block.status!, outfitMonster: v === '' ? null : v, outfitItem: null } })}
-									placeholder="monster name"
+									placeholder={t('monster name')}
 									disabled={readOnly}
 								/>
 							</Field>
-							<Field label="…or item id">
+							<Field label={t('…or item id')}>
 								<NumberField
 									value={block.status.outfitItem ?? 0}
 									onChange={v => set({ status: { ...block.status!, outfitItem: v, outfitMonster: null } })}
@@ -557,8 +567,8 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 
 			{showGeometry && (
 				<SubGroup
-					title="Area"
-					note="One shape only — if several are present the last one silently wins."
+					title={t('Area')}
+					note={t('One shape only — if several are present the last one silently wins.')}
 				>
 					<ToggleGroup
 						value={block.area?.shape ?? 'none'}
@@ -577,7 +587,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					/>
 					{block.area?.shape === 'beam' && (
 						<div className="ss-ed-card-grid">
-							<Field label="Length" hint="tiles" note="A beam forces the spell to fire in the facing direction.">
+							<Field label={t('Length')} hint={t('tiles')} note={t('A beam forces the spell to fire in the facing direction.')}>
 								<NumberField
 									value={block.area.length}
 									onChange={v => set({ area: { ...block.area!, length: v } })}
@@ -586,7 +596,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 									disabled={readOnly}
 								/>
 							</Field>
-							<Field label="Spread" note="0 is a straight beam, 3 the classic wave.">
+							<Field label={t('Spread')} note={t('0 is a straight beam, 3 the classic wave.')}>
 								<NumberField
 									value={block.area.spread}
 									onChange={v => set({ area: { ...block.area!, spread: v } })}
@@ -598,7 +608,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 						</div>
 					)}
 					{block.area?.shape === 'radius' && (
-						<Field label="Radius" hint="tiles">
+						<Field label={t('Radius')} hint={t('tiles')}>
 							<NumberField
 								value={block.area.radius}
 								onChange={v => set({ area: { ...block.area!, radius: v } })}
@@ -609,7 +619,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 						</Field>
 					)}
 					{block.area?.shape === 'ring' && (
-						<Field label="Ring" hint="tiles">
+						<Field label={t('Ring')} hint={t('tiles')}>
 							<NumberField
 								value={block.area.ring}
 								onChange={v => set({ area: { ...block.area!, ring: v } })}
@@ -621,7 +631,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					)}
 					{block.area && (block.area.shape === 'radius' || block.area.shape === 'ring') && (
 						<Toggle
-							label="Centre on the target"
+							label={t('Centre on the target')}
 							checked={block.target}
 							disabled={readOnly}
 							onChange={v => set({ target: v })}
@@ -631,9 +641,9 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 			)}
 
 			{showEffects && (
-				<SubGroup title="Effects">
+				<SubGroup title={t('Effects')}>
 					<div className="ss-ed-card-grid">
-						<Field label="Projectile" lints={lintAt('effects.shootEffect')}>
+						<Field label={t('Projectile')} lints={lintAt('effects.shootEffect')}>
 							<EffectSelect
 								kind="shoot"
 								engine={engine}
@@ -642,7 +652,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 								disabled={readOnly}
 							/>
 						</Field>
-						<Field label="Magic effect" lints={lintAt('effects.areaEffect')}>
+						<Field label={t('Magic effect')} lints={lintAt('effects.areaEffect')}>
 							<EffectSelect
 								kind="area"
 								engine={engine}
@@ -656,7 +666,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 					    does not exist" and carry on without it. */}
 					{info.aoeShootEffect && (
 						<Toggle
-							label="Draw the projectile to every tile of the area"
+							label={t('Draw the projectile to every tile of the area')}
 							checked={block.effects.aoeShootEffect}
 							disabled={readOnly}
 							onChange={v => set({ effects: { ...block.effects, aoeShootEffect: v } })}
@@ -667,7 +677,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 
 			{scripted && (
 				<Toggle
-					label="Cast in the facing direction"
+					label={t('Cast in the facing direction')}
 					checked={block.direction}
 					disabled={readOnly}
 					onChange={v => set({ direction: v })}

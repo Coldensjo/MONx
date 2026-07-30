@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import type { VoiceLine } from '../monster';
 import { Field } from '../fields/Field';
@@ -16,6 +17,7 @@ interface Props extends SectionProps {
 /** The random voice pool. The two pacifist strings and the creature events live
  *  in Pacifist & Events — they are Ironcore extras most monsters never use. */
 export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
 	const voices = doc.voices;
 	const setLines = (lines: VoiceLine[]) => patch({ voices: { ...voices, lines } });
@@ -23,7 +25,9 @@ export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 	const silent = voices.chance === 0 || voices.lines.length === 0;
 
 	const intervalSeconds = voices.interval / 1000;
-	const secondsText = `${Number.isInteger(intervalSeconds) ? intervalSeconds : intervalSeconds.toFixed(2)} s`;
+	const secondsText = t('{{seconds}} s', {
+		seconds: Number.isInteger(intervalSeconds) ? intervalSeconds : intervalSeconds.toFixed(2)
+	});
 	// A `chance`% roll every `interval` ms → the cadence a hunter actually hears.
 	const perMinute = voices.interval > 0 ? (60000 / voices.interval) * (voices.chance / 100) : 0;
 
@@ -32,14 +36,14 @@ export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 			id="voices"
 			collapsed={collapsed}
 			onToggle={() => onToggle('voices')}
-			summary={voices.lines.length === 1 ? '1 line' : `${voices.lines.length} lines`}
+			summary={t('{{count}} line', { count: voices.lines.length })}
 		>
 			{/* TVP has both attributes commented out in its loader and Nostalrius
 			    never read them: on those engines every line is simply in the pool,
 			    and showing a cadence would be showing one the server ignores. */}
 			{engine.voicesCadence && (
 			<div className="ss-ed-card-grid">
-				<Field label="Interval" lints={lintAt('voices.interval')} hint="ms">
+				<Field label={t('Interval')} lints={lintAt('voices.interval')} hint={t('ms')}>
 					<NumberField
 						value={voices.interval}
 						onChange={v => patch({ voices: { ...voices, interval: v } })}
@@ -50,10 +54,10 @@ export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 					<span className="ss-ed-field-note">= {secondsText}</span>
 				</Field>
 				<Field
-					label="Chance"
+					label={t('Chance')}
 					lints={lintAt('voices.chance')}
 					hint="%"
-					note={silent ? 'Silent monster — nothing will ever be said.' : undefined}
+					note={silent ? t('Silent monster — nothing will ever be said.') : undefined}
 				>
 					<NumberField
 						value={voices.chance}
@@ -69,8 +73,13 @@ export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 
 			{engine.voicesCadence && !silent && voices.interval > 0 && (
 				<div className="ss-ed-field-note">
-					≈ {perMinute >= 10 ? Math.round(perMinute) : perMinute.toFixed(1)} voices per minute — a {voices.chance}
-					% roll every {secondsText}.
+					{/* One sentence: the "%" used to be split onto the next line by the
+					    formatter, which no translator could have reassembled. */}
+					{t('≈ {{rate}} voices per minute — a {{chance}}% roll every {{interval}}.', {
+						rate: perMinute >= 10 ? Math.round(perMinute) : perMinute.toFixed(1),
+						chance: voices.chance,
+						interval: secondsText
+					})}
 				</div>
 			)}
 
@@ -80,18 +89,18 @@ export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 				list="voices"
 				keyOf={(_, i) => String(i)}
 				disabled={readOnly}
-				empty="No voice lines."
+				empty={t('No voice lines.')}
 				renderRow={(line, i) => (
 					<div className="ss-ed-voice-row">
 						<TextField
 							value={line.sentence}
 							onChange={v => setLines(voices.lines.map((l, j) => (j === i ? { ...l, sentence: v } : l)))}
-							placeholder="What it says"
+							placeholder={t('What it says')}
 							disabled={readOnly}
 						/>
 						<Toggle
-							label="Yell"
-							title="Heard further away; conventionally written in upper case"
+							label={t('Yell')}
+							title={t('Heard further away; conventionally written in upper case')}
 							checked={line.yell}
 							disabled={readOnly}
 							onChange={v => setLines(voices.lines.map((l, j) => (j === i ? { ...l, yell: v } : l)))}
@@ -107,7 +116,7 @@ export function Voices({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 				onClick={() => setLines([...voices.lines, { sentence: '', yell: false }])}
 			>
 				<Plus size={14} />
-				Add line
+				{t('Add line')}
 			</button>
 		</Section>
 	);

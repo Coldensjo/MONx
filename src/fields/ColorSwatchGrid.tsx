@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { memo, useEffect, useRef, useState } from 'react';
 import { OUTFIT_PALETTE, OUTFIT_PALETTE_COLUMNS } from '../catalog';
 
@@ -28,6 +29,7 @@ const Grid = memo(function Grid({ value, onChange }: { value: number; onChange: 
 /** The client's outfit palette as a grid. The XML stores an index; the designer
     picks a colour, which is the whole point of "show the thing, not the id". */
 export function ColorSwatchGrid({ value, onChange, label, disabled }: Props) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const wrapRef = useRef<HTMLDivElement>(null);
 	const hex = OUTFIT_PALETTE[value] ?? '#000000';
@@ -48,7 +50,7 @@ export function ColorSwatchGrid({ value, onChange, label, disabled }: Props) {
 				className="ss-ed-input ss-ed-color-trigger"
 				disabled={disabled}
 				onClick={() => setOpen(o => !o)}
-				title={`${label} colour ${value}`}
+				title={t('{{part}} colour {{value}}', { part: t(label), value })}
 			>
 				<span className="ss-ed-color-chip" style={{ background: hex }} />
 				<span className="ss-ed-color-index">{value}</span>

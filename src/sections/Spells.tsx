@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import type { SpellBlock } from '../monster';
 import { SortableList } from '../fields/SortableList';
@@ -35,6 +36,7 @@ function blankSpell(which: 'attacks' | 'defenses'): SpellBlock {
 }
 
 export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	const blocks = which === 'attacks' ? doc.attacks : doc.defenses;
 	const setBlocks = (next: SpellBlock[]) => patch(which === 'attacks' ? { attacks: next } : { defenses: next });
 	const id: SectionId = which === 'attacks' ? 'attacks' : 'defenses';
@@ -44,7 +46,7 @@ export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed,
 			id={id}
 			collapsed={collapsed}
 			onToggle={() => onToggle(id)}
-			summary={blocks.length === 1 ? '1 spell' : `${blocks.length} spells`}
+			summary={t('{{count}} spell', { count: blocks.length })}
 		>
 			<SortableList
 				items={blocks}
@@ -52,7 +54,7 @@ export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed,
 				list={which}
 				keyOf={(_, i) => String(i)}
 				disabled={readOnly}
-				empty={which === 'attacks' ? 'No attacks — this monster cannot hurt anything.' : 'No defenses.'}
+				empty={which === 'attacks' ? t('No attacks — this monster cannot hurt anything.') : t('No defenses.')}
 				renderRow={(block, i) => (
 					<SpellCard
 						block={block}
@@ -73,7 +75,7 @@ export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed,
 				onClick={() => setBlocks([...blocks, blankSpell(which)])}
 			>
 				<Plus size={14} />
-				Add {which === 'attacks' ? 'attack' : 'defense'}
+				{which === 'attacks' ? t('Add attack') : t('Add defense')}
 			</button>
 		</Section>
 	);

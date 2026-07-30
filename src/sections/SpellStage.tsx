@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { n } from '../i18n';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Crosshair, Pause, Play, RotateCcw, Zap } from 'lucide-react';
 import { MAGIC_EFFECT_BY_NAME, SHOOT_EFFECT_BY_NAME } from '../catalog';
@@ -75,6 +77,7 @@ const ImpactSprite = memo(function ImpactSprite({ id, frame }: { id: number; fra
 });
 
 export function SpellStage({ block, look, parent }: Props) {
+	const { t } = useTranslation();
 	const [playing, setPlaying] = useState(true);
 	const [speed, setSpeed] = useState<Speed>(1);
 	const [realCooldown, setRealCooldown] = useState(false);
@@ -294,19 +297,19 @@ export function SpellStage({ block, look, parent }: Props) {
 					type="button"
 					className="ss-btn mx-stage-btn"
 					onClick={() => setPlaying(p => !p)}
-					title={playing ? 'Pause' : 'Play'}
-					aria-label={playing ? 'Pause' : 'Play'}
+					title={playing ? t('Pause') : t('Play')}
+					aria-label={playing ? t('Pause') : t('Play')}
 				>
 					{playing ? <Pause size={13} /> : <Play size={13} />}
 				</button>
-				<button type="button" className="ss-btn mx-stage-btn" onClick={fire} title="Cast now" aria-label="Cast now">
+				<button type="button" className="ss-btn mx-stage-btn" onClick={fire} title={t('Cast now')} aria-label={t('Cast now')}>
 					<Zap size={13} />
 				</button>
 				<button
 					type="button"
 					className="ss-btn mx-stage-btn"
 					onClick={() => setTarget({ dx: defaultDistance(block), dy: 0 })}
-					title="Reset the target"
+					title={t('Reset the target')}
 					aria-label="Reset the target"
 				>
 					<RotateCcw size={13} />
@@ -325,7 +328,7 @@ export function SpellStage({ block, look, parent }: Props) {
 				</div>
 				<label className="mx-stage-toggle" title={`interval="${block.interval}"`}>
 					<input type="checkbox" checked={realCooldown} onChange={e => setRealCooldown(e.target.checked)} />
-					Real cooldown
+					{t('Real cooldown')}
 				</label>
 			</div>
 
@@ -333,26 +336,26 @@ export function SpellStage({ block, look, parent }: Props) {
 			    lasts a third of a second and you should not have to catch it. */}
 			<div className="mx-stage-fx">
 				<span className="mx-stage-fx-slot">
-					<span className="mx-stage-fx-key">Projectile</span>
+					<span className="mx-stage-fx-key">{t('Projectile')}</span>
 					{shootUrl ? (
 						<>
 							<img className="mx-stage-fx-icon" src={shootUrl} alt="" draggable={false} />
-							<span>{shootEntry?.label ?? block.effects.shootEffect}</span>
+							<span>{shootEntry ? t(shootEntry.label) : block.effects.shootEffect}</span>
 						</>
 					) : (
 						<span className="mx-stage-fx-none">
 							{block.kind === 'registered'
-								? 'from spells.xml'
+								? t('from spells.xml')
 								: selfCast
-								? 'not used — cast on itself'
+								? t('not used — cast on itself')
 								: distance > 1
-								? 'none — nothing travels'
-								: 'none'}
+								? t('none — nothing travels')
+								: t('none')}
 						</span>
 					)}
 				</span>
 				<span className="mx-stage-fx-slot">
-					<span className="mx-stage-fx-key">Magic effect</span>
+					<span className="mx-stage-fx-key">{t('Magic effect')}</span>
 					{area !== null ? (
 						<>
 							<img
@@ -361,11 +364,11 @@ export function SpellStage({ block, look, parent }: Props) {
 								alt=""
 								draggable={false}
 							/>
-							<span>{areaEntry?.label ?? block.effects.areaEffect}</span>
+							<span>{areaEntry ? t(areaEntry.label) : block.effects.areaEffect}</span>
 						</>
 					) : (
 						<span className="mx-stage-fx-none">
-							{block.kind === 'registered' ? 'from spells.xml' : 'none — the hit is invisible'}
+							{block.kind === 'registered' ? t('from spells.xml') : t('none — the hit is invisible')}
 						</span>
 					)}
 				</span>
@@ -423,7 +426,7 @@ export function SpellStage({ block, look, parent }: Props) {
 					<div
 						className={outOfRange ? 'mx-stage-target mx-stage-target-far' : 'mx-stage-target'}
 						style={{ ...px(target), width: TILE, height: TILE }}
-						title={`${distance} ${distance === 1 ? 'tile' : 'tiles'} away — drag to move`}
+						title={t('{{count}} tile away — drag to move', { count: distance })}
 					>
 						<Crosshair size={TILE - 6} />
 					</div>
@@ -465,7 +468,7 @@ export function SpellStage({ block, look, parent }: Props) {
 					</div>
 				)}
 
-				{fizzled && phase === 'cooldown' && <div className="mx-stage-fizzle">chance failed</div>}
+				{fizzled && phase === 'cooldown' && <div className="mx-stage-fizzle">{t('chance failed')}</div>}
 			</div>
 			</div>
 
@@ -476,54 +479,64 @@ export function SpellStage({ block, look, parent }: Props) {
 				/>
 				<span className="mx-stage-meter-label">
 					{phase === 'cooldown'
-						? `cooldown ${block.interval} ms${realCooldown ? '' : ' (compressed)'}`
+						? realCooldown
+							? t('cooldown {{ms}} ms', { ms: block.interval })
+							: t('cooldown {{ms}} ms (compressed)', { ms: block.interval })
 						: phase === 'flight'
-						? 'projectile'
-						: 'impact'}
+						? t('projectile')
+						: t('impact')}
 				</span>
 			</div>
 
 			<div className="mx-stage-legend">
 				{selfCast ? (
-					<span>on itself</span>
+					<span>{t('on itself')}</span>
 				) : (
 					<span className="mono">
-						{distance} {distance === 1 ? 'tile' : 'tiles'}
+						{t('{{count}} tile', { count: distance })}
 					</span>
 				)}
 				<span className="mono">
-					{tiles.length} {tiles.length === 1 ? 'tile' : 'tiles'} hit
+					{t('{{count}} tile hit', { count: tiles.length })}
 				</span>
-				{cpm !== null && <span className="mono">{cpm.toFixed(1)}/min</span>}
+				{cpm !== null && <span className="mono">{t('{{rate}}/min', { rate: cpm.toFixed(1) })}</span>}
 				{perMinute !== null && (
 					<span className="mono">
-						≈{Math.round(Math.abs(perMinute)).toLocaleString()} {gain ? 'healed' : 'dmg'}/min
+						{gain ? t('≈{{amount}} healed/min', { amount: n(Math.round(Math.abs(perMinute))) }) : t('≈{{amount}} dmg/min', { amount: n(Math.round(Math.abs(perMinute))) })}
 					</span>
 				)}
 			</div>
 
 			{outOfRange && (
 				<div className="ss-ed-field-note ss-ed-note-warn">
-					The target is {distance} tiles away but <code>range</code> is {range} — the monster never casts this from here.
+					{t('The target is {{distance}} tiles away but {{attr}} is {{range}} — the monster never casts this from here.', {
+							distance,
+							attr: 'range',
+							range
+						})}
 				</div>
 			)}
 			{!hitsTarget && !outOfRange && (
 				<div className="ss-ed-field-note ss-ed-note-warn">
-					{selfCast ? 'The area does not cover the monster itself.' : 'The area does not cover the target.'}{' '}
-					{shape.needsDirection ? 'A beam fires along the facing only.' : ''}
+					{selfCast ? t('The area does not cover the monster itself.') : t('The area does not cover the target.')}{' '}
+					{shape.needsDirection ? t('A beam fires along the facing only.') : ''}
 				</div>
 			)}
 			{selfCast && (
 				<div className="ss-ed-field-note">
-					A <code>&lt;defense&gt;</code> rolls in <code>onThinkDefense</code> with the monster as both caster and
-					target, so it lands on itself — <code>range</code> and <code>target</code> have nothing to act on.
+					{t('A {{node}} rolls in {{callback}} with the monster as both caster and target, so it lands on itself — {{range}} and {{target}} have nothing to act on.', {
+							node: '<defense>',
+							callback: 'onThinkDefense',
+							range: 'range',
+							target: 'target'
+						})}
 				</div>
 			)}
 			{block.kind !== 'builtin' && (
 				<div className="ss-ed-field-note">
 					{block.kind === 'registered'
-						? 'Registered spell — only interval, chance and range are known here; the shape and effects come from spells.xml.'
-						: 'Scripted spell — the Lua decides the shape and effects, so only the cadence is re-enacted.'}
+						? t('Registered spell — only interval, chance and range are known here; the shape and effects come from spells.xml.')
+						: t('Scripted spell — the Lua decides the shape and effects, so only the cadence is re-enacted.')}
 				</div>
 			)}
 			<div className="ss-ed-field-note">

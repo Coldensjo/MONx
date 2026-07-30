@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { TargetStrategy } from '../monster';
 import { Field } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
@@ -10,6 +11,7 @@ interface Props extends SectionProps {
 
 const BLANK: TargetStrategy = { nearest: 100, weakest: 0, mostdamage: 0, random: 0 };
 
+/** `label` and `hint` are i18n keys — translated at the render site. */
 const KEYS: { key: keyof TargetStrategy; label: string; hint: string }[] = [
 	{ key: 'nearest', label: 'Nearest', hint: 'closest enemy' },
 	{ key: 'weakest', label: 'Weakest', hint: 'lowest health' },
@@ -26,6 +28,7 @@ const KEYS: { key: keyof TargetStrategy; label: string; hint: string }[] = [
  * shown rather than left for the linter alone to mention.
  */
 export function TargetStrategySection({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	const strategy = doc.targetStrategy ?? BLANK;
 	const total = strategy.nearest + strategy.weakest + strategy.mostdamage + strategy.random;
 
@@ -34,11 +37,11 @@ export function TargetStrategySection({ doc, patch, lintAt, readOnly, collapsed,
 			id="strategy"
 			collapsed={collapsed}
 			onToggle={() => onToggle('strategy')}
-			summary={total === 100 ? 'weights total 100' : `weights total ${total}`}
+			summary={total === 100 ? t('weights total 100') : t('weights total {{total}}', { total })}
 		>
 			<div className="ss-ed-card-grid">
 				{KEYS.map(({ key, label, hint }) => (
-					<Field key={key} label={label} hint={hint} lints={lintAt('targetStrategy')}>
+					<Field key={key} label={t(label)} hint={t(hint)} lints={lintAt('targetStrategy')}>
 						<NumberField
 							value={strategy[key]}
 							onChange={v => patch({ targetStrategy: { ...strategy, [key]: v } })}
@@ -52,7 +55,7 @@ export function TargetStrategySection({ doc, patch, lintAt, readOnly, collapsed,
 			</div>
 			{total !== 100 && (
 				<div className="ss-ed-note" data-tone="warn">
-					The four weights add up to {total}. The server expects exactly 100 and complains on load.
+					{t('The four weights add up to {{total}}. The server expects exactly 100 and complains on load.', { total })}
 				</div>
 			)}
 		</Section>

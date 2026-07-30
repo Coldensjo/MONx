@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import { ChevronDown, ChevronRight, ClipboardPaste, ClipboardPlus, Copy } from 'lucide-react';
 import type { ItemIndex, MonsterDoc, SpellName } from '../monster';
@@ -34,6 +35,7 @@ export const SECTION_ENGINE_FLAG: Partial<Record<SectionId, 'bestiary' | 'target
 	strategy: 'targetStrategy'
 };
 
+/** Values are i18n keys — translated at the render site with t(). */
 export const SECTION_LABEL: Record<SectionId, string> = {
 	identity: 'Identity',
 	look: 'Look',
@@ -80,12 +82,13 @@ interface ShellProps {
 }
 
 export function Section({ id, collapsed, onToggle, summary, children }: ShellProps) {
+	const { t } = useTranslation();
 	return (
 		<section className="ss-ed-section" id={`ss-ed-${id}`}>
 			<header className="ss-ed-section-head">
 				<button type="button" className="ss-ed-section-toggle" onClick={onToggle}>
 					{collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-					<h2>{SECTION_LABEL[id]}</h2>
+					<h2>{t(SECTION_LABEL[id])}</h2>
 				</button>
 				{summary && <span className="ss-ed-section-summary">{summary}</span>}
 				<BlockButtons id={id} />
@@ -102,16 +105,17 @@ export function Section({ id, collapsed, onToggle, summary, children }: ShellPro
  * rendered without it (fixtures) simply has no buttons.
  */
 function BlockButtons({ id }: { id: SectionId }) {
+	const { t } = useTranslation();
 	const blocks = useBlocks();
 	if (!blocks || !isBlockKind(id)) return null;
 	const held = blocks.clipboard?.kind === id ? blocks.clipboard : null;
-	const label = BLOCK_LABEL[id];
+	const label = t(BLOCK_LABEL[id]);
 	return (
 		<span className="ss-ed-section-blocks">
 			<button
 				type="button"
 				className="ss-btn ss-btn-ghost ss-ed-mini"
-				title={`Copy this monster's ${label}`}
+				title={t('Copy this monster’s {{block}}', { block: label })}
 				onClick={() => blocks.copy(id)}
 			>
 				<Copy size={13} />
@@ -120,7 +124,15 @@ function BlockButtons({ id }: { id: SectionId }) {
 				type="button"
 				className="ss-btn ss-btn-ghost ss-ed-mini"
 				disabled={!held || blocks.readOnly}
-				title={held ? `Replace with ${held.count} ${label} from ${held.from}` : `No ${label} copied`}
+				title={
+					held
+						? t('Replace with {{count}} {{block}} from {{monster}}', {
+								count: held.count,
+								block: label,
+								monster: held.from
+							})
+						: t('No {{block}} copied', { block: label })
+				}
 				onClick={() => blocks.paste(id, 'replace')}
 			>
 				<ClipboardPaste size={13} />
@@ -129,7 +141,15 @@ function BlockButtons({ id }: { id: SectionId }) {
 				type="button"
 				className="ss-btn ss-btn-ghost ss-ed-mini"
 				disabled={!held || blocks.readOnly}
-				title={held ? `Add ${held.count} ${label} from ${held.from} to what is here` : `No ${label} copied`}
+				title={
+					held
+						? t('Add {{count}} {{block}} from {{monster}} to what is here', {
+								count: held.count,
+								block: label,
+								monster: held.from
+							})
+						: t('No {{block}} copied', { block: label })
+				}
 				onClick={() => blocks.paste(id, 'merge')}
 			>
 				<ClipboardPlus size={13} />

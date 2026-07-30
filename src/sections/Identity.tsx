@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { RACES, SKULLS } from '../catalog';
 import { engineInfo } from '../engine';
 import { Field } from '../fields/Field';
@@ -24,27 +25,28 @@ const SKULL_OPTIONS: EnumOption<string>[] = SKULLS.map(s => ({
 }));
 
 export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
 	const raceidLints = lintAt('raceid');
 	const duplicate = raceidLints.some(l => l.code === 'raceid.duplicate');
 
 	const scriptOptions: EnumOption<string>[] = [
-		{ value: '', label: '(none)' },
+		{ value: '', label: t('(none)') },
 		...scripts.map(s => ({ value: s, label: s }))
 	];
 
 	return (
 		<Section id="identity" collapsed={collapsed} onToggle={() => onToggle('identity')} summary={doc.file}>
 			<div className="ss-ed-card-grid">
-				<Field label="Name" lints={lintAt('name')}>
+				<Field label={t('Name')} lints={lintAt('name')}>
 					<TextField value={doc.name} onChange={v => patch({ name: v })} disabled={readOnly} />
 				</Field>
 
 				<Field
-					label="Description"
+					label={t('Description')}
 					lints={lintAt('nameDescription')}
-					hint={doc.nameDescription ? undefined : `defaults to "a ${doc.name.toLowerCase()}"`}
-					note="Shown when a player looks at the monster. Include the article yourself."
+					hint={doc.nameDescription ? undefined : t('defaults to “a {{name}}”', { name: doc.name.toLowerCase() })}
+					note={t('Shown when a player looks at the monster. Include the article yourself.')}
 				>
 					<TextField
 						value={doc.nameDescription ?? ''}
@@ -58,14 +60,14 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 				    loader reads, kept verbatim but not worth a field. */}
 				{engine.species && (
 				<Field
-					label="Species"
+					label={t('Species')}
 					lints={lintAt('species')}
-					note="Editor metadata only — the server never reads it. Used here for grouping."
+					note={t('Editor metadata only — the server never reads it. Used here for grouping.')}
 				>
 					<TextField
 						value={doc.species ?? ''}
 						onChange={v => patch({ species: v === '' ? null : v })}
-						placeholder="(none)"
+						placeholder={t('(none)')}
 						disabled={readOnly}
 					/>
 				</Field>
@@ -74,24 +76,24 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 
 			<div className="ss-ed-card-grid">
 				<Field
-					label="Experience"
+					label={t('Experience')}
 					lints={lintAt('experience')}
-					hint={`raw XP, before rateExp · ${Math.ceil(doc.experience / 200)} soul${Math.ceil(doc.experience / 200) === 1 ? '' : 's'}`}
+					hint={t('raw XP, before rateExp · {{souls}}', { souls: t('{{count}} soul', { count: Math.ceil(doc.experience / 200) }) })}
 				>
 					<NumberField value={doc.experience} onChange={v => patch({ experience: v })} min={0} width={120} disabled={readOnly} />
 				</Field>
 
-				<Field label="Speed" lints={lintAt('speed')} hint={doc.speed === 0 ? 'immobile' : undefined}>
+				<Field label={t('Speed')} lints={lintAt('speed')} hint={doc.speed === 0 ? t('immobile') : undefined}>
 					<NumberField value={doc.speed} onChange={v => patch({ speed: v })} min={0} width={120} disabled={readOnly} />
 				</Field>
 
 				<Field
-					label="Mana cost"
+					label={t('Mana cost')}
 					lints={lintAt('manacost')}
 					note={
 						doc.manacost === 0 && (doc.flags.summonable === true || doc.flags.convinceable === true)
-							? 'Summonable or convinceable with no mana cost — the loader warns about this.'
-							: 'Mana to summon or convince this monster.'
+							? t('Summonable or convinceable with no mana cost — the loader warns about this.')
+							: t('Mana to summon or convince this monster.')
 					}
 				>
 					<NumberField value={doc.manacost} onChange={v => patch({ manacost: v })} min={0} width={120} disabled={readOnly} />
@@ -100,10 +102,10 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 				{/* TVP and Nostalrius have no bestiary and no id for one. */}
 				{engine.raceidAttr !== null && (
 				<Field
-					label={engine.raceidAttr === 'raceId' ? 'Race id (raceId)' : 'Race id'}
+					label={engine.raceidAttr === 'raceId' ? t('Race id (raceId)') : t('Race id')}
 					lints={raceidLints}
-					hint={nextRaceid !== null ? `next free: ${nextRaceid}` : undefined}
-					note={duplicate ? 'Another monster already uses this raceid.' : undefined}
+					hint={nextRaceid !== null ? t('next free: {{id}}', { id: nextRaceid }) : undefined}
+					note={duplicate ? t('Another monster already uses this raceid.') : undefined}
 				>
 					<span className={duplicate ? 'ss-ed-invalid' : undefined}>
 						<NumberField
@@ -121,7 +123,7 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 							disabled={readOnly}
 							onClick={() => patch({ raceid: nextRaceid })}
 						>
-							Use {nextRaceid}
+							{t('Use {{id}}', { id: nextRaceid })}
 						</button>
 					)}
 				</Field>
@@ -129,7 +131,11 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 			</div>
 
 			<div className="ss-ed-card-grid">
-				<Field label="Race" lints={lintAt('race')} note="Controls blood splash, corpse decay and undead checks.">
+				<Field
+					label={t('Race')}
+					lints={lintAt('race')}
+					note={t('Controls blood splash, corpse decay and undead checks.')}
+				>
 					<EnumSelect
 						value={doc.race ?? 'blood'}
 						onChange={v => patch({ race: v })}
@@ -139,7 +145,7 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 					/>
 				</Field>
 
-				<Field label="Skull" lints={lintAt('skull')}>
+				<Field label={t('Skull')} lints={lintAt('skull')}>
 					<EnumSelect
 						value={doc.skull === '' ? 'none' : doc.skull}
 						onChange={v => patch({ skull: v === 'none' ? '' : v })}
@@ -150,9 +156,9 @@ export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, co
 				</Field>
 
 				<Field
-					label="Script"
+					label={t('Script')}
 					lints={lintAt('script')}
-					note="A .lua file in monster/scripts/ providing onThink, onCreatureAppear and friends."
+					note={t('A .lua file in monster/scripts/ providing onThink, onCreatureAppear and friends.')}
 				>
 					<EnumSelect
 						value={doc.script ?? ''}

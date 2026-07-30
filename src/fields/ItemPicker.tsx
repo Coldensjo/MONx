@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { itemUrl, type ItemIndex, type ItemInfo } from '../monster';
@@ -78,7 +79,7 @@ interface Props {
 	placeholder?: string;
 	/** Restricts results to containers — used when nesting loot. */
 	containersOnly?: boolean;
-	/** Shows a "Corpses only" toggle (on by default) — used by the corpse picker. */
+	/** Shows a "{t('Corpses only')}" toggle (on by default) — used by the corpse picker. */
 	corpseFilter?: boolean;
 	/** Opens the search straight away, for pickers summoned by an "Add" button. */
 	defaultOpen?: boolean;
@@ -97,6 +98,7 @@ export function ItemPicker({
 	corpseFilter,
 	defaultOpen
 }: Props) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(!!defaultOpen);
 	const [query, setQuery] = useState('');
 	const [corpsesOnly, setCorpsesOnly] = useState(true);
@@ -151,7 +153,7 @@ export function ItemPicker({
 			>
 				<ItemSprite serverId={value} size={24} />
 				<span className="ss-ed-item-name">
-					{value === null ? placeholder : current ? current.name : `id ${value}`}
+					{value === null ? t(placeholder) : current ? current.name : t('id {{id}}', { id: value })}
 				</span>
 				{value !== null && <span className="ss-ed-item-id">{value}</span>}
 				<ChevronDown size={14} />
@@ -165,7 +167,7 @@ export function ItemPicker({
 				<div className="ss-ed-popover ss-ed-popover-items">
 					<div className="ss-ed-popover-search">
 						<Search size={13} />
-						<input autoFocus value={query} placeholder="Search items…" onChange={e => setQuery(e.target.value)} />
+						<input autoFocus value={query} placeholder={t('Search items…')} onChange={e => setQuery(e.target.value)} />
 					</div>
 					{corpseFilter && (
 						<label className="ss-ed-popover-filter">
@@ -174,12 +176,12 @@ export function ItemPicker({
 								checked={corpsesOnly}
 								onChange={e => setCorpsesOnly(e.target.checked)}
 							/>
-							Corpses only
+							{t('Corpses only')}
 						</label>
 					)}
 					<div className="ss-ed-popover-list">
-						{busy && rows.length === 0 && <div className="ss-ed-popover-empty">Searching…</div>}
-						{!busy && rows.length === 0 && <div className="ss-ed-popover-empty">No match</div>}
+						{busy && rows.length === 0 && <div className="ss-ed-popover-empty">{t('Searching…')}</div>}
+						{!busy && rows.length === 0 && <div className="ss-ed-popover-empty">{t('No match')}</div>}
 						{rows.map(item => (
 							<button
 								key={item.serverId}
@@ -192,7 +194,7 @@ export function ItemPicker({
 							>
 								<ItemSprite serverId={item.serverId} size={24} />
 								<span className="ss-ed-popover-label">{item.name}</span>
-								{item.ambiguousName && <span className="ss-ed-ambiguous" title="More than one item owns this name — the entry must be pinned to an id">ambiguous</span>}
+								{item.ambiguousName && <span className="ss-ed-ambiguous" title={t('More than one item owns this name — the entry must be pinned to an id')}>{t('ambiguous')}</span>}
 								<span className="ss-ed-popover-usage">{item.serverId}</span>
 							</button>
 						))}

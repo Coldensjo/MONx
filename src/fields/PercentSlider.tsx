@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { NumberField } from './NumberField';
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
  * rather than filled from the left.
  */
 export function PercentSlider({ value, onChange, disabled, min = -100, max = 100 }: Props) {
+	const { t } = useTranslation();
 	const span = max - min;
 	const zeroPct = ((0 - min) / span) * 100;
 	const valuePct = ((value - min) / span) * 100;
@@ -40,7 +42,7 @@ export function PercentSlider({ value, onChange, disabled, min = -100, max = 100
 			</div>
 			<NumberField value={value} onChange={onChange} disabled={disabled} width={64} />
 			<span className="ss-ed-percent-tag">
-				{value > 0 ? `takes ${100 - value}%` : value < 0 ? `takes ${100 - value}%` : 'normal'}
+				{value === 0 ? t('normal') : t('takes {{pct}}%', { pct: 100 - value })}
 			</span>
 		</div>
 	);

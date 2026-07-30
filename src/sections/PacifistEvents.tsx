@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import { Field } from '../fields/Field';
 import { TextField } from '../fields/TextField';
@@ -16,6 +17,7 @@ interface Props extends SectionProps {
  * the format puts them; only the UI is split.
  */
 export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	const voices = doc.voices;
 	// The two pacifist strings do nothing on a monster that isn't one (§5.1).
 	const pacifist = doc.flags.pacifist === true;
@@ -26,37 +28,37 @@ export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onTogg
 			id="events"
 			collapsed={collapsed}
 			onToggle={() => onToggle('events')}
-			summary={`${pacifistLines} pacifist · ${doc.events.length} events`}
+			summary={t('{{pacifist}} pacifist · {{events}} events', { pacifist: pacifistLines, events: doc.events.length })}
 		>
 			<SubGroup
-				title="Pacifist lines (Ironcore)"
+				title={t('Pacifist lines (Ironcore)')}
 				note={
 					pacifist
-						? 'Said once when it wakes, and when it walks past its leash radius. Neither is part of the random voice pool.'
-						: 'Only spoken by a pacifist monster — turn Pacifist on in Combat, or these never fire.'
+						? t('Said once when it wakes, and when it walks past its leash radius. Neither is part of the random voice pool.')
+						: t('Only spoken by a pacifist monster — turn Pacifist on in Combat, or these never fire.')
 				}
 			>
-				<Field label="On waking" lints={lintAt('voices.pacifist')}>
+				<Field label={t('On waking')} lints={lintAt('voices.pacifist')}>
 					<TextField
 						value={voices.pacifist ?? ''}
 						onChange={v => patch({ voices: { ...voices, pacifist: v === '' ? null : v } })}
-						placeholder="Said when first attacked"
+						placeholder={t('Said when first attacked')}
 						disabled={readOnly}
 					/>
 				</Field>
-				<Field label="On leashing" lints={lintAt('voices.leash')}>
+				<Field label={t('On leashing')} lints={lintAt('voices.leash')}>
 					<TextField
 						value={voices.leash ?? ''}
 						onChange={v => patch({ voices: { ...voices, leash: v === '' ? null : v } })}
-						placeholder="Said when it walks too far"
+						placeholder={t('Said when it walks too far')}
 						disabled={readOnly}
 					/>
 				</Field>
 			</SubGroup>
 
 			<SubGroup
-				title="Creature events"
-				note="Registered from creaturescripts — onKill, onDeath, onPrepareDeath and friends. Not the same thing as the monster script in Identity. Names are not checked: what registers them is Lua, which MONx cannot see."
+				title={t('Creature events')}
+				note={t('Registered from creaturescripts — onKill, onDeath, onPrepareDeath and friends. Not the same thing as the monster script in Identity. Names are not checked: what registers them is Lua, which MONx cannot see.')}
 			>
 				<SortableList
 					items={doc.events}
@@ -64,12 +66,12 @@ export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onTogg
 					list="events"
 					keyOf={(e, i) => `${e}-${i}`}
 					disabled={readOnly}
-					empty="No events registered."
+					empty={t('No events registered.')}
 					renderRow={(event, i) => (
 						<TextField
 							value={event}
 							onChange={v => patch({ events: doc.events.map((e, j) => (j === i ? v : e)) })}
-							placeholder="EventName"
+							placeholder={t('EventName')}
 							monospace
 							disabled={readOnly}
 						/>
@@ -82,7 +84,7 @@ export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onTogg
 					onClick={() => patch({ events: [...doc.events, ''] })}
 				>
 					<Plus size={14} />
-					Add event
+					{t('Add event')}
 				</button>
 			</SubGroup>
 		</Section>

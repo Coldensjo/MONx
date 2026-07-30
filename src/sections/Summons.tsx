@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import type { SummonEntry } from '../monster';
 import { Field } from '../fields/Field';
@@ -20,6 +21,7 @@ function blankSummon(name: string): SummonEntry {
 }
 
 export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
 	const summons = doc.summons;
 	const setEntries = (entries: SummonEntry[]) => patch({ summons: { ...summons, entries } });
@@ -35,17 +37,17 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 			id="summons"
 			collapsed={collapsed}
 			onToggle={() => onToggle('summons')}
-			summary={`${summons.entries.length} of max ${summons.maxSummons}`}
+			summary={t('{{count}} of max {{max}}', { count: summons.entries.length, max: summons.maxSummons })}
 		>
-			<Banner kind="info">Summons never drop loot and never grant experience.</Banner>
+			<Banner kind="info">{t('Summons never drop loot and never grant experience.')}</Banner>
 
 			<Field
-				label="Max live summons"
+				label={t('Max live summons')}
 				lints={lintAt('summons.maxSummons')}
 				note={
 					summons.maxSummons === 0 && summons.entries.length > 0
-						? 'Zero means the monster can never summon, whatever the entries below say.'
-						: 'Total across all entries, clamped to 100.'
+						? t('Zero means the monster can never summon, whatever the entries below say.')
+						: t('Total across all entries, clamped to 100.')
 				}
 			>
 				<NumberField
@@ -65,7 +67,7 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 					list="summons"
 					keyOf={(_, i) => String(i)}
 					disabled={readOnly}
-					empty="No summons. Drag a monster here from the list."
+					empty={t('No summons. Drag a monster here from the list.')}
 					renderRow={(entry, i) => {
 						const update = (p: Partial<SummonEntry>) =>
 							setEntries(summons.entries.map((e, j) => (j === i ? { ...e, ...p } : e)));
@@ -73,11 +75,11 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 						return (
 							<div className="ss-ed-card">
 								<Field
-									label="Monster"
+									label={t('Monster')}
 									lints={lintAt(`summons.entries[${i}].name`)}
 									note={
 										unknown
-											? 'No monster with this name is registered — the server does not check this, so at runtime it silently summons nothing.'
+											? t('No monster with this name is registered — the server does not check this, so at runtime it silently summons nothing.')
 											: undefined
 									}
 								>
@@ -89,20 +91,20 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 									{/* Nostalrius summons take only name, chance, max and
 									    force — there is no interval to set. */}
 									{engine.summonInterval && (
-										<Field label="Interval" hint="ms">
+										<Field label={t('Interval')} hint={t('ms')}>
 											<NumberField value={entry.interval} onChange={v => update({ interval: v })} min={1} width={100} disabled={readOnly} />
 										</Field>
 									)}
-									<Field label="Chance" hint="%">
+									<Field label={t('Chance')} hint="%">
 										<NumberField value={entry.chance} onChange={v => update({ chance: v })} min={0} max={100} width={100} disabled={readOnly} />
 									</Field>
-									<Field label="Max" note="Per-entry cap; inherits the section maximum when absent.">
+									<Field label={t('Max')} note={t('Per-entry cap; inherits the section maximum when absent.')}>
 										<NumberField value={entry.max} onChange={v => update({ max: v })} min={0} width={100} disabled={readOnly} />
 									</Field>
 								</div>
 								<Toggle
-									label="Force placement"
-									title="Ironcore — places the summon even on an occupied or blocked tile"
+									label={t('Force placement')}
+									title={t('Ironcore — places the summon even on an occupied or blocked tile')}
 									checked={entry.force}
 									disabled={readOnly}
 									onChange={v => update({ force: v })}
@@ -111,17 +113,17 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 								    7.x engines an <attribute> there is never read. */}
 								{engine.summonEffects && (
 								<>
-								<Field label="Effect at the summon" note="Defaults to a teleport effect.">
+								<Field label={t('Effect at the summon')} note={t('Defaults to a teleport effect.')}>
 									<EffectSelect
 										kind="area"
 										engine={doc.engine}
 										value={entry.effect}
 										onChange={v => update({ effect: v })}
 										disabled={readOnly}
-										noneLabel="(default teleport)"
+										noneLabel={t('(default teleport)')}
 									/>
 								</Field>
-								<Field label="Effect at the summoner" note="A casting telegraph on the summoner's own tile.">
+								<Field label={t('Effect at the summoner')} note={t('A casting telegraph on the summoner’s own tile.')}>
 									<EffectSelect kind="area" engine={doc.engine} value={entry.masterEffect} onChange={v => update({ masterEffect: v })} disabled={readOnly} />
 								</Field>
 								</>
@@ -139,7 +141,7 @@ export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed,
 				onClick={() => setEntries([...summons.entries, blankSummon('')])}
 			>
 				<Plus size={14} />
-				Add summon
+				{t('Add summon')}
 			</button>
 		</Section>
 	);

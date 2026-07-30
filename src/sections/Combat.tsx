@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { BOOLEAN_FLAGS, FLAG_GROUP_LABEL, NUMERIC_FLAGS } from '../catalog';
 import { engineInfo } from '../engine';
@@ -18,6 +19,7 @@ const GROUPS = ['behaviour', 'push', 'terrain'] as const;
 const blankAttacks = (s: AttacksStats | null): AttacksStats => s ?? { attack: 0, skill: 0, poison: null };
 
 export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
 	const [showPacifist, setShowPacifist] = useState(
 		doc.flags.pacifist === true || doc.flags.deaggroonkill === true || doc.flags.singletarget === true
@@ -41,7 +43,7 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 			id="combat"
 			collapsed={collapsed}
 			onToggle={() => onToggle('combat')}
-			summary={`armor ${doc.defenseStats.armor} · defense ${doc.defenseStats.defense}`}
+			summary={t('armor {{armor}} · defense {{defense}}', { armor: doc.defenseStats.armor, defense: doc.defenseStats.defense })}
 		>
 			{/* A group whose flags this engine all lacks renders nothing — an empty
 			    "Terrain" heading reads as a missing feature rather than an absent one. */}
@@ -50,7 +52,7 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 					BOOLEAN_FLAGS.some(f => f.group === group && engine.boolFlags.includes(f.key)) ||
 					NUMERIC_FLAGS.some(f => f.group === group && engine.numFlags.includes(f.key))
 			).map(group => (
-				<SubGroup key={group} title={FLAG_GROUP_LABEL[group]}>
+				<SubGroup key={group} title={t(FLAG_GROUP_LABEL[group])}>
 					<div className="ss-ed-flags">
 						{BOOLEAN_FLAGS.filter(f => f.group === group && engine.boolFlags.includes(f.key)).map(f => {
 							const value = boolFlag(f.key, f.default);
@@ -58,7 +60,11 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 								<Toggle
 									key={f.key}
 									label={f.ironcore ? `${f.label} ✦` : f.label}
-									title={f.note ? `${f.note}${f.ironcore ? ' (Ironcore)' : ''}` : f.ironcore ? 'Ironcore' : undefined}
+									title={
+										f.note && f.ironcore
+											? t('{{note}} (Ironcore)', { note: f.note })
+											: (f.note ?? (f.ironcore ? t('Ironcore') : undefined))
+									}
 									checked={value}
 									changed={value !== f.default}
 									disabled={readOnly}
@@ -87,17 +93,17 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 
 			{boolFlag('canpushcreatures', false) && boolFlag('pushable', true) && (
 				<Banner kind="warn">
-					“Pushes creatures” forces “pushable by players” off at load — the value written here will not survive.
+					{t('“Pushes creatures” forces “pushable by players” off at load — the value written here will not survive.')}
 				</Banner>
 			)}
 
-			<SubGroup title="Target change">
+			<SubGroup title={t('Target change')}>
 				<div className="ss-ed-card-grid">
 					<Field
-						label="Interval"
+						label={t('Interval')}
 						lints={lintAt('targetchange.interval')}
-						hint="ms"
-						note="Milliseconds between target-reselection rolls."
+						hint={t('ms')}
+						note={t('Milliseconds between target-reselection rolls.')}
 					>
 						<NumberField
 							value={doc.targetchange.interval}
@@ -108,12 +114,12 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 						/>
 					</Field>
 					<Field
-						label="Chance"
+						label={t('Chance')}
 						lints={lintAt('targetchange.chance')}
 						hint="%"
 						note={
 							doc.targetchange.chance === 0
-								? 'Zero disables retargeting entirely, and also the step-aside behaviour in onWalk.'
+								? t('Zero disables retargeting entirely, and also the step-aside behaviour in onWalk.')
 								: undefined
 						}
 					>
@@ -134,11 +140,11 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 			    monster stat rather than one of its spells. */}
 			{engine.meleeOnAttacks && (
 				<SubGroup
-					title="Melee"
-					note="On this engine melee lives on <attacks>, not in a spell block. Both skill and attack are needed."
+					title={t('Melee')}
+					note={t('On this engine melee lives on <attacks>, not in a spell block. Both skill and attack are needed.')}
 				>
 					<div className="ss-ed-card-grid">
-						<Field label="Skill" lints={lintAt('attacksStats')}>
+						<Field label={t('Skill')} lints={lintAt('attacksStats')}>
 							<NumberField
 								value={doc.attacksStats?.skill ?? 0}
 								onChange={v => patch({ attacksStats: { ...blankAttacks(doc.attacksStats), skill: v } })}
@@ -147,7 +153,7 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 								disabled={readOnly}
 							/>
 						</Field>
-						<Field label="Attack" lints={lintAt('attacksStats')}>
+						<Field label={t('Attack')} lints={lintAt('attacksStats')}>
 							<NumberField
 								value={doc.attacksStats?.attack ?? 0}
 								onChange={v => patch({ attacksStats: { ...blankAttacks(doc.attacksStats), attack: v } })}
@@ -156,14 +162,14 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 								disabled={readOnly}
 							/>
 						</Field>
-						<Field label="Max damage" hint="derived">
+						<Field label={t('Max damage')} hint={t('derived')}>
 							<span className="ss-ed-derived">
 								{doc.attacksStats
 									? maxMeleeDamage(doc.attacksStats.skill, doc.attacksStats.attack)
 									: '—'}
 							</span>
 						</Field>
-						<Field label="Poison" hint="optional, on hit">
+						<Field label={t('Poison')} hint={t('optional, on hit')}>
 							<NumberField
 								value={doc.attacksStats?.poison ?? 0}
 								onChange={v =>
@@ -179,11 +185,11 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 			)}
 
 			<SubGroup
-				title="Defense stats"
-				note="Armor reduces melee and physical hits; defense is only consulted on hits that check it, i.e. melee."
+				title={t('Defense stats')}
+				note={t('Armor reduces melee and physical hits; defense is only consulted on hits that check it, i.e. melee.')}
 			>
 				<div className="ss-ed-card-grid">
-					<Field label="Armor" lints={lintAt('defenseStats.armor')}>
+					<Field label={t('Armor')} lints={lintAt('defenseStats.armor')}>
 						<NumberField
 							value={doc.defenseStats.armor}
 							onChange={v => patch({ defenseStats: { ...doc.defenseStats, armor: v } })}
@@ -192,7 +198,7 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 							disabled={readOnly}
 						/>
 					</Field>
-					<Field label="Defense" lints={lintAt('defenseStats.defense')}>
+					<Field label={t('Defense')} lints={lintAt('defenseStats.defense')}>
 						<NumberField
 							value={doc.defenseStats.defense}
 							onChange={v => patch({ defenseStats: { ...doc.defenseStats, defense: v } })}
@@ -209,16 +215,20 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 			{engine.pacifist && (
 			<div className="ss-ed-advanced">
 				<button type="button" className="ss-btn ss-btn-ghost" onClick={() => setShowPacifist(s => !s)}>
-					{showPacifist ? 'Hide' : 'Show'} pacifist system (Ironcore)
+					{showPacifist ? t('Hide pacifist system (Ironcore)') : t('Show pacifist system (Ironcore)')}
 				</button>
 				{showPacifist && (
 					<SubGroup
-						title={FLAG_GROUP_LABEL.pacifist}
-						note="A dormant monster that only fights back once struck. The sub-flags do nothing without Pacifist."
+						title={t(FLAG_GROUP_LABEL.pacifist)}
+						note={t('A dormant monster that only fights back once struck. The sub-flags do nothing without Pacifist.')}
 					>
 						{pacifist && boolFlag('hostile', true) && (
 							<Banner kind="warn">
-								Pacifist forces <code>hostile</code> to 0 during load — writing both as 1 will not survive.
+								{/* `hostile` is the flag name as the file spells it, so it is
+								    passed in rather than left inside translatable prose. */}
+								{t('Pacifist forces {{flag}} to 0 during load — writing both as 1 will not survive.', {
+									flag: 'hostile'
+								})}
 							</Banner>
 						)}
 						<div className="ss-ed-flags">

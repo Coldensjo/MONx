@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Package, Pause, Play } from 'lucide-react';
 import {
@@ -31,6 +32,7 @@ import { frameMs, idleCycleMs, useThingAnim, walkFrameMs } from './fields/previe
 // never states, and an advisory balance hint (DESIGN §14).
 
 // Outfit direction order in the .dat is N, E, S, W.
+/** `label` values are i18n keys; `dir` is the wire pattern index. */
 const DIRECTIONS = [
 	{ dir: 0, label: 'North', Icon: ChevronUp },
 	{ dir: 1, label: 'East', Icon: ChevronRight },
@@ -124,6 +126,7 @@ export default function PreviewPanel({
 	onGoToLoot,
 	enhancedAnimations = false
 }: Props) {
+	const { t } = useTranslation();
 	const [dir, setDir] = useState(2);
 	const [frame, setFrame] = useState(0);
 	const [playing, setPlaying] = useState(true);
@@ -234,7 +237,7 @@ export default function PreviewPanel({
 					<button
 						className="ss-search-clear"
 						onClick={() => setPlaying(p => !p)}
-						aria-label={playing ? 'Pause animation' : 'Play animation'}
+						aria-label={playing ? t('Pause animation') : t('Play animation')}
 					>
 						{playing ? <Pause size={13} /> : <Play size={13} />}
 					</button>
@@ -258,8 +261,8 @@ export default function PreviewPanel({
 					</div>
 				</div>
 				<div className="ss-preview-caption">
-					{typeex ? `typeex ${doc.look.typeex ?? 0}` : `type ${doc.look.type ?? 0}`}
-					{doc.raceid !== null && <span className="mono"> · raceid {doc.raceid}</span>}
+					{typeex ? t('typeex {{id}}', { id: doc.look.typeex ?? 0 }) : t('type {{id}}', { id: doc.look.type ?? 0 })}
+					{doc.raceid !== null && <span className="mono"> · {t('raceid {{id}}', { id: doc.raceid })}</span>}
 				</div>
 				{!typeex && (
 					<div className="ss-details-dirs">
@@ -268,7 +271,7 @@ export default function PreviewPanel({
 								key={d}
 								className={`ss-dir-btn${dir === d ? ' ss-dir-btn-active' : ''}`}
 								onClick={() => setDir(d)}
-								title={label}
+								title={t(label)}
 								aria-label={label}
 							>
 								<Icon size={13} />
@@ -279,54 +282,54 @@ export default function PreviewPanel({
 			</div>
 
 			<div className="ss-details-scroll">
-				<div className="ss-details-section">Derived</div>
+				<div className="ss-details-section">{t('Derived')}</div>
 				<dl className="ss-details-stats">
 					<div className="ss-details-prop">
-						<dt>Max melee</dt>
+						<dt>{t('Max melee')}</dt>
 						<dd className="mono">{maxMelee === null ? '—' : fmt(maxMelee)}</dd>
 					</div>
 					<div className="ss-details-prop">
-						<dt>Health</dt>
+						<dt>{t('Health')}</dt>
 						<dd className="mono">{fmt(doc.health.max)}</dd>
 					</div>
-					<div className="ss-details-prop" title="Melee and physical hits only (§23)">
-						<dt>Armor</dt>
+					<div className="ss-details-prop" title={t('Melee and physical hits only (§23)')}>
+						<dt>{t('Armor')}</dt>
 						<dd className="mono">
 							{doc.defenseStats.armor}
 							{armor.max > 0 && <span className="ss-derived-note"> −{armor.min}…{armor.max}</span>}
 						</dd>
 					</div>
-					<div className="ss-details-prop" title="Melee hits only (§23)">
-						<dt>Defense</dt>
+					<div className="ss-details-prop" title={t('Melee hits only (§23)')}>
+						<dt>{t('Defense')}</dt>
 						<dd className="mono">
 							{doc.defenseStats.defense}
 							{defense.max > 0 && <span className="ss-derived-note"> −{defense.min}…{defense.max}</span>}
 						</dd>
 					</div>
 					<div className="ss-details-prop">
-						<dt>Experience</dt>
+						<dt>{t('Experience')}</dt>
 						<dd className="mono">{fmt(doc.experience)}</dd>
 					</div>
 					<div className="ss-details-prop">
-						<dt>Speed</dt>
+						<dt>{t('Speed')}</dt>
 						<dd className="mono">{fmt(doc.speed)}</dd>
 					</div>
 					{loot.valued > 0 && (
-						<div className="ss-details-prop" title="Expected value per kill, where item worth is known">
-							<dt>Loot value</dt>
+						<div className="ss-details-prop" title={t('Expected value per kill, where item worth is known')}>
+							<dt>{t('Loot value')}</dt>
 							<dd className="mono">
 								{fmt(Math.round(loot.expected))}
-								{loot.unknown > 0 && <span className="ss-derived-note"> +{loot.unknown} unpriced</span>}
+								{loot.unknown > 0 && <span className="ss-derived-note"> {t('+{{count}} unpriced', { count: loot.unknown })}</span>}
 							</dd>
 						</div>
 					)}
 					{summons.entries > 0 && (
 						<div className="ss-details-prop">
-							<dt>Summons</dt>
+							<dt>{t('Summons')}</dt>
 							<dd className="mono">
 								{summons.declared} / {summons.maxSummons}
-								{summons.neverSummons && <span className="ss-derived-warn"> never summons</span>}
-								{summons.overCap && !summons.neverSummons && <span className="ss-derived-note"> capped</span>}
+								{summons.neverSummons && <span className="ss-derived-warn"> {t('never summons')}</span>}
+								{summons.overCap && !summons.neverSummons && <span className="ss-derived-note"> {t('capped')}</span>}
 							</dd>
 						</div>
 					)}
@@ -334,18 +337,18 @@ export default function PreviewPanel({
 
 				{notableEhp.length > 0 && (
 					<>
-						<div className="ss-details-section">Effective HP</div>
+						<div className="ss-details-section">{t('Effective HP')}</div>
 						<dl className="ss-details-stats">
 							{notableEhp.map(e => (
 								<div key={e.type} className="ss-details-prop">
-									<dt>{DAMAGE_TYPE_LABEL[e.type]}</dt>
+									<dt>{t(DAMAGE_TYPE_LABEL[e.type])}</dt>
 									<dd className="mono">
 										{e.immune ? (
-											<span className="ss-ehp-immune">immune</span>
+											<span className="ss-ehp-immune">{t('immune')}</span>
 										) : e.effective === null ? (
 											// 100 % resistance takes zero damage but reads to the client as a
 											// block, not an absorb (§11) — worth distinguishing from immunity.
-											<span className="ss-ehp-immune">blocked 100%</span>
+											<span className="ss-ehp-immune">{t('blocked 100%')}</span>
 										) : (
 											<>
 												{fmt(e.effective)}
@@ -365,7 +368,7 @@ export default function PreviewPanel({
 
 				{doc.look.corpse > 0 && (
 					<>
-						<div className="ss-details-section">Corpse</div>
+						<div className="ss-details-section">{t('Corpse')}</div>
 						<div className="ss-corpse">
 							<img src={itemUrl(doc.look.corpse, 32)} width={32} height={32} draggable={false} alt="" />
 							<span className="mono">{doc.look.corpse}</span>
@@ -377,12 +380,12 @@ export default function PreviewPanel({
 				{onLootChange && (
 					<>
 						<div className="ss-details-section mx-details-head">
-							Loot
+							{t('Loot')}
 							{onGoToLoot && (
 								<button
 									type="button"
 									className="ss-btn ss-btn-ghost mx-details-jump"
-									title="Edit in the Loot tab"
+									title={t('Edit in the Loot tab')}
 									onClick={onGoToLoot}
 								>
 									Edit
@@ -398,31 +401,31 @@ export default function PreviewPanel({
 									onChange={next => onLootChange(doc.loot.map((e, j) => (j === i ? next : e)))}
 								/>
 							))}
-							<div className="ss-loot-mini-hint">Drag items from the Items browser to add loot</div>
+							<div className="ss-loot-mini-hint">{t('Drag items from the Items browser to add loot')}</div>
 						</div>
 					</>
 				)}
 
 				{hint && (
 					<>
-						<div className="ss-details-section">Balance</div>
+						<div className="ss-details-section">{t('Balance')}</div>
 						<div className="ss-balance">
 							<div className="ss-balance-band">
-								XP {fmt(doc.experience)} → band {hint.band.label}{' '}
+								{t('XP {{xp}} → band {{band}}', { xp: fmt(doc.experience), band: hint.band.label })}{' '}
 								<span className="ss-derived-note">n={hint.band.count}</span>
 							</div>
 							{/* Advisory only, never a blocker and never auto-applied (§14.3). */}
 							<div className="ss-balance-rows">
 								<div className={`ss-balance-row ${verdictClass(hint.health.verdict)}`}>
-									HP <span className="mono">{fmt(hint.health.value)}</span> vs median{' '}
+									{t('HP')} <span className="mono">{fmt(hint.health.value)}</span> {t('vs median')}{' '}
 									<span className="mono">{fmt(hint.health.median)}</span>
 								</div>
 								<div className={`ss-balance-row ${verdictClass(hint.speed.verdict)}`}>
-									Speed <span className="mono">{fmt(hint.speed.value)}</span> vs median{' '}
+									{t('Speed')} <span className="mono">{fmt(hint.speed.value)}</span> {t('vs median')}{' '}
 									<span className="mono">{fmt(hint.speed.median)}</span>
 								</div>
 								<div className={`ss-balance-row ${verdictClass(hint.armor.verdict)}`}>
-									Armor <span className="mono">{fmt(hint.armor.value)}</span> vs median{' '}
+									{t('Armor')} <span className="mono">{fmt(hint.armor.value)}</span> {t('vs median')}{' '}
 									<span className="mono">{fmt(hint.armor.median)}</span>
 								</div>
 							</div>
@@ -432,7 +435,7 @@ export default function PreviewPanel({
 
 				{lintCount > 0 && (
 					<button className="ss-preview-lints" onClick={onOpenLints}>
-						{lintCount} {lintCount === 1 ? 'lint' : 'lints'}
+						{t('{{count}} lint', { count: lintCount })}
 					</button>
 				)}
 			</div>

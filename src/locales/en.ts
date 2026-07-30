@@ -11,6 +11,15 @@
 // cannot be served by gluing an "s" onto a word.
 
 const en: Record<string, string> = {
+	// --- Not English text, so they need a real entry ------------------------
+	// Compass initials for the outfit preview. The letter is language-specific
+	// (Polish ends on Z for zachód, Portuguese on O for oeste), so the key is a
+	// name rather than the letter itself.
+	'compass-N': 'N',
+	'compass-E': 'E',
+	'compass-S': 'S',
+	'compass-W': 'W',
+
 	// --- Lints -------------------------------------------------------------
 	'{{count}} error_one': '{{count}} error',
 	'{{count}} error_other': '{{count}} errors',
