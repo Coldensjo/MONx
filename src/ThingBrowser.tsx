@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Filter, Search, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { loadZoomIdx, saveZoomIdx } from './settings';
 import { useDragSource, type DragPayload } from './dnd';
@@ -289,6 +290,8 @@ function BrowserCellInner<T>({
 	onContextMenu,
 	onDoubleClick
 }: BrowserCellProps<T>) {
+	// memo() does not re-render on a language change unless it subscribes itself.
+	const { t } = useTranslation();
 	const drag = useDragSource(
 		() => (dragPayload ? dragPayload(item) : null),
 		{ ghostUrl: dragGhostUrl ? dragGhostUrl(item) : undefined, ghostSize: zoom }
@@ -332,7 +335,11 @@ function BrowserCellInner<T>({
 			) : (
 				<div className="ss-cell-sprite" style={{ width: zoom, height: zoom }} />
 			)}
-			{marked && <span className="mx-cell-star" title="Favourite">★</span>}
+			{marked && (
+			<span className="mx-cell-star" title={t('Favourite')}>
+				★
+			</span>
+		)}
 			<div className="ss-cell-id">{label}</div>
 		</div>
 	);
@@ -343,6 +350,7 @@ const BrowserCell = memo(BrowserCellInner) as typeof BrowserCellInner;
 // ---------- Browser ----------
 
 export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
+	const { t } = useTranslation();
 	const {
 		items,
 		cellKey,
@@ -422,8 +430,10 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 	}, [items, filterFn, searchMode, matchFn]);
 
 	const filterListQuery = filterSearch.trim().toLowerCase();
+	// Searched against the translated label, so the box matches what is on screen
+	// rather than the English key behind it.
 	const visibleFilters = filterListQuery
-		? filters.filter(f => f.label.toLowerCase().includes(filterListQuery))
+		? filters.filter(f => t(f.label).toLowerCase().includes(filterListQuery))
 		: filters;
 	const filterSections = useMemo(() => {
 		const groups = new Map<string, Filter<T>[]>();
@@ -717,8 +727,8 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 			setGridFrame(0);
 			return;
 		}
-		const t = setInterval(() => setGridFrame(f => f + 1), tickMs);
-		return () => clearInterval(t);
+		const timer = setInterval(() => setGridFrame(f => f + 1), tickMs);
+		return () => clearInterval(timer);
 	}, [gridAnimates, tickMs]);
 
 	return (
@@ -727,13 +737,13 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 				<div className="ss-search">
 					<Search size={14} />
 					<input
-						placeholder={searchPlaceholder ?? 'Search id (e.g. 2400 or 100-250) or name'}
+						placeholder={searchPlaceholder ?? t('Search id (e.g. 2400 or 100-250) or name')}
 						value={search}
 						onChange={e => setSearch(e.target.value)}
 						spellCheck={false}
 					/>
 					{search && (
-						<button className="ss-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+						<button className="ss-search-clear" onClick={() => setSearch('')} aria-label={t('Clear search')}>
 							<X size={13} />
 						</button>
 					)}
@@ -744,26 +754,26 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 						<button
 							className={`ss-btn ss-filter-btn${activeFilters.size > 0 ? ' ss-filter-btn-active' : ''}`}
 							onClick={() => setShowFilters(s => !s)}
-							title="Filter the grid"
+							title={t('Filter the grid')}
 						>
 							<Filter size={14} />
-							Filter
+							{t('Filter')}
 							{activeFilters.size > 0 && <span className="ss-filter-count">{activeFilters.size}</span>}
 						</button>
 						{showFilters && (
 							<div className="ss-filter-popover" onMouseDown={e => e.stopPropagation()}>
 								<div className="ss-filter-head">
-									<span>Filters</span>
+									<span>{t('Filters')}</span>
 									{activeFilters.size > 0 && (
 										<button className="ss-filter-reset" onClick={() => setActiveFilters(new Set())}>
-											Clear all
+											{t('Clear all')}
 										</button>
 									)}
 								</div>
 								<div className="ss-filter-search">
 									<Search size={13} />
 									<input
-										placeholder="Search filters"
+										placeholder={t('Search filters')}
 										value={filterSearch}
 										onChange={e => setFilterSearch(e.target.value)}
 										spellCheck={false}
@@ -772,7 +782,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 										<button
 											className="ss-search-clear"
 											onClick={() => setFilterSearch('')}
-											aria-label="Clear filter search"
+											aria-label={t('Clear filter search')}
 										>
 											<X size={12} />
 										</button>
@@ -780,7 +790,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 								</div>
 								{filterSections.map(([section, list]) => (
 									<div key={section}>
-										<div className="ss-filter-section">{section}</div>
+										<div className="ss-filter-section">{t(section)}</div>
 										<div className="ss-filter-list">
 											{list.map(f => (
 												<label key={f.key} className="ss-filter-item">
@@ -789,13 +799,15 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 														checked={activeFilters.has(f.key)}
 														onChange={() => toggleFilter(f.key)}
 													/>
-													{f.label}
+													{t(f.label)}
 												</label>
 											))}
 										</div>
 									</div>
 								))}
-								{filterSections.length === 0 && <div className="ss-filter-empty">No matching filters</div>}
+								{filterSections.length === 0 && (
+									<div className="ss-filter-empty">{t('No matching filters')}</div>
+								)}
 							</div>
 						)}
 					</div>
@@ -804,7 +816,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 				{cellFrames && (
 					<label className="ss-toggle">
 						<input type="checkbox" checked={animateEnabled} onChange={e => setAnimateEnabled(e.target.checked)} />
-						Animate
+						{t('Animate')}
 					</label>
 				)}
 
@@ -815,7 +827,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 						className="ss-zoom-btn"
 						onClick={() => setZoomIdx(i => Math.max(0, i - 1))}
 						disabled={zoomIdx === 0}
-						aria-label="Zoom out"
+						aria-label={t('Zoom out')}
 					>
 						<ZoomOut size={14} />
 					</button>
@@ -824,7 +836,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 						className="ss-zoom-btn"
 						onClick={() => setZoomIdx(i => Math.min(ZOOM_LEVELS.length - 1, i + 1))}
 						disabled={zoomIdx === ZOOM_LEVELS.length - 1}
-						aria-label="Zoom in"
+						aria-label={t('Zoom in')}
 					>
 						<ZoomIn size={14} />
 					</button>
@@ -838,7 +850,9 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 				onMouseDown={handleGridMouseDown}
 			>
 				<div className="ss-grid-inner" style={{ height: totalHeight }}>
-					{shown.length === 0 && <div className="ss-grid-empty">No {emptyLabel}.</div>}
+					{shown.length === 0 && (
+						<div className="ss-grid-empty">{t('No {{what}}.', { what: t(emptyLabel) })}</div>
+					)}
 					{visible.map(({ row, cells }) => (
 						<GridRow
 							key={`${row}-${String(cellKey(cells[0]))}-${cells.length}`}

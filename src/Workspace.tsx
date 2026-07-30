@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { confirm, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { Bookmark, Package, Percent, PersonStanding, Plus, Save, Skull, Sparkles, Star, Trash2, Users, Wand2, X } from 'lucide-react';
 import {
@@ -67,6 +68,7 @@ import { loadFavourites, saveFavourites } from './favourites';
 import { loadPresets, savePresets, upsertPreset, type LootPreset } from './lootpresets';
 import { getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
+import { n } from './i18n';
 import { workspaceLabel, type Toast } from './App';
 
 /** Scoped to the corpus, like the patch-notes cut-off. */
@@ -116,6 +118,9 @@ function walkCells(t: ThingSummary): number {
 	return Math.max(0, t.frames - (t.idleFrames ?? 1));
 }
 
+/** Values are i18n keys — translated at the render site with t(). Lower-case
+ *  because they appear mid-sentence ("Show errors"), which is a fact about
+ *  English; a translation is free to capitalise as its own language requires. */
 const LINT_SEVERITY_LABEL: Record<LintSeverity, string> = {
 	error: 'errors',
 	warning: 'warnings',
@@ -149,6 +154,7 @@ export default function Workspace({
 	showToast,
 	onCloseWorkspace
 }: Props) {
+	const { t } = useTranslation();
 	const [view, setView] = useState<View>('monsters');
 	const [tool, setTool] = useState<PinScope | null>(null);
 	/** Editor tab preferences; the dialog writes them straight through to storage. */
@@ -375,8 +381,10 @@ export default function Workspace({
 			if (dirtyClosing.length > 0) {
 				const msg =
 					dirtyClosing.length === 1
-						? `${dirtyClosing[0]} has unsaved changes. Close and discard them?`
-						: `${dirtyClosing.length} tabs have unsaved changes. Close and discard them?`;
+						? t('{{file}} has unsaved changes. Close and discard them?', { file: dirtyClosing[0] })
+						: t('{{count}} tab has unsaved changes. Close and discard them?', {
+								count: dirtyClosing.length
+							});
 				if (!(await confirm(msg))) return;
 			}
 			const closing = new Set(files);
@@ -401,7 +409,7 @@ export default function Workspace({
 				return next;
 			});
 		},
-		[dirtyFiles, selected]
+		[dirtyFiles, selected, t]
 	);
 
 	const closeTab = useCallback((file: string) => closeTabs([file]), [closeTabs]);
@@ -562,11 +570,11 @@ export default function Workspace({
 				path,
 				`MONx lint report — ${label}\n${lines.length} findings\n\n${lines.join('\n')}\n`
 			);
-			showToast('ok', `Exported ${lines.length} lints`);
+			showToast('ok', t('Exported {{count}} lint', { count: lines.length }));
 		} catch (e) {
 			showToast('error', String(e));
 		}
-	}, [label, showToast]);
+	}, [label, showToast, t]);
 
 	// Moves the cut-off point to now without going through the dialog, for a user
 	// who knows they are starting a span rather than ending one.
@@ -574,14 +582,14 @@ export default function Workspace({
 		try {
 			const marks = await patchMarks();
 			if (!saveCutoff(info.paths.monsters, marks)) {
-				showToast('error', 'Could not store the cut-off point');
+				showToast('error', t('Could not store the cut-off point'));
 				return;
 			}
-			showToast('ok', `Cut-off point set — ${marks.length} monsters marked`);
+			showToast('ok', t('Cut-off point set — {{count}} monster marked', { count: marks.length }));
 		} catch (e) {
 			showToast('error', String(e));
 		}
-	}, [info.paths.monsters, showToast]);
+	}, [info.paths.monsters, showToast, t]);
 
 	const reveal = useCallback(
 		(file: string) => {
@@ -667,29 +675,29 @@ export default function Workspace({
 			if (doc && (target === null || target === doc.file)) {
 				const next = applyLintFix(doc, lint, { nextRaceid });
 				if (next) editDoc(next);
-				else showToast('error', `${lint.code} needs a manual fix`);
+				else showToast('error', t('{{code}} needs a manual fix', { code: lint.code }));
 				return;
 			}
 			if (!target) return;
 			if (dirtyFiles.has(target)) {
-				showToast('error', `${target} has unsaved changes — save it first`);
+				showToast('error', t('{{file}} has unsaved changes — save it first', { file: target }));
 				return;
 			}
 			try {
 				if ((await fixInFile(target, [lint])).length === 0) {
-					showToast('error', `${lint.code} needs a manual fix`);
+					showToast('error', t('{{code}} needs a manual fix', { code: lint.code }));
 					return;
 				}
 				// Source lints are only computed when the workspace opens, so there
 				// is nothing to re-fetch — drop the row that was just repaired.
 				setWorkspaceLints(prev => prev.filter(l => l !== lint));
 				onMonstersChanged(null);
-				showToast('ok', `Fixed ${lint.code} in ${target}`);
+				showToast('ok', t('Fixed {{code}} in {{file}}', { code: lint.code, file: target }));
 			} catch (e) {
 				showToast('error', String(e));
 			}
 		},
-		[doc, dirtyFiles, editDoc, fixInFile, nextRaceid, onMonstersChanged, showToast]
+		[doc, dirtyFiles, editDoc, fixInFile, nextRaceid, onMonstersChanged, showToast, t]
 	);
 
 	// An ignored code is gone from everything downstream — the drawer, the status
@@ -722,15 +730,15 @@ export default function Workspace({
 		(code: string) => {
 			if (lintPrefs.muted.includes(code)) return;
 			updateLintPrefs({ ...lintPrefs, muted: [...lintPrefs.muted, code].sort() });
-			showToast('ok', `Ignoring ${code} — restore it from the Linter menu`);
+			showToast('ok', t('Ignoring {{code}} — restore it from the Linter menu', { code }));
 		},
-		[lintPrefs, updateLintPrefs, showToast]
+		[lintPrefs, updateLintPrefs, showToast, t]
 	);
 
 	/** Fix all, for the Workspace tab: every fixable lint, grouped by its file. */
 	const fixAllWorkspaceLints = useCallback(async () => {
 		if (dirtyFiles.size > 0) {
-			showToast('error', 'Save your open changes first — these fixes write files directly');
+			showToast('error', t('Save your open changes first — these fixes write files directly'));
 			return;
 		}
 		const byFile = new Map<string, Lint[]>();
@@ -755,7 +763,7 @@ export default function Workspace({
 			return;
 		}
 		if (applied.size === 0) {
-			showToast('ok', 'Nothing here has an automatic fix');
+			showToast('ok', t('Nothing here has an automatic fix'));
 			return;
 		}
 		// Source lints are only computed at open, so the panel is corrected in
@@ -763,11 +771,16 @@ export default function Workspace({
 		setWorkspaceLints(prev => prev.filter(l => !applied.has(l)));
 		onMonstersChanged(null);
 		setReloadKey(k => k + 1);
+		// Two counts in one sentence, so the inner noun phrase is translated on its
+		// own and passed in — i18next carries one `count` per message.
 		showToast(
 			'ok',
-			`Fixed ${applied.size} ${applied.size === 1 ? 'lint' : 'lints'} across ${files.length} ${files.length === 1 ? 'file' : 'files'}`
+			t('Fixed {{count}} lint across {{files}}', {
+				count: applied.size,
+				files: t('{{count}} file', { count: files.length })
+			})
 		);
-	}, [dirtyFiles, fixInFile, onMonstersChanged, showToast, visibleWorkspaceLints]);
+	}, [dirtyFiles, fixInFile, onMonstersChanged, showToast, visibleWorkspaceLints, t]);
 
 	const fixAllLints = useCallback(() => {
 		if (!doc) return;
@@ -782,8 +795,13 @@ export default function Workspace({
 			} else manual++;
 		}
 		if (fixed > 0) editDoc(d);
-		showToast('ok', `Fixed ${fixed} ${fixed === 1 ? 'lint' : 'lints'}${manual > 0 ? ` — ${manual} need a manual fix` : ''}`);
-	}, [doc, visibleMonsterLints, editDoc, nextRaceid, showToast]);
+		showToast(
+			'ok',
+			manual > 0
+				? t('Fixed {{count}} lint, {{manual}} need a manual fix', { count: fixed, manual })
+				: t('Fixed {{count}} lint', { count: fixed })
+		);
+	}, [doc, visibleMonsterLints, editDoc, nextRaceid, showToast, t]);
 
 	// Undo/redo used to have their own listener here. They are commands now, like
 	// everything else — see the command table below — and they carry
@@ -794,14 +812,14 @@ export default function Workspace({
 	// as dropping it on the Look section. Asked for explicitly from a menu, so
 	// there is no confirm on top of it.
 	const pickOutfit = useCallback(
-		(t: ThingSummary) => {
+		(thing: ThingSummary) => {
 			if (!doc) return;
-			const label = t.name ? `${t.name} (${t.id})` : `#${t.id}`;
-			editDoc({ ...doc, look: { ...doc.look, mode: 'type', type: t.id } });
+			const label = thing.name ? `${thing.name} (${thing.id})` : `#${thing.id}`;
+			editDoc({ ...doc, look: { ...doc.look, mode: 'type', type: thing.id } });
 			setView('monsters');
-			showToast('ok', `${doc.name}'s outfit set to ${label}`);
+			showToast('ok', t('Outfit of {{monster}} set to {{outfit}}', { monster: doc.name, outfit: label }));
 		},
-		[doc, editDoc, showToast]
+		[doc, editDoc, showToast, t]
 	);
 
 	// The item browser gets the whole database — the grid virtualizes rows, so
@@ -884,7 +902,7 @@ export default function Workspace({
 				next.delete(doc.file);
 				return next;
 			});
-			showToast('ok', `Saved ${doc.file}`);
+			showToast('ok', t('Saved {{file}}', { file: doc.file }));
 			setWorkspaceLints(await lintWorkspace());
 			refreshDropped();
 		} catch (e) {
@@ -892,7 +910,7 @@ export default function Workspace({
 		} finally {
 			setSaving(false);
 		}
-	}, [doc, showToast, refreshDropped]);
+	}, [doc, showToast, refreshDropped, t]);
 
 	const refreshMonsters = useCallback(
 		(focusFile: string | null) => {
@@ -907,7 +925,9 @@ export default function Workspace({
 	// The corpus tools rewrite files straight from the on-disk corpus, so an
 	// unsaved editor buffer would be silently overwritten by the next save.
 	// Blocked rather than merged: the fix is one Ctrl+S away.
-	const toolsBlocked = dirty ? ' — save first' : '';
+	// A whole sentence rather than a suffix spliced onto four labels: word order
+	// after "save first" is not English's to decide.
+	const blocked = (label: string) => (dirty ? t('{{action}} — save first', { action: label }) : label);
 
 	const updatePrefs = (next: Prefs) => {
 		setPrefs(next);
@@ -916,21 +936,24 @@ export default function Workspace({
 
 	// How old the patch-notes cut-off point is, in the menu label. Re-read when
 	// the dialog closes, because that is where it usually moves.
-	const patchCutoffAge = useMemo(() => {
+	const patchCutoffLabel = useMemo(() => {
 		const c = loadCutoff(info.paths.monsters);
-		return c ? ` — last set ${relativeWhen(c.at)}` : '';
-	}, [info.paths.monsters, patchOpen]);
+		return c
+			? t('Set patch notes cut-off point — last set {{when}}', { when: relativeWhen(c.at) })
+			: t('Set patch notes cut-off point');
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [info.paths.monsters, patchOpen, t]);
 	const nav: { key: View; label: string; icon: JSX.Element; count: number }[] = [
-		{ key: 'monsters', label: 'Monsters', icon: <Skull size={16} />, count: info.monsterCount },
-		{ key: 'items', label: 'Items', icon: <Package size={16} />, count: itemList.length },
+		{ key: 'monsters', label: t('Monsters'), icon: <Skull size={16} />, count: info.monsterCount },
+		{ key: 'items', label: t('Items'), icon: <Package size={16} />, count: itemList.length },
 		{
 			key: 'outfits',
-			label: 'Outfits',
+			label: t('Outfits'),
 			icon: <PersonStanding size={16} />,
 			count: things.outfit.length
 		},
-		{ key: 'effects', label: 'Effects', icon: <Sparkles size={16} />, count: things.effect.length },
-		{ key: 'missiles', label: 'Missiles', icon: <Wand2 size={16} />, count: things.missile.length }
+		{ key: 'effects', label: t('Effects'), icon: <Sparkles size={16} />, count: things.effect.length },
+		{ key: 'missiles', label: t('Missiles'), icon: <Wand2 size={16} />, count: things.missile.length }
 	];
 
 	const itemRowUrl = useCallback(
@@ -944,26 +967,33 @@ export default function Workspace({
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
 	// Multi-line tooltip from the raw items.xml attributes — weight is in
 	// hundredths of an oz, as the client displays it.
-	const itemCellTitle = useCallback((i: ItemInfo) => {
-		const a = i.attributes;
-		const lines = [`${i.name || `#${i.serverId}`}  (#${i.serverId})`];
-		const combat: string[] = [];
-		if (a.attack) combat.push(`atk ${a.attack}`);
-		if (a.defense) combat.push(`def ${a.defense}${a.extradef ? ` ${Number(a.extradef) >= 0 ? '+' : ''}${a.extradef}` : ''}`);
-		if (a.armor) combat.push(`arm ${a.armor}`);
-		if (a.weaponType) combat.push(a.weaponType);
-		if (a.slotType) combat.push(a.slotType);
-		if (combat.length > 0) lines.push(combat.join(' · '));
-		const misc: string[] = [];
-		if (a.weight) misc.push(`${(Number(a.weight) / 100).toLocaleString()} oz`);
-		if (a.worth) misc.push(`worth ${Number(a.worth).toLocaleString()} gp`);
-		if (a.charges) misc.push(`${a.charges} charges`);
-		if (a.containerSize) misc.push(`${a.containerSize} slots`);
-		if (a.duration) misc.push(`decays in ${a.duration}s`);
-		if (misc.length > 0) lines.push(misc.join(' · '));
-		if (a.description) lines.push(a.description);
-		return lines.join('\n');
-	}, []);
+	// `atk`/`def`/`arm` and the weaponType/slotType words are the items.xml
+	// vocabulary itself, so they stay as the file spells them; only the prose
+	// around them is translated.
+	const itemCellTitle = useCallback(
+		(i: ItemInfo) => {
+			const a = i.attributes;
+			const lines = [`${i.name || `#${i.serverId}`}  (#${i.serverId})`];
+			const combat: string[] = [];
+			if (a.attack) combat.push(`atk ${a.attack}`);
+			if (a.defense)
+				combat.push(`def ${a.defense}${a.extradef ? ` ${Number(a.extradef) >= 0 ? '+' : ''}${a.extradef}` : ''}`);
+			if (a.armor) combat.push(`arm ${a.armor}`);
+			if (a.weaponType) combat.push(a.weaponType);
+			if (a.slotType) combat.push(a.slotType);
+			if (combat.length > 0) lines.push(combat.join(' · '));
+			const misc: string[] = [];
+			if (a.weight) misc.push(t('{{weight}} oz', { weight: n(Number(a.weight) / 100) }));
+			if (a.worth) misc.push(t('worth {{worth}} gp', { worth: n(Number(a.worth)) }));
+			if (a.charges) misc.push(t('{{count}} charge', { count: Number(a.charges) }));
+			if (a.containerSize) misc.push(t('{{count}} slot', { count: Number(a.containerSize) }));
+			if (a.duration) misc.push(t('decays in {{seconds}}s', { seconds: a.duration }));
+			if (misc.length > 0) lines.push(misc.join(' · '));
+			if (a.description) lines.push(a.description);
+			return lines.join('\n');
+		},
+		[t]
+	);
 	const itemCellFrames = useCallback((i: ItemInfo) => itemFrames.get(i.clientId) ?? 1, [itemFrames]);
 	const itemCellUrl = useCallback(
 		(i: ItemInfo, frame: number) =>
@@ -975,6 +1005,9 @@ export default function Workspace({
 	// SPRx — vocabulary from the corpus: weaponType sword/club/axe/distance/
 	// wand/shield/ammunition, slotType head/body/legs/feet/ring/necklace/
 	// backpack/rune/trinket/two-handed.
+	// `label` and `section` are i18n keys; ThingBrowser translates them where it
+	// renders the popover, so this table stays a plain list of predicates. The
+	// `key`s are storage and never translated.
 	const itemFilters = useMemo(() => {
 		const attr = (key: string) => (i: ItemInfo) => key in i.attributes;
 		const attrIs = (key: string, value: string) => (i: ItemInfo) => i.attributes[key] === value;
@@ -1060,16 +1093,18 @@ export default function Workspace({
 					else next.add(i.serverId);
 				}
 				saveFavourites(next);
+				// Two whole sentences rather than one assembled from "Removed"/"Added"
+				// and "from"/"to" — those fragments only compose in English.
 				showToast(
 					'ok',
-					`${allStarred ? 'Removed' : 'Added'} ${picked.length} ${
-						picked.length === 1 ? 'item' : 'items'
-					} ${allStarred ? 'from' : 'to'} favourites`
+					allStarred
+						? t('Removed {{count}} item from favourites', { count: picked.length })
+						: t('Added {{count}} item to favourites', { count: picked.length })
 				);
 				return next;
 			});
 		},
-		[showToast]
+		[showToast, t]
 	);
 
 	const thingContextMenu = useCallback((t: ThingSummary, e: React.MouseEvent, kind: 'effect' | 'missile') => {
@@ -1084,12 +1119,22 @@ export default function Workspace({
 	 *  (###) spells are skipped because the loader never reads theirs (§8.1). */
 	const spellTargets = useMemo(() => {
 		if (!doc) return [];
-		const label = (b: (typeof doc.attacks)[number]) => b.name ?? b.script ?? 'unnamed';
+		const label = (b: (typeof doc.attacks)[number]) => b.name ?? b.script ?? t('unnamed');
 		return [
-			...doc.attacks.map((b, i) => ({ list: 'attacks' as const, i, b, label: `${label(b)} (attack)` })),
-			...doc.defenses.map((b, i) => ({ list: 'defenses' as const, i, b, label: `${label(b)} (defense)` }))
-		].filter(t => t.b.kind !== 'registered');
-	}, [doc]);
+			...doc.attacks.map((b, i) => ({
+				list: 'attacks' as const,
+				i,
+				b,
+				label: t('{{spell}} (attack)', { spell: label(b) })
+			})),
+			...doc.defenses.map((b, i) => ({
+				list: 'defenses' as const,
+				i,
+				b,
+				label: t('{{spell}} (defense)', { spell: label(b) })
+			}))
+		].filter(target => target.b.kind !== 'registered');
+	}, [doc, t]);
 
 	const setSpellEffect = useCallback(
 		(list: 'attacks' | 'defenses', index: number, kind: 'effect' | 'missile', entry: EffectEntry) => {
@@ -1100,12 +1145,22 @@ export default function Workspace({
 			);
 			editDoc({ ...doc, [list]: blocks });
 			const spell = doc[list][index];
+			// `kind` is a wire value, so it selects between two whole messages rather
+			// than being interpolated as an English word.
 			showToast(
 				'ok',
-				`${kind === 'effect' ? 'Effect' : 'Missile'} of ${spell.name ?? spell.script ?? 'spell'} set to ${entry.label}`
+				kind === 'effect'
+					? t('Effect of {{spell}} set to {{effect}}', {
+							spell: spell.name ?? spell.script ?? t('spell'),
+							effect: t(entry.label)
+						})
+					: t('Missile of {{spell}} set to {{effect}}', {
+							spell: spell.name ?? spell.script ?? t('spell'),
+							effect: t(entry.label)
+						})
 			);
 		},
-		[doc, editDoc, showToast]
+		[doc, editDoc, showToast, t]
 	);
 
 	// Outfit filters read the .dat geometry: width/height are in 32px tiles,
@@ -1148,9 +1203,15 @@ export default function Workspace({
 		(item: ItemInfo) => {
 			if (!doc) return;
 			editDoc({ ...doc, look: { ...doc.look, mode: 'typeex', typeex: item.serverId } });
-			showToast('ok', `Outfit (typeex) of ${doc.name} set to ${item.name || `#${item.serverId}`}`);
+			showToast(
+				'ok',
+				t('Outfit (typeex) of {{monster}} set to {{item}}', {
+					monster: doc.name,
+					item: item.name || `#${item.serverId}`
+				})
+			);
 		},
-		[doc, editDoc, showToast]
+		[doc, editDoc, showToast, t]
 	);
 
 	const itemContextMenu = useCallback((item: ItemInfo, e: React.MouseEvent, selected: ItemInfo[]) => {
@@ -1180,16 +1241,17 @@ export default function Workspace({
 				const fresh = picked.filter(i => !have.has(i.serverId));
 				return fresh.length > 0 ? [...prev, ...fresh] : prev;
 			});
-			showToast('ok', `Added ${picked.length} ${picked.length === 1 ? 'item' : 'items'} to Loot`);
+			showToast('ok', t('Added {{count}} item to Loot', { count: picked.length }));
 		},
-		[showToast]
+		[showToast, t]
 	);
 
 	const clearTray = useCallback(async () => {
-		const n = lootTray.length;
-		const ok = await confirm(`Clear ${n} ${n === 1 ? 'item' : 'items'} from Loot?`, { title: 'Clear loot' });
+		const ok = await confirm(t('Clear {{count}} item from Loot?', { count: lootTray.length }), {
+			title: t('Clear loot')
+		});
 		if (ok) setLootTray([]);
-	}, [lootTray.length]);
+	}, [lootTray.length, t]);
 
 	/** Straight onto the open monster, skipping the tray — same entries the tray would make. */
 	const addToMonsterLoot = useCallback(
@@ -1201,10 +1263,10 @@ export default function Workspace({
 			});
 			showToast(
 				'ok',
-				`Added ${picked.length} loot ${picked.length === 1 ? 'entry' : 'entries'} to ${doc.name}`
+				t('Added {{count}} loot entry to {{monster}}', { count: picked.length, monster: doc.name })
 			);
 		},
-		[doc, editDoc, showToast]
+		[doc, editDoc, showToast, t]
 	);
 
 	// The same mutation as dropping the item on the Look section's corpse field.
@@ -1212,9 +1274,15 @@ export default function Workspace({
 		(item: ItemInfo) => {
 			if (!doc) return;
 			editDoc({ ...doc, look: { ...doc.look, corpse: item.serverId } });
-			showToast('ok', `Corpse of ${doc.name} set to ${item.name || `#${item.serverId}`}`);
+			showToast(
+				'ok',
+				t('Corpse of {{monster}} set to {{item}}', {
+					monster: doc.name,
+					item: item.name || `#${item.serverId}`
+				})
+			);
 		},
-		[doc, editDoc, showToast]
+		[doc, editDoc, showToast, t]
 	);
 
 	/** Saves the tray under a name, replacing a preset of the same name. */
@@ -1226,9 +1294,15 @@ export default function Workspace({
 			setPresets(next);
 			savePresets(next);
 			setPresetName(null);
-			showToast('ok', `Saved “${trimmed}” — ${lootTray.length} items`);
+			showToast(
+				'ok',
+				t('Saved “{{name}}” — {{items}}', {
+					name: trimmed,
+					items: t('{{count}} item', { count: lootTray.length })
+				})
+			);
 		},
-		[lootTray, presets, showToast]
+		[lootTray, presets, showToast, t]
 	);
 
 	/** A preset back into the tray. Ids are resolved against the item index now,
@@ -1242,12 +1316,16 @@ export default function Workspace({
 			const missing = preset.ids.length - found.length;
 			showToast(
 				'ok',
-				`Loaded “${preset.name}” — ${found.length} items${
-					missing > 0 ? `, ${missing} not in this workspace` : ''
-				}`
+				missing > 0
+					? t('Loaded “{{name}}” — {{count}} item, {{missing}} not in this workspace', {
+							name: preset.name,
+							count: found.length,
+							missing
+						})
+					: t('Loaded “{{name}}” — {{count}} item', { name: preset.name, count: found.length })
 			);
 		},
-		[itemList, showToast]
+		[itemList, showToast, t]
 	);
 
 	const deletePreset = useCallback(
@@ -1265,9 +1343,11 @@ export default function Workspace({
 			...doc,
 			loot: [...doc.loot, ...lootTray.map(i => newLootEntry({ serverId: i.serverId, name: i.name }))]
 		});
-		const n = lootTray.length;
-		showToast('ok', `Added ${n} loot ${n === 1 ? 'entry' : 'entries'} to ${doc.name}`);
-	}, [doc, lootTray, editDoc, showToast]);
+		showToast(
+			'ok',
+			t('Added {{count}} loot entry to {{monster}}', { count: lootTray.length, monster: doc.name })
+		);
+	}, [doc, lootTray, editDoc, showToast, t]);
 
 	// ---- Commands ----
 	// One table of everything the shell can do. The menus are built from it and
@@ -1275,111 +1355,111 @@ export default function Workspace({
 	// and be missing from the other, and the manager lists them all by
 	// construction.
 	const commands: Command[] = [
-		{ id: 'save-monster', label: 'Save monster', group: 'Monsters', enabled: !!doc && !saving, run: () => void save() },
-		{ id: 'quick-open', label: 'Go to monster…', group: 'Monsters', run: () => setQuickOpen(true) },
-		{ id: 'new-monster', label: 'New monster…', group: 'Monsters', run: () => listActions.current?.newMonster() },
+		{ id: 'save-monster', label: t('Save monster'), group: t('Monsters'), enabled: !!doc && !saving, run: () => void save() },
+		{ id: 'quick-open', label: t('Go to monster…'), group: t('Monsters'), run: () => setQuickOpen(true) },
+		{ id: 'new-monster', label: t('New monster…'), group: t('Monsters'), run: () => listActions.current?.newMonster() },
 		{
 			id: 'duplicate-monster',
-			label: 'Duplicate monster',
-			group: 'Monsters',
+			label: t('Duplicate monster'),
+			group: t('Monsters'),
 			enabled: !!selected,
 			run: () => listActions.current?.duplicateSelected()
 		},
 		{
 			id: 'rename-monster',
-			label: 'Rename monster…',
-			group: 'Monsters',
+			label: t('Rename monster…'),
+			group: t('Monsters'),
 			enabled: !!selected,
 			run: () => listActions.current?.renameSelected()
 		},
 		{
 			id: 'delete-monster',
-			label: 'Delete monster…',
-			group: 'Monsters',
+			label: t('Delete monster…'),
+			group: t('Monsters'),
 			enabled: !!selected,
 			run: () => listActions.current?.deleteSelected()
 		},
 		{
 			id: 'reveal-monster',
-			label: 'Show monster in folder',
-			group: 'Monsters',
+			label: t('Show monster in folder'),
+			group: t('Monsters'),
 			enabled: !!selected,
 			run: () => selected && reveal(selected)
 		},
-		{ id: 'close-workspace', label: 'Close workspace', group: 'Monsters', run: onCloseWorkspace },
+		{ id: 'close-workspace', label: t('Close workspace'), group: t('Monsters'), run: onCloseWorkspace },
 
 		{
 			id: 'undo',
-			label: 'Undo',
-			group: 'Edit',
+			label: t('Undo'),
+			group: t('Edit'),
 			enabled: undoRef.current.length > 0,
 			notWhileTyping: true,
 			run: undoEdit
 		},
 		{
 			id: 'redo',
-			label: 'Redo',
-			group: 'Edit',
+			label: t('Redo'),
+			group: t('Edit'),
 			enabled: redoRef.current.length > 0,
 			notWhileTyping: true,
 			run: redoEdit
 		},
 		{
 			id: 'fix-all-lints',
-			label: 'Fix every fixable lint',
-			group: 'Edit',
+			label: t('Fix every fixable lint'),
+			group: t('Edit'),
 			enabled: !!doc,
 			run: fixAllLints
 		},
 		{
 			id: 'add-tray-loot',
-			label: 'Add the loot tray to this monster',
-			group: 'Edit',
+			label: t('Add the loot tray to this monster'),
+			group: t('Edit'),
 			enabled: !!doc && lootTray.length > 0,
 			run: addTrayToMonster
 		},
 
-		{ id: 'view-monsters', label: 'Go to Monsters', group: 'View', run: () => setView('monsters') },
-		{ id: 'view-items', label: 'Go to Items', group: 'View', run: () => setView('items') },
-		{ id: 'view-outfits', label: 'Go to Outfits', group: 'View', run: () => setView('outfits') },
-		{ id: 'view-effects', label: 'Go to Effects', group: 'View', run: () => setView('effects') },
-		{ id: 'view-missiles', label: 'Go to Missiles', group: 'View', run: () => setView('missiles') },
+		{ id: 'view-monsters', label: t('Go to Monsters'), group: t('View'), run: () => setView('monsters') },
+		{ id: 'view-items', label: t('Go to Items'), group: t('View'), run: () => setView('items') },
+		{ id: 'view-outfits', label: t('Go to Outfits'), group: t('View'), run: () => setView('outfits') },
+		{ id: 'view-effects', label: t('Go to Effects'), group: t('View'), run: () => setView('effects') },
+		{ id: 'view-missiles', label: t('Go to Missiles'), group: t('View'), run: () => setView('missiles') },
 		{
 			id: 'focus-search',
-			label: 'Search monsters',
-			group: 'View',
+			label: t('Search monsters'),
+			group: t('View'),
 			run: () => {
 				setView('monsters');
 				listActions.current?.focusSearch();
 			}
 		},
-		{ id: 'toggle-lints', label: 'Toggle the lint drawer', group: 'View', run: () => setLintsOpen(o => !o) },
+		{ id: 'toggle-lints', label: t('Toggle the lint drawer'), group: t('View'), run: () => setLintsOpen(o => !o) },
 		{
 			id: 'next-monster',
-			label: 'Next monster in the list',
-			group: 'View',
+			label: t('Next monster in the list'),
+			group: t('View'),
 			run: () => listActions.current?.step(1)
 		},
 		{
 			id: 'prev-monster',
-			label: 'Previous monster in the list',
-			group: 'View',
+			label: t('Previous monster in the list'),
+			group: t('View'),
 			run: () => listActions.current?.step(-1)
 		},
-		{ id: 'next-tab', label: 'Next editor tab', group: 'View', enabled: tabs.length > 1, run: () => stepTab(1) },
-		{ id: 'prev-tab', label: 'Previous editor tab', group: 'View', enabled: tabs.length > 1, run: () => stepTab(-1) },
+		{ id: 'next-tab', label: t('Next editor tab'), group: t('View'), enabled: tabs.length > 1, run: () => stepTab(1) },
+		{ id: 'prev-tab', label: t('Previous editor tab'), group: t('View'), enabled: tabs.length > 1, run: () => stepTab(-1) },
 		{
 			id: 'close-tab',
-			label: 'Close editor tab',
-			group: 'View',
+			label: t('Close editor tab'),
+			group: t('View'),
 			enabled: !!selected,
 			run: () => selected && void closeTab(selected)
 		},
 
 		...SECTION_IDS.map(id => ({
 			id: `goto-${id}`,
-			label: `Jump to ${SECTION_LABEL[id]}`,
-			group: 'Editor tabs',
+			label: t('Jump to {{tab}}', { tab: t(SECTION_LABEL[id]) }),
+			group: t('Editor tabs'),
 			enabled: !!doc && prefs.visibleSections.includes(id),
 			run: () => {
 				setView('monsters');
@@ -1389,55 +1469,55 @@ export default function Workspace({
 
 		{
 			id: 'pin-ambiguous',
-			label: 'Pin ambiguous loot ids…',
-			group: 'Tools',
+			label: t('Pin ambiguous loot ids…'),
+			group: t('Tools'),
 			enabled: !dirty,
 			run: () => setTool('ambiguous')
 		},
-		{ id: 'pin-all', label: 'Pin all loot ids…', group: 'Tools', enabled: !dirty, run: () => setTool('all') },
+		{ id: 'pin-all', label: t('Pin all loot ids…'), group: t('Tools'), enabled: !dirty, run: () => setTool('all') },
 		{
 			id: 'scale-loot',
-			label: 'Scale loot chances…',
-			group: 'Tools',
+			label: t('Scale loot chances…'),
+			group: t('Tools'),
 			enabled: !dirty,
 			run: () => setScaling({ itemId: null })
 		},
 		{
 			id: 'batch-edit',
-			label: 'Batch edit fields…',
-			group: 'Tools',
+			label: t('Batch edit fields…'),
+			group: t('Tools'),
 			enabled: !dirty,
 			run: () => setBatchOpen(true)
 		},
 		{
 			id: 'compare-monsters',
-			label: 'Compare monsters…',
-			group: 'Tools',
+			label: t('Compare monsters…'),
+			group: t('Tools'),
 			enabled: monsters.length > 1,
 			run: () => setCompareOpen(true)
 		},
-		{ id: 'export-lints', label: 'Export lint report…', group: 'Tools', run: () => void exportLints() },
-		{ id: 'export-patch-notes', label: 'Export patch notes…', group: 'Tools', run: () => setPatchOpen(true) },
+		{ id: 'export-lints', label: t('Export lint report…'), group: t('Tools'), run: () => void exportLints() },
+		{ id: 'export-patch-notes', label: t('Export patch notes…'), group: t('Tools'), run: () => setPatchOpen(true) },
 		{
 			id: 'set-patch-cutoff',
-			label: 'Set patch notes cut-off point',
-			group: 'Tools',
+			label: t('Set patch notes cut-off point'),
+			group: t('Tools'),
 			run: () => void setPatchCutoff()
 		},
 
 		...LINT_SEVERITIES.map(s => ({
 			id: `toggle-severity-${s}`,
-			label: `Show ${LINT_SEVERITY_LABEL[s]} lints`,
-			group: 'Linter',
+			label: t('Show {{severity}} lints', { severity: t(LINT_SEVERITY_LABEL[s]) }),
+			group: t('Linter'),
 			run: () => toggleLintSeverity(s)
 		})),
 
-		{ id: 'open-prefs', label: 'Editor tabs…', group: 'Preferences', run: () => setPrefsOpen(true) },
-		{ id: 'open-hotkeys', label: 'Hotkeys…', group: 'Preferences', run: () => setHotkeysOpen(true) },
+		{ id: 'open-prefs', label: t('Editor tabs…'), group: t('Preferences'), run: () => setPrefsOpen(true) },
+		{ id: 'open-hotkeys', label: t('Hotkeys…'), group: t('Preferences'), run: () => setHotkeysOpen(true) },
 		{
 			id: 'show-all-tabs',
-			label: 'Show every editor tab',
-			group: 'Preferences',
+			label: t('Show every editor tab'),
+			group: t('Preferences'),
 			enabled: prefs.visibleSections.length !== SECTION_IDS.length,
 			run: () => updatePrefs({ ...prefs, visibleSections: [...SECTION_IDS] })
 		}
@@ -1459,7 +1539,7 @@ export default function Workspace({
 
 	const menus: Menu[] = [
 		{
-			label: 'File',
+			label: t('File'),
 			items: [
 				item('save-monster'),
 				item('quick-open', { separated: true }),
@@ -1472,38 +1552,42 @@ export default function Workspace({
 			]
 		},
 		{
-			label: 'Edit',
+			label: t('Edit'),
 			items: [item('undo'), item('redo'), item('fix-all-lints', { separated: true }), item('add-tray-loot')]
 		},
 		{
-			label: 'Tools',
+			label: t('Tools'),
 			items: [
-				item('pin-ambiguous', { label: `Pin ambiguous loot ids…${toolsBlocked}` }),
-				item('pin-all', { label: `Pin all loot ids…${toolsBlocked}` }),
-				item('scale-loot', { label: `Scale loot chances…${toolsBlocked}` }),
-				item('batch-edit', { label: `Batch edit fields…${toolsBlocked}` }),
+				item('pin-ambiguous', { label: blocked(t('Pin ambiguous loot ids…')) }),
+				item('pin-all', { label: blocked(t('Pin all loot ids…')) }),
+				item('scale-loot', { label: blocked(t('Scale loot chances…')) }),
+				item('batch-edit', { label: blocked(t('Batch edit fields…')) }),
 				item('compare-monsters', { separated: true }),
 				item('export-lints'),
 				item('export-patch-notes'),
-				item('set-patch-cutoff', { label: `Set patch notes cut-off point${patchCutoffAge}` })
+				item('set-patch-cutoff', { label: patchCutoffLabel })
 			]
 		},
 		{
 			// Severities first (what the drawer shows at all), then the ignore list,
 			// which is where a right-clicked lint ends up and the only place it can be
 			// taken back.
-			label: 'Linter',
+			label: t('Linter'),
 			items: [
 				...LINT_SEVERITIES.map(s =>
 					item(`toggle-severity-${s}`, {
-						label: `${lintPrefs.severities.includes(s) ? '✓' : '　'} Show ${LINT_SEVERITY_LABEL[s]}`
+						label: `${lintPrefs.severities.includes(s) ? '✓' : '　'} ${t('Show {{severity}}', {
+							severity: t(LINT_SEVERITY_LABEL[s])
+						})}`
 					})
 				),
 				...(lintPrefs.muted.length === 0
-					? [{ label: 'Nothing ignored', separated: true, disabled: true, onSelect: () => undefined }]
+					? [{ label: t('Nothing ignored'), separated: true, disabled: true, onSelect: () => undefined }]
 					: [
 							{
-								label: `Ignored (${lintPrefs.muted.length}) — pick one to restore`,
+								label: t('Ignored ({{count}}) — pick one to restore', {
+									count: lintPrefs.muted.length
+								}),
 								separated: true,
 								disabled: true,
 								onSelect: () => undefined
@@ -1514,7 +1598,7 @@ export default function Workspace({
 									updateLintPrefs({ ...lintPrefs, muted: lintPrefs.muted.filter(c => c !== code) })
 							})),
 							{
-								label: 'Stop ignoring everything',
+								label: t('Stop ignoring everything'),
 								separated: true,
 								onSelect: () => updateLintPrefs({ ...lintPrefs, muted: [] })
 							}
@@ -1522,7 +1606,7 @@ export default function Workspace({
 			]
 		},
 		{
-			label: 'Preferences',
+			label: t('Preferences'),
 			items: [item('open-prefs'), item('open-hotkeys'), item('show-all-tabs', { separated: true })]
 		}
 	];
@@ -1615,7 +1699,7 @@ export default function Workspace({
 										className={`ss-ed-tabitem${f === selected ? ' ss-ed-tabitem-active' : ''}${
 											f === previewTab ? ' ss-ed-tabitem-preview' : ''
 										}`}
-										title={f === previewTab ? `${f} — preview; double-click to keep open` : f}
+										title={f === previewTab ? t('{{file}} — preview; double-click to keep open', { file: f }) : f}
 										onDoubleClick={() => pinTab(f)}
 										onMouseDown={e => {
 											// Activating a tab from a browser view also returns to the editor.
@@ -1639,7 +1723,7 @@ export default function Workspace({
 										{dirtyFiles.has(f) && <span className="ss-ed-tabdirty">•</span>}
 										<button
 											className="ss-ed-tabclose"
-											aria-label={`Close ${f}`}
+											aria-label={t('Close {{file}}', { file: f })}
 											onMouseDown={e => e.stopPropagation()}
 											onClick={() => void closeTab(f)}
 										>
@@ -1663,7 +1747,7 @@ export default function Workspace({
 									void closeTab(tabMenu.file);
 								}}
 							>
-								Close
+								{t('Close')}
 							</button>
 							<button
 								className="ss-menu-item"
@@ -1673,7 +1757,7 @@ export default function Workspace({
 									void closeTabs(tabs.filter(f => f !== tabMenu.file));
 								}}
 							>
-								Close all except this one
+								{t('Close all except this one')}
 							</button>
 							<button
 								className="ss-menu-item"
@@ -1683,7 +1767,7 @@ export default function Workspace({
 									void closeTabs(tabs.slice(0, tabs.indexOf(tabMenu.file)));
 								}}
 							>
-								Close all to the left
+								{t('Close all to the left')}
 							</button>
 							<button
 								className="ss-menu-item"
@@ -1693,7 +1777,7 @@ export default function Workspace({
 									void closeTabs(tabs.slice(tabs.indexOf(tabMenu.file) + 1));
 								}}
 							>
-								Close all to the right
+								{t('Close all to the right')}
 							</button>
 							<div className="ss-menu-sep" />
 							<button
@@ -1703,7 +1787,7 @@ export default function Workspace({
 									void closeTabs([...tabs]);
 								}}
 							>
-								Close all
+								{t('Close all')}
 							</button>
 						</div>
 					)}
@@ -1730,7 +1814,7 @@ export default function Workspace({
 								onToast={showToast}
 							/>
 						) : (
-							<div className="mx-empty">Select a monster</div>
+							<div className="mx-empty">{t('Select a monster')}</div>
 						)
 					) : view === 'items' ? (
 						<>
@@ -1759,17 +1843,17 @@ export default function Workspace({
 								})}
 								onContextMenu={itemContextMenu}
 								onPick={i => addToTray([i])}
-								searchPlaceholder="Search server id or name"
+								searchPlaceholder={t('Search server id or name')}
 							/>
 							<div className="ss-loot-tray">
 								<div className="ss-loot-tray-head">
-									Loot
+									{t('Loot')}
 									{lootTray.length > 0 && <span className="ss-nav-meta">{lootTray.length}</span>}
 								</div>
 								<div className="ss-loot-tray-items">
 									{lootTray.length === 0 ? (
 										<span className="ss-loot-tray-empty">
-											Right-click selected items above to add them here.
+											{t('Right-click selected items above to add them here.')}
 										</span>
 									) : (
 										lootTray.map(i => (
@@ -1790,40 +1874,40 @@ export default function Workspace({
 										onClick={addTrayToMonster}
 									>
 										<Plus size={14} />
-										{doc ? `Add loot to ${doc.name}` : 'Add loot'}
+										{doc ? t('Add loot to {{monster}}', { monster: doc.name }) : t('Add loot')}
 									</button>
 									<button
 										className="ss-btn"
 										disabled={lootTray.length === 0}
 										onClick={() => void clearTray()}
-										title="Clear the Loot section"
+										title={t('Clear the Loot section')}
 									>
 										<Trash2 size={14} />
-										Clear
+										{t('Clear')}
 									</button>
 									{/* Presets sit beside the tray because they are the tray:
 									    saving one is naming what is already collected. */}
 									<button
 										className="ss-btn"
 										disabled={lootTray.length === 0}
-										title="Save this tray under a name"
+										title={t('Save this tray under a name')}
 										onClick={() => setPresetName(`Preset ${presets.length + 1}`)}
 									>
 										<Bookmark size={14} />
-										Save preset
+										{t('Save preset')}
 									</button>
 									<select
 										className="ss-ed-input mx-preset-pick"
 										value=""
 										disabled={presets.length === 0}
-										title={presets.length === 0 ? 'No presets saved yet' : 'Load a preset into the tray'}
+										title={presets.length === 0 ? t('No presets saved yet') : t('Load a preset into the tray')}
 										onChange={e => {
 											const p = presets.find(x => x.name === e.target.value);
 											if (p) loadPresetToTray(p);
 										}}
 									>
 										<option value="">
-											{presets.length === 0 ? 'No presets' : `Presets (${presets.length})`}
+											{presets.length === 0 ? t('No presets') : t('Presets ({{count}})', { count: presets.length })}
 										</option>
 										{presets.map(p => (
 											<option key={p.name} value={p.name}>
@@ -1834,7 +1918,7 @@ export default function Workspace({
 									{presets.length > 0 && (
 										<button
 											className="ss-btn ss-btn-ghost"
-											title="Delete a preset"
+											title={t('Delete a preset')}
 											onClick={() => setPresetManage(true)}
 										>
 											<Trash2 size={14} />
@@ -1856,7 +1940,7 @@ export default function Workspace({
 										}}
 									>
 										<Package size={14} />
-										Add {itemMenu.items.length === 1 ? 'item' : `${itemMenu.items.length} items`} to Loot
+										{t('Add {{count}} item to Loot', { count: itemMenu.items.length })}
 									</button>
 									<button
 										className="ss-menu-item"
@@ -1866,7 +1950,7 @@ export default function Workspace({
 										}}
 									>
 										<Users size={14} />
-										Used by…
+										{t('Used by…')}
 									</button>
 									<button
 										className="ss-menu-item"
@@ -1876,33 +1960,33 @@ export default function Workspace({
 										}}
 									>
 										<Star size={14} />
-										{itemMenu.items.every(i => favourites.has(i.serverId)) ? 'Remove' : 'Add'}{' '}
-										{itemMenu.items.length === 1 ? 'item' : `${itemMenu.items.length} items`}{' '}
-										{itemMenu.items.every(i => favourites.has(i.serverId)) ? 'from' : 'to'} favourites
+										{itemMenu.items.every(i => favourites.has(i.serverId))
+											? t('Remove {{count}} item from favourites', { count: itemMenu.items.length })
+											: t('Add {{count}} item to favourites', { count: itemMenu.items.length })}
 									</button>
 									<button
 										className="ss-menu-item"
 										// Same gate as the Tools menu: the scaler rewrites files from
 										// what is on disk, so an unsaved buffer would be overwritten.
 										disabled={dirty}
-										title={dirty ? 'Save the open monster first' : undefined}
+										title={dirty ? t('Save the open monster first') : undefined}
 										onClick={() => {
 											setItemMenu(null);
 											setScaling({ itemId: itemMenu.item.serverId });
 										}}
 									>
 										<Percent size={14} />
-										Scale drop chance…
+										{t('Scale drop chance…')}
 									</button>
 									<button
 										className="ss-menu-item"
 										onClick={() => {
 											setItemMenu(null);
 											void navigator.clipboard.writeText(String(itemMenu.item.serverId));
-											showToast('ok', `Copied ${itemMenu.item.serverId}`);
+											showToast('ok', t('Copied {{value}}', { value: itemMenu.item.serverId }));
 										}}
 									>
-										Copy id {itemMenu.item.serverId}
+										{t('Copy id {{id}}', { id: itemMenu.item.serverId })}
 									</button>
 									<button
 										className="ss-menu-item"
@@ -1910,10 +1994,10 @@ export default function Workspace({
 										onClick={() => {
 											setItemMenu(null);
 											void navigator.clipboard.writeText(itemMenu.item.name);
-											showToast('ok', `Copied "${itemMenu.item.name}"`);
+											showToast('ok', t('Copied “{{value}}”', { value: itemMenu.item.name }));
 										}}
 									>
-										Copy name
+										{t('Copy name')}
 									</button>
 									{doc && (
 										<>
@@ -1925,8 +2009,10 @@ export default function Workspace({
 												}}
 											>
 												<Plus size={14} />
-												Add {itemMenu.items.length === 1 ? 'item' : `${itemMenu.items.length} items`} to
-												loot for {doc.name}
+												{t('Add {{count}} item to loot for {{monster}}', {
+													count: itemMenu.items.length,
+													monster: doc.name
+												})}
 											</button>
 											<div className="ss-menu-sep" />
 											<button
@@ -1937,7 +2023,7 @@ export default function Workspace({
 												}}
 											>
 												<Skull size={14} />
-												Set as corpse for {doc.name}
+												{t('Set as corpse for {{monster}}', { monster: doc.name })}
 											</button>
 											<button
 												className="ss-menu-item"
@@ -1947,7 +2033,7 @@ export default function Workspace({
 												}}
 											>
 												<PersonStanding size={14} />
-												Set as outfit (typeex) for {doc.name}
+												{t('Set as outfit (typeex) for {{monster}}', { monster: doc.name })}
 											</button>
 										</>
 									)}
@@ -1997,7 +2083,7 @@ export default function Workspace({
 										? (t, e) => thingContextMenu(t, e, view === 'effects' ? 'effect' : 'missile')
 										: undefined
 							}
-							searchPlaceholder="Search client id or name"
+							searchPlaceholder={t('Search client id or name')}
 						/>
 					)}
 					{outfitMenu && (
@@ -2015,7 +2101,7 @@ export default function Workspace({
 									}}
 								>
 									<PersonStanding size={14} />
-									Set as outfit for {doc.name}
+									{t('Set as outfit for {{monster}}', { monster: doc.name })}
 								</button>
 							)}
 							<button
@@ -2023,10 +2109,10 @@ export default function Workspace({
 								onClick={() => {
 									setOutfitMenu(null);
 									void navigator.clipboard.writeText(String(outfitMenu.thing.id));
-									showToast('ok', `Copied ${outfitMenu.thing.id}`);
+									showToast('ok', t('Copied {{value}}', { value: outfitMenu.thing.id }));
 								}}
 							>
-								Copy id {outfitMenu.thing.id}
+								{t('Copy id {{id}}', { id: outfitMenu.thing.id })}
 							</button>
 						</div>
 					)}
@@ -2036,26 +2122,40 @@ export default function Workspace({
 							style={{ left: thingMenu.x, top: thingMenu.y }}
 							onMouseDown={e => e.stopPropagation()}
 						>
+							{/* `kind` is a wire value, so it picks between two whole messages
+							    rather than being dropped into one as an English noun. */}
 							<div className="ss-menu-head">
-								Set {thingMenu.entry?.label ?? thingMenu.label} as {thingMenu.kind} for…
+								{thingMenu.kind === 'effect'
+									? t('Set {{thing}} as the effect for…', {
+											thing: thingMenu.entry ? t(thingMenu.entry.label) : thingMenu.label
+										})
+									: t('Set {{thing}} as the missile for…', {
+											thing: thingMenu.entry ? t(thingMenu.entry.label) : thingMenu.label
+										})}
 							</div>
 							{!thingMenu.entry ? (
-								<div className="ss-menu-note">This {thingMenu.kind} has no XML name — it cannot be used from a monster file.</div>
+								<div className="ss-menu-note">
+									{thingMenu.kind === 'effect'
+										? t('This effect has no XML name — it cannot be used from a monster file.')
+										: t('This missile has no XML name — it cannot be used from a monster file.')}
+								</div>
 							) : !doc ? (
-								<div className="ss-menu-note">No monster open.</div>
+								<div className="ss-menu-note">{t('No monster open.')}</div>
 							) : spellTargets.length === 0 ? (
-								<div className="ss-menu-note">{doc.name} has no spells that take effects.</div>
+								<div className="ss-menu-note">
+									{t('{{monster}} has no spells that take effects.', { monster: doc.name })}
+								</div>
 							) : (
-								spellTargets.map(t => (
+								spellTargets.map(target => (
 									<button
-										key={`${t.list}-${t.i}`}
+										key={`${target.list}-${target.i}`}
 										className="ss-menu-item"
 										onClick={() => {
 											setThingMenu(null);
-											setSpellEffect(t.list, t.i, thingMenu.kind, thingMenu.entry!);
+											setSpellEffect(target.list, target.i, thingMenu.kind, thingMenu.entry!);
 										}}
 									>
-										{t.label}
+										{target.label}
 									</button>
 								))
 							)}
@@ -2095,7 +2195,7 @@ export default function Workspace({
 				<span className="mx-status-file mono">{doc?.file ?? ''}</span>
 				<button className="ss-btn ss-btn-primary" disabled={!doc || saving} onClick={() => void save()}>
 					<Save size={14} />
-					{saving ? 'Saving…' : activeDirty ? 'Save •' : 'Save'}
+					{saving ? t('Saving…') : activeDirty ? `${t('Save')} •` : t('Save')}
 				</button>
 			</div>
 
@@ -2104,13 +2204,17 @@ export default function Workspace({
 					<div className="ss-modal ss-usage-modal" onMouseDown={e => e.stopPropagation()}>
 						<div className="ss-modal-title">
 							<img src={itemUrl(usageDialog.item.serverId, 32)} width={32} height={32} alt="" />
-							Used by — {usageDialog.item.name || `#${usageDialog.item.serverId}`}
+							{t('Used by — {{item}}', {
+								item: usageDialog.item.name || `#${usageDialog.item.serverId}`
+							})}
 						</div>
 						{!usageDialog.usage ? (
-							<div className="ss-modal-desc">Scanning the corpus…</div>
+							<div className="ss-modal-desc">{t('Scanning the corpus…')}</div>
 						) : usageDialog.usage.loot.length + usageDialog.usage.corpse.length + usageDialog.usage.typeex.length === 0 ? (
-							<div className="ss-modal-desc">No monster references this item.</div>
+							<div className="ss-modal-desc">{t('No monster references this item.')}</div>
 						) : (
+							// The English title doubles as the React key; only the display
+							// goes through t().
 							(
 								[
 									['Dropped as loot', usageDialog.usage.loot],
@@ -2122,7 +2226,7 @@ export default function Workspace({
 									refs.length > 0 && (
 										<div key={title} className="ss-usage-group">
 											<div className="ss-usage-title">
-												{title} · {refs.length}
+												{t(title)} · {refs.length}
 											</div>
 											<div className="ss-usage-list">
 												{refs.map(r => (
@@ -2147,7 +2251,7 @@ export default function Workspace({
 						)}
 						<div className="ss-modal-buttons">
 							<button className="ss-btn ss-btn-ghost" onClick={() => setUsageDialog(null)}>
-								Close
+								{t('Close')}
 							</button>
 						</div>
 					</div>
@@ -2157,13 +2261,13 @@ export default function Workspace({
 			{presetName !== null && (
 				<div className="ss-backdrop" onMouseDown={() => setPresetName(null)}>
 					<div className="ss-modal" onMouseDown={e => e.stopPropagation()}>
-						<div className="ss-modal-title">Save loot preset</div>
+						<div className="ss-modal-title">{t('Save loot preset')}</div>
 						<div className="ss-modal-desc">
-							{lootTray.length} {lootTray.length === 1 ? 'item' : 'items'} in the tray. An existing name is
-							overwritten.
+							{t('{{count}} item in the tray.', { count: lootTray.length })}{' '}
+							{t('An existing name is overwritten.')}
 						</div>
 						<div className="ss-field-row">
-							<label className="ss-field-label">Name</label>
+							<label className="ss-field-label">{t('Name')}</label>
 							<input
 								className="ss-field"
 								autoFocus
@@ -2178,7 +2282,7 @@ export default function Workspace({
 						</div>
 						<div className="ss-modal-buttons">
 							<button className="ss-btn ss-btn-ghost" onClick={() => setPresetName(null)}>
-								Cancel
+								{t('Cancel')}
 							</button>
 							<div className="ss-modal-buttons-spacer" />
 							<button
@@ -2186,7 +2290,7 @@ export default function Workspace({
 								disabled={!presetName.trim()}
 								onClick={() => savePreset(presetName)}
 							>
-								Save
+								{t('Save')}
 							</button>
 						</div>
 					</div>
@@ -2196,37 +2300,39 @@ export default function Workspace({
 			{presetManage && (
 				<div className="ss-backdrop" onMouseDown={() => setPresetManage(false)}>
 					<div className="ss-modal mx-pin-modal" onMouseDown={e => e.stopPropagation()}>
-						<div className="ss-modal-title">Loot presets</div>
+						<div className="ss-modal-title">{t('Loot presets')}</div>
 						<div className="mx-pin-list">
 							{presets.map(p => (
 								<div className="mx-preset-row" key={p.name}>
 									<span className="mx-preset-name">{p.name}</span>
-									<span className="ss-ed-field-note">{p.ids.length} items</span>
+									<span className="ss-ed-field-note">
+										{t('{{count}} item', { count: p.ids.length })}
+									</span>
 									<button
 										className="ss-btn ss-btn-ghost ss-ed-mini"
-										title="Load into the tray"
+										title={t('Load into the tray')}
 										onClick={() => {
 											loadPresetToTray(p);
 											setPresetManage(false);
 										}}
 									>
-										Load
+										{t('Load')}
 									</button>
 									<button
 										className="ss-btn ss-btn-ghost ss-ed-mini"
-										title={`Delete “${p.name}”`}
+										title={t('Delete “{{name}}”', { name: p.name })}
 										onClick={() => deletePreset(p.name)}
 									>
 										<Trash2 size={13} />
 									</button>
 								</div>
 							))}
-							{presets.length === 0 && <div className="ss-ed-empty">No presets left.</div>}
+							{presets.length === 0 && <div className="ss-ed-empty">{t('No presets left.')}</div>}
 						</div>
 						<div className="ss-modal-buttons">
 							<div className="ss-modal-buttons-spacer" />
 							<button className="ss-btn ss-btn-primary" onClick={() => setPresetManage(false)}>
-								Done
+								{t('Done')}
 							</button>
 						</div>
 					</div>
@@ -2288,12 +2394,7 @@ export default function Workspace({
 						onMonstersChanged(null);
 						lintWorkspace().then(setWorkspaceLints).catch(() => {});
 						setReloadKey(k => k + 1);
-						showToast(
-							'ok',
-							`Changed ${report.changed.toLocaleString()} ${
-								report.changed === 1 ? 'monster' : 'monsters'
-							}`
-						);
+						showToast('ok', t('Changed {{count}} monster', { count: report.changed }));
 					}}
 				/>
 			)}
@@ -2309,9 +2410,10 @@ export default function Workspace({
 						setReloadKey(k => k + 1);
 						showToast(
 							'ok',
-							`Scaled ${report.entries.toLocaleString()} loot ${report.entries === 1 ? 'chance' : 'chances'} across ${
-								report.files
-							} ${report.files === 1 ? 'file' : 'files'}`
+							t('Scaled {{count}} loot chance across {{files}}', {
+								count: report.entries,
+								files: t('{{count}} file', { count: report.files })
+							})
 						);
 					}}
 				/>
@@ -2326,12 +2428,12 @@ export default function Workspace({
 						onMonstersChanged(null);
 						lintWorkspace().then(setWorkspaceLints).catch(() => {});
 						setReloadKey(k => k + 1);
-						const n = report.pinned.length + report.named.length;
 						showToast(
 							'ok',
-							`Pinned ${n} loot ${n === 1 ? 'entry' : 'entries'} across ${report.files} ${
-								report.files === 1 ? 'file' : 'files'
-							}`
+							t('Pinned {{count}} loot entry across {{files}}', {
+								count: report.pinned.length + report.named.length,
+								files: t('{{count}} file', { count: report.files })
+							})
 						);
 					}}
 				/>

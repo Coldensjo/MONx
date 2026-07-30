@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { t } from 'i18next';
 import { loadSetting } from './settings';
 import { percentText } from './sections/Loot';
 
@@ -181,17 +182,21 @@ export function formatWhen(iso: string): string {
 	return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
-/** "3 days ago" — how a cut-off point is worth reading at a glance. */
+/** "3 days ago" — how a cut-off point is worth reading at a glance.
+ *
+ *  Not a component, so it uses i18next's module-level `t`. Every caller renders
+ *  inside a tree that subscribes with useTranslation(), so switching language
+ *  re-runs this rather than leaving a stale phrase behind. */
 export function relativeWhen(iso: string): string {
 	const then = new Date(iso).getTime();
 	if (Number.isNaN(then)) return '';
 	const mins = Math.floor((Date.now() - then) / 60000);
-	if (mins < 1) return 'just now';
-	if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+	if (mins < 1) return t('just now');
+	if (mins < 60) return t('{{count}} minute ago', { count: mins });
 	const hours = Math.floor(mins / 60);
-	if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+	if (hours < 24) return t('{{count}} hour ago', { count: hours });
 	const days = Math.floor(hours / 24);
-	return `${days} day${days === 1 ? '' : 's'} ago`;
+	return t('{{count}} day ago', { count: days });
 }
 
 const HEADINGS: Record<ChangeKind, string> = {
