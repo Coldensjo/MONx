@@ -55,6 +55,14 @@ pub struct Thing {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     pub is_outfit: bool,
+    /// Frames belonging to the idle group, when the version splits an outfit
+    /// into idle and walking groups (10.50+). Zero means no split: one animator
+    /// over the whole strip, which is every version before that.
+    pub idle_frames: u8,
+    /// Milliseconds each frame is held, in frame order. Only 10.50+ states
+    /// them; earlier versions leave this empty and run at a fixed tick.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub durations: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -680,13 +688,17 @@ impl<'a> DatReader<'a> {
             let pattern_z = if self.version > 750 { self.read_u8()? } else { 1 };
             let frames = self.read_u8()?;
 
+            let mut durations: Vec<u32> = Vec::new();
             if frames > 1 && self.frame_durations {
                 self.read_u8()?; // animation mode
                 self.read_u32()?; // loop count
                 self.read_u8()?; // start frame
                 for _ in 0..frames {
-                    self.read_u32()?; // min duration
-                    self.read_u32()?; // max duration
+                    let min = self.read_u32()?;
+                    let max = self.read_u32()?;
+                    // The client rolls a value in the window each time it plays
+                    // the phase; a fixed-step preview can only show the middle.
+                    durations.push((min + max) / 2);
                 }
             }
 
@@ -709,22 +721,22 @@ impl<'a> DatReader<'a> {
             let id_width = if self.extended { 4 } else { 2 };
             let id_bytes = self.take(total as usize * id_width)?;
 
-            // Keep the first group (idle) as the thing's primary layout.
+            let mut sprite_index = Vec::with_capacity(total as usize);
+            if self.extended {
+                sprite_index.extend(
+                    id_bytes
+                        .chunks_exact(4)
+                        .map(|b| u32::from_le_bytes(b.try_into().unwrap())),
+                );
+            } else {
+                sprite_index.extend(
+                    id_bytes
+                        .chunks_exact(2)
+                        .map(|b| u16::from_le_bytes(b.try_into().unwrap()) as u32),
+                );
+            }
+
             if group_idx == 0 {
-                let mut sprite_index = Vec::with_capacity(total as usize);
-                if self.extended {
-                    sprite_index.extend(
-                        id_bytes
-                            .chunks_exact(4)
-                            .map(|b| u32::from_le_bytes(b.try_into().unwrap())),
-                    );
-                } else {
-                    sprite_index.extend(
-                        id_bytes
-                            .chunks_exact(2)
-                            .map(|b| u16::from_le_bytes(b.try_into().unwrap()) as u32),
-                    );
-                }
                 thing.width = width;
                 thing.height = height;
                 thing.exact_size = exact_size;
@@ -734,6 +746,40 @@ impl<'a> DatReader<'a> {
                 thing.pattern_z = pattern_z;
                 thing.frames = frames;
                 thing.sprite_index = sprite_index;
+                thing.durations = durations;
+                // Only meaningful once a second group proves this one was the
+                // idle half of a pair; left at 0 when the outfit stands alone.
+                if group_count > 1 {
+                    thing.idle_frames = frames;
+                }
+            } else if group_idx == 1 {
+                // 10.50+ splits an outfit into an idle group and a walking one.
+                // The strip the rest of MONx works with is both, concatenated:
+                // `sprite_slot` has `frame` as its slowest axis, so appending a
+                // group's sprites appends exactly its frames. Without this the
+                // walking group was read and dropped, which left every outfit
+                // on such a client frozen at its single idle pose.
+                //
+                // Only when the geometry matches — anything else would
+                // interleave two different layouts, so it keeps the idle group
+                // alone rather than drawing nonsense.
+                let same_shape = width == thing.width
+                    && height == thing.height
+                    && layers == thing.layers
+                    && pattern_x == thing.pattern_x
+                    && pattern_y == thing.pattern_y
+                    && pattern_z == thing.pattern_z;
+                if same_shape && thing.frames as u32 + frames as u32 <= u8::MAX as u32 {
+                    thing.sprite_index.extend(sprite_index);
+                    thing.frames += frames;
+                    if !thing.durations.is_empty() || !durations.is_empty() {
+                        // Keep the two halves aligned even when only one of them
+                        // states durations.
+                        thing.durations.resize(thing.idle_frames as usize, 0);
+                        thing.durations.extend(durations);
+                        thing.durations.resize(thing.frames as usize, 0);
+                    }
+                }
             }
         }
 
@@ -755,6 +801,8 @@ impl<'a> DatReader<'a> {
             props: Vec::new(),
             name: None,
             is_outfit,
+            idle_frames: 0,
+            durations: Vec::new(),
         };
         self.read_properties(&mut thing)?;
         self.read_texture_patterns(&mut thing)?;

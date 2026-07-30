@@ -35,10 +35,10 @@ No test suite, no linter config beyond TypeScript strict mode.
 `probe_monster` takes flags for each gate, and exits non-zero if any of them fails:
 
 ```sh
-cargo run --release --example probe_monster -- ../assets/monsters              # round-trip
-cargo run --release --example probe_monster -- ../assets/monsters --canonical --mutate
-cargo run --release --example probe_monster -- ../assets/monsters --lint
-cargo run --release --example probe_monster -- ../assets/monsters --crud <scratch-dir>
+cargo run --release --example probe_monster -- ../assets/Ironcore/monsters              # round-trip
+cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --canonical --mutate
+cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --lint
+cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --crud <scratch-dir>
 ```
 
 `--mutate` is the one that proves the writer is driven by the model rather than copying bytes: it edits several fields in every file, writes, re-reads, and checks the document that comes back is the one that went in. It also budgets the diff — a handful of field edits that rewrite more than 12 lines fail, because the writer is meant to splice. A change that *inserts or removes* a node moves every line under it and can never meet that budget, so it belongs in a pass of its own (see `voice_extras_survive`). Add `--verbose` to any of them to list every finding.
@@ -46,20 +46,20 @@ cargo run --release --example probe_monster -- ../assets/monsters --crud <scratc
 `--engine <key>` picks the profile (`ironcore`, `tfs`, `tvp`, `nostalrius`, `canary`, `blacktek`); without it the corpus is sniffed exactly as the Landing dialog sniffs it, and the guess is printed. **Run every gate against all six engines' own corpora when touching the reader, writer or a profile** — an over-declared `known_attrs` drops data, and `--mutate` is the only thing that catches it:
 
 ```sh
+cargo run --release --example probe_monster -- ../assets/TVP/monster        --engine tvp        --mutate
+cargo run --release --example probe_monster -- ../assets/Nostalrius/monster --engine nostalrius --mutate
+cargo run --release --example probe_monster -- ../assets/Canary/monster     --engine canary     --mutate
+cargo run --release --example probe_monster -- ../assets/BlackTek/monster   --engine blacktek   --mutate
 cargo run --release --example probe_monster -- ../sources/forgottenserver-master/data/monster --engine tfs --mutate
-cargo run --release --example probe_monster -- ../sources/TVP-main/data/monster --engine tvp --mutate
-cargo run --release --example probe_monster -- ../sources/Nostalrius-master/data/monster --engine nostalrius --mutate
-cargo run --release --example probe_monster -- ../sources/canary-main/data-otservbr-global/monster --engine canary --mutate
-cargo run --release --example probe_monster -- ../sources/BlackTek-Server-master/data/scripts/monsters/monsters --engine blacktek --mutate
 ```
 
 The two Lua engines also have `probe_lua`, which tests the document layer alone — parse, write back, diff, and measure how much of each file the assignment model actually accounts for:
 
 ```sh
-cargo run --release --example probe_lua -- ../sources/canary-main/data-otservbr-global/monster
+cargo run --release --example probe_lua -- ../assets/Canary/monster
 ```
 
-Those corpora ship with the engines under `sources/`, which is gitignored — clone them there to run the foreign gates.
+`assets/` holds a workspace per engine — monsters, items, client and spells — and `sources/` the servers' own trees. Both are gitignored, so populate them locally to run the foreign gates. TFS ships no fixture in `assets/`; its corpus comes from `sources/`.
 
 ## Commands
 
@@ -192,7 +192,8 @@ src/
 src-tauri/src/         see the architecture diagram above
 src-tauri/examples/    probe.rs, probe_dat.rs, probe_monster.rs
 
-assets/                fixture workspace: monsters/, items/, client/
+assets/                fixture workspaces, one folder per engine: each has
+                       monster(s)/, items/, client/, spells/
 ```
 
 ## Domain knowledge

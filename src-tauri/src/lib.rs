@@ -127,19 +127,22 @@ fn get_things(
             animate_always: dat::thing_animate_always(t),
             prop_names: t.props.iter().map(|p| p.name.clone()).collect(),
             name: t.name.clone(),
-            frame_durations: Vec::new(),
-            // The `.dat` has no groups: frame 0 is the standing pose and the
-            // rest are the walk — except under `animateAlways`, where the whole
-            // strip is one idle animation and there is no walk at all.
-            idle_frames: if dat::thing_animate_always(t) {
-                t.frames
-            } else {
-                t.frames.min(1)
+            frame_durations: t.durations.clone(),
+            // From 10.50 an outfit really does carry an idle group and a
+            // walking one, and `dat.rs` concatenates them into one strip — so
+            // the split is known rather than assumed. Before that there is one
+            // animator: frame 0 stands and the rest walk, except under
+            // `animateAlways`, where the whole strip is the idle animation and
+            // nothing walks.
+            idle_frames: match (t.idle_frames, dat::thing_animate_always(t)) {
+                (0, true) => t.frames,
+                (0, false) => t.frames.min(1),
+                (idle, _) => idle,
             },
-            walk_frames: if dat::thing_animate_always(t) {
-                0
-            } else {
-                t.frames
+            walk_frames: match (t.idle_frames, dat::thing_animate_always(t)) {
+                (0, true) => 0,
+                (0, false) => t.frames,
+                (idle, _) => t.frames.saturating_sub(idle),
             },
         })
         .collect())

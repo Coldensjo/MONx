@@ -657,6 +657,16 @@ it read 26,282 items, 903 outfits, 175 effects and 54 missiles on the first try,
 1098 `Tibia.spr` supplies the pixels. Two lines in `open_workspace` were the whole change:
 prefer an `assets.dat` sitting in the items folder over a `.dat` in the client folder.
 
+One thing about it did need work, and it was in the inherited reader rather than in BlackTek.
+**From 10.50 the `.dat` splits an outfit into an idle frame group and a walking one**, exactly
+as the modern bundle does, and `dat.rs` read the second group and threw it away — the comment
+said "keep the first group (idle) as the thing's primary layout". On an 8.0 client that costs
+nothing, because there is only ever one group. On BlackTek's 10.98 it left every outfit at
+`frames = 1`: not animating slowly, not animating at all. They are now concatenated into one
+strip, which `sprite_slot` accepts unchanged since `frame` is its slowest axis, and outfit 3
+goes from 1 frame to 9. The same block was discarding the per-frame durations that version
+states, so BlackTek's effects ran at the fixed tick too; 602 of them are 100 ms and 174 are 40.
+
 `items.toml` is the item database, and it is a narrow enough subset of TOML — `[[items]]`
 tables of scalar keys — that a hand-rolled reader beside the existing `items.xml` one was
 smaller than a dependency. It carries **no `clientId` key at all**, in any of its 21,881
