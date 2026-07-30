@@ -3,6 +3,8 @@ pub mod dat;
 pub mod engine;
 pub mod items;
 pub mod lint;
+pub mod luadoc;
+pub mod monster_lua;
 pub mod monster;
 pub mod otb;
 mod protocol;
@@ -138,6 +140,12 @@ fn probe_workspace(paths: WorkspacePaths) -> Result<WorkspaceProbe, String> {
     Ok(workspace::probe(&paths))
 }
 
+/// A path for the wire, or the empty string when the slot is unset — the
+/// frontend treats empty as "absent" throughout.
+fn path_string(p: Option<&std::path::Path>) -> String {
+    p.map(|p| p.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
 #[tauri::command]
 fn open_workspace(
     state: State<WorkspaceState>,
@@ -147,33 +155,49 @@ fn open_workspace(
 ) -> Result<WorkspaceInfo, String> {
     let monsters_dir = workspace::resolve_folder(&paths.monsters)
         .ok_or_else(|| format!("Not a folder: {}", paths.monsters))?;
-    let items_dir = workspace::resolve_folder(&paths.items)
-        .ok_or_else(|| format!("Not a folder: {}", paths.items))?;
-    let client_dir = workspace::resolve_folder(&paths.client)
-        .ok_or_else(|| format!("Not a folder: {}", paths.client))?;
 
-    let dat_path = workspace::find_by_ext(&client_dir, "dat")
-        .ok_or_else(|| format!("No .dat file in {}", client_dir.display()))?;
-    let spr_path = workspace::find_by_ext(&client_dir, "spr")
-        .ok_or_else(|| format!("No .spr file in {}", client_dir.display()))?;
+    // Only the monsters folder is required. Canary and BlackTek ship neither
+    // `items.otb` nor a `.spr`/`.dat` pair — their items live in a modern asset
+    // bundle MONx cannot read — so demanding those would make their corpora
+    // unopenable for the sake of previews. Without them the editor still reads,
+    // lints and writes monsters; it just cannot draw them or name a loot id.
+    let items_dir = workspace::resolve_folder(&paths.items);
+    let client_dir = workspace::resolve_folder(&paths.client);
+    let dat_path = client_dir
+        .as_deref()
+        .and_then(|d| workspace::find_by_ext(d, "dat"));
+    let spr_path = client_dir
+        .as_deref()
+        .and_then(|d| workspace::find_by_ext(d, "spr"));
 
     // The sibling `.otfi` carries two separate hints: `extended` selects the
     // SPR header layout, `transparency` selects 3- vs 4-channel decompression.
     // They are not interchangeable — every later composition call has to be
     // handed the same `transparency` or the pixel stream decodes to nothing.
-    let otfi = dat::find_otfi(&dat_path.to_string_lossy());
-    let extended = otfi.as_ref().and_then(|o| o.extended);
-    let transparent = otfi.as_ref().and_then(|o| o.transparency).unwrap_or(false);
-    let spr_info = {
-        let mut manager = spr_state.write().map_err(|e| format!("lock: {e}"))?;
-        manager.open_file(spr_path.to_string_lossy().into_owned(), extended)?
-    };
-    {
+    let mut transparent = false;
+    let mut sprite_count = 0u32;
+    if let (Some(dat_path), Some(spr_path)) = (dat_path.as_ref(), spr_path.as_ref()) {
+        let otfi = dat::find_otfi(&dat_path.to_string_lossy());
+        let extended = otfi.as_ref().and_then(|o| o.extended);
+        transparent = otfi.as_ref().and_then(|o| o.transparency).unwrap_or(false);
+        let spr_info = {
+            let mut manager = spr_state.write().map_err(|e| format!("lock: {e}"))?;
+            manager.open_file(spr_path.to_string_lossy().into_owned(), extended)?
+        };
+        sprite_count = spr_info.sprite_count;
         let mut manager = dat_state.write().map_err(|e| format!("lock: {e}"))?;
         manager.open_file(dat_path.to_string_lossy().into_owned(), None)?;
     }
 
-    let index = items::ItemIndex::load(&items_dir)?;
+    // An unreadable or absent items folder is a degraded workspace, not a
+    // failed one: loot ids stay numbers and the lints that need the database
+    // stand down.
+    let index = items_dir
+        .as_deref()
+        .map(items::ItemIndex::load)
+        .transpose()
+        .unwrap_or_default()
+        .unwrap_or_default();
 
     // The engine is settled once, here, and everything downstream reads it off
     // the workspace. An explicit key from the Landing picker wins; otherwise the
@@ -205,8 +229,8 @@ fn open_workspace(
     let info = WorkspaceInfo {
         paths: WorkspacePaths {
             monsters: monsters_dir.to_string_lossy().into_owned(),
-            items: items_dir.to_string_lossy().into_owned(),
-            client: client_dir.to_string_lossy().into_owned(),
+            items: path_string(items_dir.as_deref()),
+            client: path_string(client_dir.as_deref()),
             spells: paths.spells.clone(),
             engine: Some(profile.key.to_string()),
         },
@@ -218,9 +242,9 @@ fn open_workspace(
         orphan_count,
         item_count: index.len() as u32,
         otb_version: index.otb_version.clone(),
-        spr_path: spr_path.to_string_lossy().into_owned(),
-        dat_path: dat_path.to_string_lossy().into_owned(),
-        sprite_count: spr_info.sprite_count,
+        spr_path: path_string(spr_path.as_deref()),
+        dat_path: path_string(dat_path.as_deref()),
+        sprite_count,
         transparent,
         lints,
     };

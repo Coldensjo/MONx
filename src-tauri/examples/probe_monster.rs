@@ -69,8 +69,7 @@ fn main() {
             })
         })
         .unwrap_or_else(|| {
-            let mut files = monster::monster_files(&engine::TFS, &dir);
-            files.truncate(24);
+            let files = monster::candidate_files(&dir, 24);
             let samples: Vec<Vec<u8>> = files.iter().filter_map(|p| std::fs::read(p).ok()).collect();
             let d = engine::detection(engine::detect(&samples));
             let p = engine::by_key(&d.best).unwrap_or_else(engine::default_profile);
@@ -116,6 +115,14 @@ fn main() {
         match monster::read_file_keyed(profile, path, &name, registered) {
             Err(e) => failed.push((name, e)),
             Ok(parsed) => {
+                // Helper scripts that live beside the monsters define none; the
+                // corpus reader skips them and so does this.
+                if parsed
+                    .lua()
+                    .is_some_and(|l| l.assignments.is_empty() && l.type_name.is_none())
+                {
+                    continue;
+                }
                 parsed_ok += 1;
                 if want_lint {
                     source_lints.extend(lint::lint_source(profile, &parsed));
@@ -375,13 +382,17 @@ fn first_doc_difference(a: &monster::MonsterDoc, b: &monster::MonsterDoc) -> Opt
 /// corpus: saving an untouched document must not change the file on disk, the
 /// original must land in `.monx-backup`, and create/duplicate/rename/delete
 /// must each leave the folder and `monsters.xml` consistent.
-fn copy_tree(source: &Path, target: &Path) -> Result<(), String> {
+fn copy_tree(source: &Path, target: &Path, ext: &str) -> Result<(), String> {
     std::fs::create_dir_all(target).map_err(|e| e.to_string())?;
     for entry in std::fs::read_dir(source).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            copy_tree(&path, &target.join(entry.file_name()))?;
-        } else if path.extension().and_then(|s| s.to_str()) == Some("xml") {
+            copy_tree(&path, &target.join(entry.file_name()), ext)?;
+        } else if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.eq_ignore_ascii_case(ext) || s.eq_ignore_ascii_case("xml"))
+        {
             std::fs::copy(&path, target.join(entry.file_name())).map_err(|e| e.to_string())?;
         }
     }
@@ -400,7 +411,7 @@ fn crud_check(
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     // Mirror the tree, not just the top level: on the nested corpora every
     // monster lives in a subfolder and a flat copy would leave nothing to test.
-    copy_tree(source, &work)?;
+    copy_tree(source, &work, profile.extension)?;
 
     let registry = Registry::load(&work.join("monsters.xml"));
     let files = monster::monster_files(profile, &work);
@@ -439,12 +450,16 @@ fn crud_check(
 
     // 4. Create, duplicate, rename, delete — each with the registry in step.
     let registry = Registry::load(&work.join("monsters.xml"));
-    monster::create(profile, &work, &registry, "Probe Subject", "probesubject.xml", "wrecks")?;
-    if !work.join("probesubject.xml").is_file() {
+    // The extension is the profile's, so take the path from the document
+    // rather than assuming .xml.
+    let created = monster::create(profile, &work, &registry, "Probe Subject", "probesubject", "wrecks")?.file;
+    if !work.join(&created).is_file() {
         return Err("create did not write a file".into());
     }
+    // The Lua engines autoload every script, so there is no registry to keep
+    // in step and nothing to assert about one.
     let registry = Registry::load(&work.join("monsters.xml"));
-    if !registry.has_name("Probe Subject") {
+    if profile.has_registry && !registry.has_name("Probe Subject") {
         return Err("create did not register the monster".into());
     }
 
@@ -466,14 +481,14 @@ fn crud_check(
         &registry,
         &copy_key,
         "Probe Renamed",
-        "probrenamed.xml",
+        "probrenamed",
     )?
     .file;
     if work.join(&copy_key).exists() || !work.join(&renamed_key).is_file() {
         return Err("rename left the old file behind".into());
     }
     let registry = Registry::load(&work.join("monsters.xml"));
-    if !registry.has_name("Probe Renamed") || registry.has_name("Probe Copy") {
+    if profile.has_registry && (!registry.has_name("Probe Renamed") || registry.has_name("Probe Copy")) {
         return Err("rename did not update monsters.xml".into());
     }
 
@@ -489,7 +504,7 @@ fn crud_check(
     // 5. The registry survived all of that as valid, parseable XML with only
     //    the entries we meant to change.
     let final_registry = Registry::load(&work.join("monsters.xml"));
-    if final_registry.is_empty() {
+    if profile.has_registry && final_registry.is_empty() {
         return Err("monsters.xml was destroyed".into());
     }
 
@@ -548,16 +563,43 @@ fn mutation_survives(profile: &'static EngineProfile, parsed: &monster::Parsed) 
 
     let before: Vec<&[u8]> = parsed.bytes.split(|&b| b == b'\n').collect();
     let after: Vec<&[u8]> = written.split(|&b| b == b'\n').collect();
-    let changed = before
-        .iter()
-        .zip(after.iter())
-        .filter(|(a, b)| a != b)
-        .count()
-        + before.len().abs_diff(after.len());
+    let _ = (&before, &after);
+    let changed = diff_lines(&parsed.bytes, &written);
     if changed > 12 {
         return Err(format!("{changed} lines changed for a 5-field edit"));
     }
     Ok(changed)
+}
+
+/// Lines touched, counted as a real diff rather than position-by-position.
+///
+/// A positional count goes wrong the moment an edit *inserts* a line — setting
+/// a field the file did not have — because every line below it then compares
+/// unequal and a one-field edit reports as fifty. That would make the budget
+/// measure the corpus's formatting rather than the writer's locality, which is
+/// the only thing it is there to measure.
+fn diff_lines(a: &[u8], b: &[u8]) -> usize {
+    let al: Vec<&[u8]> = a.split(|&c| c == b'\n').collect();
+    let bl: Vec<&[u8]> = b.split(|&c| c == b'\n').collect();
+    // Longest common subsequence. These files are a few hundred lines, so the
+    // quadratic table is far cheaper than the confusion it prevents.
+    let (n, m) = (al.len(), bl.len());
+    let mut dp = vec![0usize; (n + 1) * (m + 1)];
+    let at = |i: usize, j: usize| i * (m + 1) + j;
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            dp[at(i, j)] = if al[i] == bl[j] {
+                dp[at(i + 1, j + 1)] + 1
+            } else {
+                dp[at(i + 1, j)].max(dp[at(i, j + 1)])
+            };
+        }
+    }
+    let common = dp[at(0, 0)];
+    // The larger side, not the sum: a substituted line is one line changed, not
+    // a deletion plus an insertion. That keeps the budget below meaning what it
+    // meant when it was written against the XML corpus.
+    (n - common).max(m - common)
 }
 
 /// `<voice pacifist=…/>` and `<voice leash=…/>` are single strings on the block,

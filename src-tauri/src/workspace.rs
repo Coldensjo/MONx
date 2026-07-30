@@ -265,39 +265,14 @@ fn detect_engine(dir: &Path) -> crate::engine::EngineDetection {
     // are trying to work out.
     let mut files = Vec::new();
     collect_xml(dir, &mut files, 0);
-    files.sort();
-    let samples: Vec<Vec<u8>> = files
-        .iter()
-        .step_by((files.len() / DETECT_SAMPLE).max(1))
-        .take(DETECT_SAMPLE)
-        .filter_map(|p| std::fs::read(p).ok())
-        .collect();
+    let samples: Vec<Vec<u8>> = files.iter().filter_map(|p| std::fs::read(p).ok()).collect();
     crate::engine::detection(crate::engine::detect(&samples))
 }
 
 fn collect_xml(dir: &Path, out: &mut Vec<PathBuf>, depth: u32) {
-    if depth > 3 {
-        return;
-    }
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_xml(&path, out, depth + 1);
-        } else if path
-            .extension()
-            .and_then(|s| s.to_str())
-            .is_some_and(|s| s.eq_ignore_ascii_case("xml"))
-            && !path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .is_some_and(|s| s.eq_ignore_ascii_case("monsters.xml"))
-        {
-            out.push(path);
-        }
-    }
+    // Both formats: which one this corpus is, is exactly what detection is for.
+    let _ = depth;
+    out.extend(crate::monster::candidate_files(dir, DETECT_SAMPLE));
 }
 
 pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {

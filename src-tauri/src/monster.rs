@@ -709,13 +709,48 @@ impl Default for Layout {
 }
 
 /// A parsed file: the model, plus everything needed to write it back exactly.
+/// The format-specific half of a parsed document. Everything above this — the
+/// model, the lints, the editor — is shared across all six engines; only the
+/// bytes are read and written two different ways.
+pub enum Body {
+    Xml {
+        layout: Layout,
+        root: Node,
+        /// Byte offset of the root element's start, so the prolog can be copied.
+        root_start: usize,
+    },
+    /// Canary and BlackTek. See `luadoc.rs` for the span model and
+    /// `monster_lua.rs` for the field mapping.
+    Lua(crate::luadoc::LuaDoc),
+}
+
 pub struct Parsed {
     pub doc: MonsterDoc,
     pub bytes: Vec<u8>,
-    pub layout: Layout,
-    pub root: Node,
-    /// Byte offset of the root element's start, so the prolog can be copied.
-    pub root_start: usize,
+    pub body: Body,
+}
+
+impl Parsed {
+    /// The XML tree, or None for a Lua document. Callers that only make sense
+    /// for XML — `lint_source`'s presence rules, chiefly — ask for it and do
+    /// nothing when it is absent, rather than assuming.
+    pub fn xml(&self) -> Option<(&Layout, &Node, usize)> {
+        match &self.body {
+            Body::Xml {
+                layout,
+                root,
+                root_start,
+            } => Some((layout, root, *root_start)),
+            Body::Lua(_) => None,
+        }
+    }
+
+    pub fn lua(&self) -> Option<&crate::luadoc::LuaDoc> {
+        match &self.body {
+            Body::Lua(d) => Some(d),
+            Body::Xml { .. } => None,
+        }
+    }
 }
 
 // ---------- Tokenising ----------
@@ -1219,6 +1254,16 @@ pub fn read_bytes(
     bytes: &[u8],
     registered: bool,
 ) -> Result<Parsed, String> {
+    // Canary and BlackTek are Lua; everything below this line is XML.
+    if profile.format == crate::engine::Format::Lua {
+        let lua = crate::luadoc::parse(bytes);
+        let doc = crate::monster_lua::to_doc(profile, file, registered, &lua);
+        return Ok(Parsed {
+            doc,
+            bytes: bytes.to_vec(),
+            body: Body::Lua(lua),
+        });
+    }
     let layout = detect_layout(bytes);
     let (root, root_start) = parse_dom(bytes, &layout)?;
 
@@ -1499,9 +1544,11 @@ pub fn read_bytes(
     Ok(Parsed {
         doc,
         bytes: bytes.to_vec(),
-        layout,
-        root,
-        root_start,
+        body: Body::Xml {
+            layout,
+            root,
+            root_start,
+        },
     })
 }
 
@@ -1817,24 +1864,34 @@ pub fn write_bytes(
     parsed: &Parsed,
     doc: &MonsterDoc,
 ) -> Vec<u8> {
+    let (layout, root, root_start) = match parsed.xml() {
+        Some(x) => x,
+        None => {
+            let lua = parsed.lua().expect("a parsed document is XML or Lua");
+            return crate::monster_lua::write(profile, lua, &parsed.doc, doc);
+        }
+    };
     let mut out = Vec::with_capacity(parsed.bytes.len() + 256);
     let w = Writer {
         profile,
         src: &parsed.bytes,
-        layout: &parsed.layout,
+        layout,
         base: &parsed.doc,
         doc,
     };
 
     // Prolog: declaration, whitespace, any leading comment — verbatim.
-    out.extend_from_slice(&parsed.bytes[..parsed.root_start]);
-    w.root(&parsed.root, &mut out);
+    out.extend_from_slice(&parsed.bytes[..root_start]);
+    w.root(root, &mut out);
     out
 }
 
 /// Renders a document from nothing, for `create_monster`. Canonical form:
 /// tabs, CRLF, the §2 node order, one attribute per flag/immunity/element node.
 pub fn write_new(profile: &'static EngineProfile, doc: &MonsterDoc) -> Vec<u8> {
+    if profile.format == crate::engine::Format::Lua {
+        return crate::monster_lua::write_new(profile, doc);
+    }
     let layout = Layout::default();
     let mut out = Vec::new();
     out.extend_from_slice(br#"<?xml version="1.0" encoding="utf-8"?>"#);
@@ -3570,6 +3627,16 @@ pub fn read_corpus(
         let name = file_key(dir, &path);
         match read_file_keyed(profile, &path, &name, registry.has_file(&name)) {
             Ok(mut parsed) => {
+                // A .lua in the monster folder that defines no monster is a
+                // helper script, not a broken monster — Canary ships several
+                // `*_functions.lua`. Listing them would put rows in the sidebar
+                // that cannot be opened or saved.
+                if parsed
+                    .lua()
+                    .is_some_and(|l| l.assignments.is_empty() && l.type_name.is_none())
+                {
+                    continue;
+                }
                 // The presence-based §24 rules can only be seen here, while the
                 // original nodes are still around.
                 lints.extend(crate::lint::lint_source(profile, &parsed));
@@ -3600,17 +3667,41 @@ pub fn file_key(dir: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
+/// Candidate monster documents of *any* supported format, for engine detection.
+///
+/// Detection cannot use `monster_files` because that already needs a profile,
+/// and which profile applies is the question being asked. This walks the tree
+/// once and takes both extensions.
+pub fn candidate_files(dir: &Path, limit: usize) -> Vec<std::path::PathBuf> {
+    let mut files = Vec::new();
+    for ext in ["xml", "lua"] {
+        collect_monster_files(dir, true, ext, &mut files);
+    }
+    files.sort();
+    // Spread the sample across the corpus rather than taking the first N. A
+    // monster folder is alphabetical, and the first two dozen files of a large
+    // one are a poor guide to the whole — TFS's leading `a_*` monsters have no
+    // <bestiary> between them, which is its single most decisive signal.
+    let step = (files.len() / limit.max(1)).max(1);
+    files.into_iter().step_by(step).take(limit).collect()
+}
+
 /// Every monster file under `dir`. Recurses only where the engine's registry
 /// actually names subfolders — walking a tree on a flat corpus would sweep in
 /// whatever else happens to live nearby.
 pub fn monster_files(profile: &EngineProfile, dir: &Path) -> Vec<std::path::PathBuf> {
     let mut files = Vec::new();
-    collect_monster_files(dir, profile.recursive_corpus, &mut files);
+    collect_monster_files(dir, profile.recursive_corpus, profile.extension, &mut files);
     files.sort();
     files
 }
 
-fn collect_monster_files(dir: &Path, recursive: bool, out: &mut Vec<std::path::PathBuf>) {
+fn collect_monster_files(
+    dir: &Path,
+    recursive: bool,
+    extension: &str,
+    out: &mut Vec<std::path::PathBuf>,
+) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -3618,19 +3709,20 @@ fn collect_monster_files(dir: &Path, recursive: bool, out: &mut Vec<std::path::P
         let path = entry.path();
         if path.is_dir() {
             if recursive {
-                collect_monster_files(&path, recursive, out);
+                collect_monster_files(&path, recursive, extension, out);
             }
             continue;
         }
-        let is_xml = path
+        let wanted = path
             .extension()
             .and_then(|s| s.to_str())
-            .is_some_and(|s| s.eq_ignore_ascii_case("xml"));
+            .is_some_and(|s| s.eq_ignore_ascii_case(extension));
+        // The registry is not one of the monsters it lists.
         let is_registry = path
             .file_name()
             .and_then(|s| s.to_str())
             .is_some_and(|s| s.eq_ignore_ascii_case("monsters.xml"));
-        if is_xml && !is_registry {
+        if wanted && !is_registry {
             out.push(path);
         }
     }
@@ -3694,8 +3786,12 @@ pub fn save(
 
     write_atomic(&path, &bytes)?;
 
-    // Keep the registry honest about the name (§1).
+    // Keep the registry honest about the name (§1). The Lua engines autoload
+    // every script, so there is nothing to keep honest.
     let mut lints = Vec::new();
+    if !profile.has_registry {
+        return Ok(lints);
+    }
     if let Some(entry) = registry.entry_for_file(&doc.file) {
         if !entry.name.eq_ignore_ascii_case(&doc.name) {
             let updated = registry.with_renamed(&doc.file, &doc.name, &doc.file);
@@ -3884,7 +3980,7 @@ pub fn create(
     file: &str,
     group: &str,
 ) -> Result<MonsterDoc, String> {
-    let file = normalise_file_name(file, name);
+    let file = normalise_file_name_ext(file, name, profile.extension);
     let path = dir.join(&file);
     if path.exists() {
         return Err(format!("{file} already exists"));
@@ -3911,7 +4007,7 @@ pub fn duplicate(
 ) -> Result<MonsterDoc, String> {
     // Keep the copy beside its original: on a nested corpus a bare name would
     // land in the monsters root, outside the folder the registry points at.
-    let new_file = sibling_file_name(file, &normalise_file_name("", new_name));
+    let new_file = sibling_file_name(file, &normalise_file_name_ext("", new_name, profile.extension));
     let target = dir.join(&new_file);
     if target.exists() {
         return Err(format!("{new_file} already exists"));
@@ -3962,7 +4058,7 @@ pub fn rename(
     new_name: &str,
     new_file: &str,
 ) -> Result<MonsterDoc, String> {
-    let new_file = sibling_file_name(file, &normalise_file_name(new_file, new_name));
+    let new_file = sibling_file_name(file, &normalise_file_name_ext(new_file, new_name, profile.extension));
     if new_file != file && dir.join(&new_file).exists() {
         return Err(format!("{new_file} already exists"));
     }
@@ -4012,16 +4108,17 @@ fn sibling_file_name(reference: &str, name: &str) -> String {
 
 /// The corpus convention: lower-case, no spaces, `.xml`. Falls back to the
 /// monster's name when the caller didn't supply a file name.
-fn normalise_file_name(file: &str, name: &str) -> String {
+fn normalise_file_name_ext(file: &str, name: &str, ext: &str) -> String {
     let base = if file.trim().is_empty() { name } else { file };
     let stem: String = base
         .trim()
+        .trim_end_matches(&format!(".{ext}"))
         .trim_end_matches(".xml")
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
         .collect::<String>()
         .to_lowercase();
-    format!("{}.xml", if stem.is_empty() { "monster" } else { &stem })
+    format!("{}.{ext}", if stem.is_empty() { "monster" } else { &stem })
 }
 
 // =====================================================================

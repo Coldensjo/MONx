@@ -9,7 +9,7 @@
 
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 
-export type EngineKey = 'ironcore' | 'tfs' | 'tvp' | 'nostalrius';
+export type EngineKey = 'ironcore' | 'tfs' | 'tvp' | 'nostalrius' | 'canary' | 'blacktek';
 
 /** How effect values are spelled. Ironcore matches `CONST_ME_*`
  *  case-sensitively; everyone else lower-cases a short name before lookup. */
@@ -287,7 +287,89 @@ const NOSTALRIUS: EngineInfo = {
 	shootEffects: ANI_NOS
 };
 
-export const ENGINES: EngineInfo[] = [IRONCORE, TFS, TVP, NOSTALRIUS];
+// The two Lua engines. Their monsters are Lua tables rather than XML, which
+// the document layer handles; up here the only differences that matter are
+// which sections and fields the loader actually reads.
+
+const CANARY: EngineInfo = {
+	key: 'canary',
+	label: 'Canary / OTServBR',
+	blurb: 'Lua monsters, bestiary + bosstiary, COMBAT_* damage types',
+	pacifist: false,
+	bestiary: true,
+	targetStrategy: true,
+	meleeOnAttacks: false,
+	meleeSkillProgression: false,
+	boolFlags: [
+		'summonable', 'attackable', 'hostile', 'convinceable', 'illusionable', 'challengeable',
+		'pushable', 'canPushItems', 'canPushCreatures', 'isBlockable', 'healthHidden',
+		'ignoreSpawnBlock', 'isBoss', 'rewardBoss', 'canWalkOnEnergy', 'canWalkOnFire',
+		'canWalkOnPoison', 'canWalkOnIce', 'isPreyExclusive', 'isPreyable', 'isPet', 'familiar',
+		'respawntype', 'canTeleport'
+	],
+	numFlags: ['staticAttackChance', 'targetDistance', 'runHealth', 'pet', 'raceId'],
+	species: false,
+	// `monster.raceId` is a Lua field rather than an attribute; the Identity
+	// section still shows it, so name the spelling the file uses.
+	raceidAttr: 'raceId',
+	races: ['venom', 'blood', 'undead', 'fire', 'energy'],
+	// Canary registers no `skull` setter at all — a monster that sets it fails
+	// to load outright, so the picker must not offer one.
+	skulls: [],
+	corpseactionid: false,
+	lookAddons: true,
+	lookMount: true,
+	spellInterval: true,
+	spellDelay: false,
+	geometryRing: true,
+	conditionStyle: 'tickStart',
+	speedSpell: 'speedChange',
+	aoeShootEffect: false,
+	summonEffects: false,
+	summonInterval: true,
+	voicesCadence: true,
+	effectNaming: 'constMe',
+	magicEffects: MAGIC_EFFECTS,
+	shootEffects: SHOOT_EFFECTS
+};
+
+const BLACKTEK: EngineInfo = {
+	key: 'blacktek',
+	label: 'BlackTek',
+	blurb: 'TFS 1.x in Lua: flags table, top-level numerics',
+	pacifist: false,
+	bestiary: false,
+	targetStrategy: false,
+	meleeOnAttacks: false,
+	meleeSkillProgression: false,
+	boolFlags: [
+		'summonable', 'attackable', 'hostile', 'convinceable', 'illusionable', 'challengeable',
+		'pushable', 'canPushItems', 'canPushCreatures', 'boss', 'ignoreSpawnBlock', 'hideHealth',
+		'isBlockable', 'canWalkOnEnergy', 'canWalkOnFire', 'canWalkOnPoison', 'rewardBoss'
+	],
+	numFlags: ['staticAttackChance', 'targetDistance', 'runHealth'],
+	species: false,
+	raceidAttr: null,
+	races: ['venom', 'blood', 'undead', 'fire', 'energy', 'ink'],
+	skulls: ['none', 'yellow', 'green', 'white', 'red', 'black', 'orange'],
+	corpseactionid: false,
+	lookAddons: true,
+	lookMount: true,
+	spellInterval: true,
+	spellDelay: false,
+	geometryRing: true,
+	conditionStyle: 'tickStart',
+	speedSpell: 'speedChange',
+	aoeShootEffect: false,
+	summonEffects: false,
+	summonInterval: true,
+	voicesCadence: true,
+	effectNaming: 'constMe',
+	magicEffects: MAGIC_EFFECTS,
+	shootEffects: SHOOT_EFFECTS
+};
+
+export const ENGINES: EngineInfo[] = [IRONCORE, TFS, TVP, NOSTALRIUS, CANARY, BLACKTEK];
 
 const BY_KEY = new Map(ENGINES.map(e => [e.key, e]));
 

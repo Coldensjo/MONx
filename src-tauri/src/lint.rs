@@ -192,6 +192,47 @@ fn identity(doc: &MonsterDoc, r: &mut Report) {
     }
 }
 
+/// The Lua counterpart to the presence rules above: things only visible in the
+/// document as written, not in the model that comes out of it.
+fn lua_source(lua: &crate::luadoc::LuaDoc, r: &mut Report) {
+    use crate::luadoc::LuaValue;
+
+    for a in &lua.assignments {
+        // A value MONx could not reduce to a literal. `monster.maxHealth =
+        // monster.health` appears six times in Canary's corpus. The bytes are
+        // preserved and an untouched save is still byte-identical, but the
+        // editor is showing a default where the server will use something else,
+        // and only saying so makes that discoverable.
+        if let LuaValue::Raw(text) = &a.value {
+            r.add(
+                SILENT,
+                "lua.value-not-literal",
+                None,
+                false,
+                format!(
+                    "monster.{} is the expression \"{}\", which MONx cannot evaluate — the editor shows a default and will not rewrite the line",
+                    a.key,
+                    text.trim()
+                ),
+            );
+        }
+    }
+
+    // Canary never registers a `skull` setter, so `mtype:skull(...)` raises
+    // "attempt to call a nil value" and the whole file fails to register — the
+    // monster simply does not exist. No monster in the shipped corpus sets it,
+    // which is exactly why an editor that offered the field would be dangerous.
+    if r.profile.key == "canary" && lua.has("skull") {
+        r.add(
+            ERROR,
+            "lua.skull-unsupported",
+            Some("skull"),
+            false,
+            "This engine has no skull setter — setting it raises a Lua error and the monster never loads".to_string(),
+        );
+    }
+}
+
 /// Rules that only exist on some engines, and that would be nonsense on the
 /// rest. Each one is a thing the *server* does — a warning it prints, a block it
 /// discards, an attribute it reads twice — not a house style.
@@ -502,6 +543,11 @@ fn spell(s: &SpellBlock, path: &str, spells: &SpellIndex, r: &mut Report) {
 
 fn effect_value(value: Option<&str>, key: &str, path: &str, r: &mut Report) {
     let Some(value) = value else { return };
+    // The Lua engines write effects as either a CONST_* name or the raw id the
+    // client uses. A number is not an unknown name; it is the value itself.
+    if !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()) {
+        return;
+    }
     let is_shoot = key == "shootEffect";
 
     let known = if is_shoot {
@@ -699,7 +745,17 @@ fn ignored_attributes(doc: &MonsterDoc, r: &mut Report) {
 /// Runs at load time, where the original nodes are still available.
 pub fn lint_source(profile: &'static EngineProfile, parsed: &Parsed) -> Vec<Lint> {
     let mut r = Report::new(profile, Some(parsed.doc.file.clone()));
-    let root = &parsed.root;
+    // Every rule below is about the *shape of the XML text* — whether an
+    // attribute was written at all, or written twice. None of it has a Lua
+    // analogue that this code could express, and inventing one would mean
+    // reporting rules the Lua engines do not have. The Lua profiles suppress
+    // these codes for the same reason. The Lua documents get their own pass.
+    let Some((_, root, _)) = parsed.xml() else {
+        if let Some(lua) = parsed.lua() {
+            lua_source(lua, &mut r);
+        }
+        return r.lints;
+    };
 
     for child in root.children.iter().filter_map(as_element) {
         match child.name.to_ascii_lowercase().as_str() {
