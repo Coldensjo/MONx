@@ -953,6 +953,17 @@
 	font-size: 12px;
 	font-weight: 500;
 	cursor: pointer;
+	/* The open list is drawn by the platform, not by this stylesheet: without a
+	   colour-scheme it comes up white, and the chip's own colours then read as
+	   accent text on white. `dark` is what makes the popup match the app. */
+	color-scheme: dark;
+}
+
+/* Named explicitly as well — the popup does not inherit the chip's hover
+   colour, and a bare option on some platforms falls back to the system text. */
+.mx-engine-chip select option {
+	background: var(--surface);
+	color: var(--text);
 }
 
 .mx-engine-chip select:hover {
