@@ -1,4 +1,6 @@
-//! `items.xml` database and name search.
+//! The item database and name search, in its three spellings: `items.xml`,
+//! BlackTek's `items.toml`, and Nostalrius's 7.x `items.srv`. One `ItemInfo`
+//! for all three — everything above this module asks the index, not the file.
 //!
 //! Names are **not** unique in the corpus — reference §13 makes that a real
 //! hazard, because a loot entry naming an ambiguous item is silently dropped by
@@ -60,6 +62,9 @@ pub struct ItemIndex {
     otb: Otb,
     pub otb_version: String,
     pub cross_check: ItemCrossCheck,
+    /// True when the database itself said which items can be picked up, so the
+    /// no-OTB fallback must not overwrite it. Only `items.srv` does.
+    pickupable_known: bool,
 }
 
 impl ItemIndex {
@@ -166,13 +171,16 @@ impl ItemIndex {
 
     /// Loads the item database from a folder holding `items.otb` + `items.xml`.
     pub fn load(dir: &Path) -> Result<ItemIndex, String> {
-        // BlackTek replaced `items.xml` with `items.toml`. Same database, same
-        // fields, different punctuation.
+        // Three spellings of the same database. BlackTek ships `items.toml`,
+        // Nostalrius the 7.x `items.srv`; everyone else `items.xml`.
         let xml = dir.join("items.xml");
+        let toml = dir.join("items.toml");
         let mut index = if xml.is_file() {
             ItemIndex::load_xml(&xml)?
+        } else if toml.is_file() {
+            ItemIndex::load_toml(&toml)?
         } else {
-            ItemIndex::load_toml(&dir.join("items.toml"))?
+            ItemIndex::load_srv(&dir.join("items.srv"))?
         };
         match Otb::load(&dir.join("items.otb")) {
             Ok(otb) => {
@@ -271,31 +279,198 @@ impl ItemIndex {
         }
         flush(&mut current, &mut index);
 
-        // A name owned by several ids is the same §13 drop hazard as in XML.
-        let ambiguous: Vec<u32> = index
+        index.mark_ambiguous_names();
+        Ok(index)
+    }
+
+    /// `items.srv` — Nostalrius's item database, inherited from GIMUD.
+    ///
+    /// A flat run of `Key = value` records, one item per `TypeID`, with `#`
+    /// comments and two brace blocks: `Flags = {Take,Cumulative}` and
+    /// `Attributes = {Weight=800,SlotType=BODY}`. The server's own reader is a
+    /// tokenizer that lower-cases every identifier, so the file's `TypeID` and
+    /// the code's `typeid` are the same key; nothing in the corpus wraps a
+    /// block across lines, which is what makes a line reader enough here.
+    ///
+    /// **Names keep their article.** `Name = "a campfire"` is the whole name as
+    /// far as the server is concerned, and a loot entry naming one has to match
+    /// it verbatim, so splitting an `article` field out of it would break the
+    /// very lookup the field exists to serve.
+    ///
+    /// The keys are spelled differently from `items.xml` but mostly name the
+    /// same things, and the Items browser's filters were written against the
+    /// XML vocabulary. The handful the UI actually asks about are renamed on
+    /// the way in — see `srv_attr_key` and the flag table below. Everything
+    /// else is kept exactly as written, including the whole `Flags` list.
+    pub fn load_srv(items_srv: &Path) -> Result<ItemIndex, String> {
+        let text = std::fs::read_to_string(items_srv)
+            .map_err(|e| format!("Failed to read {}: {}", items_srv.display(), e))?;
+
+        /// One `TypeID` record, accumulated until the next one begins.
+        #[derive(Default)]
+        struct Record {
+            id: u32,
+            name: String,
+            attrs: BTreeMap<String, String>,
+            stackable: bool,
+            container: bool,
+            pickupable: bool,
+        }
+
+        let mut index = ItemIndex {
+            // The `Take` flag is the server's own answer, so the no-OTB
+            // fallback must leave it alone.
+            pickupable_known: true,
+            ..ItemIndex::default()
+        };
+        let mut current: Option<Record> = None;
+
+        let flush = |slot: &mut Option<Record>, index: &mut ItemIndex| {
+            let Some(r) = slot.take() else { return };
+            if r.name.is_empty() {
+                return;
+            }
+            index.by_id.insert(
+                r.id,
+                ItemInfo {
+                    server_id: r.id,
+                    client_id: r.id,
+                    name: r.name.clone(),
+                    article: None,
+                    attributes: r.attrs,
+                    stackable: r.stackable,
+                    container: r.container,
+                    pickupable: r.pickupable,
+                    ambiguous_name: false,
+                },
+            );
+            index
+                .by_name
+                .entry(r.name.to_lowercase())
+                .or_default()
+                .push(r.id);
+        };
+
+        for line in text.lines() {
+            // No `#` occurs inside a quoted name in the corpus, so a comment
+            // starts wherever one appears.
+            let line = line.split('#').next().unwrap_or("").trim();
+            if line.is_empty() {
+                continue;
+            }
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            let key = key.trim().to_ascii_lowercase();
+            let value = value.trim();
+
+            if key == "typeid" {
+                flush(&mut current, &mut index);
+                current = value.parse().ok().map(|id| Record {
+                    id,
+                    ..Record::default()
+                });
+                continue;
+            }
+            let Some(r) = current.as_mut() else { continue };
+            match key.as_str() {
+                "name" => r.name = unquote(value),
+                "description" => {
+                    r.attrs.insert("description".to_string(), unquote(value));
+                }
+                "flags" => {
+                    let list = braced(value);
+                    for flag in list.split(',').map(str::trim).filter(|f| !f.is_empty()) {
+                        // The flags the UI keys on become the attribute
+                        // `items.xml` would have carried; the list itself is
+                        // kept whole, because in this format the flags *are*
+                        // the item's properties.
+                        match flag.to_ascii_lowercase().as_str() {
+                            "take" => r.pickupable = true,
+                            "cumulative" => r.stackable = true,
+                            "container" | "chest" => r.container = true,
+                            "corpse" => {
+                                r.attrs.insert("corpseType".into(), "corpse".into());
+                            }
+                            "shield" | "wand" | "distance" => {
+                                r.attrs.insert("weaponType".into(), flag.to_lowercase());
+                            }
+                            "ammo" => {
+                                r.attrs.insert("weaponType".into(), "ammunition".into());
+                            }
+                            "rune" => {
+                                r.attrs.insert("slotType".into(), "rune".into());
+                            }
+                            "write" | "writeonce" => {
+                                r.attrs.insert("writeable".into(), "1".into());
+                            }
+                            "unthrow" => {
+                                r.attrs.insert("blockprojectile".into(), "1".into());
+                            }
+                            _ => {}
+                        }
+                    }
+                    r.attrs.insert("flags".to_string(), list.to_string());
+                }
+                // `MagicField = {Type=FIRE,Count=70,Damage=20}` — its own
+                // top-level key rather than an attribute, for 22 items.
+                "magicfield" => {
+                    for (k, v) in srv_pairs(value) {
+                        if k.eq_ignore_ascii_case("type") {
+                            r.attrs.insert("field".into(), v.to_lowercase());
+                        } else {
+                            r.attrs.insert(format!("field{k}"), v);
+                        }
+                    }
+                }
+                "attributes" => {
+                    for (k, v) in srv_pairs(value) {
+                        let (key, value) = srv_attr(&k, &v);
+                        r.attrs.insert(key, value);
+                    }
+                }
+                // An unmodelled top-level key still belongs to the item.
+                _ => {
+                    r.attrs.insert(key, unquote(value));
+                }
+            }
+        }
+        flush(&mut current, &mut index);
+
+        index.mark_ambiguous_names();
+        Ok(index)
+    }
+
+    /// Treats every server id as its own client id, for engines with no OTB.
+    fn assume_direct_ids(&mut self) {
+        let known = self.pickupable_known;
+        for (id, item) in self.by_id.iter_mut() {
+            item.client_id = *id;
+            // Nothing says otherwise without an OTB, and a loot list of things
+            // the editor claims cannot be picked up would be worse than silence.
+            // `items.srv` is the exception: it carries the `Take` flag, which is
+            // the same answer the OTB would have given.
+            if !known {
+                item.pickupable = true;
+            }
+        }
+        self.cross_check.missing_from_otb.clear();
+    }
+
+    /// Flags every id whose name is shared with another — the §13 drop hazard,
+    /// and the same in all three database formats.
+    fn mark_ambiguous_names(&mut self) {
+        let ambiguous: Vec<u32> = self
             .by_name
             .values()
             .filter(|ids| ids.len() > 1)
             .flat_map(|ids| ids.iter().copied())
             .collect();
         for id in ambiguous {
-            if let Some(item) = index.by_id.get_mut(&id) {
+            if let Some(item) = self.by_id.get_mut(&id) {
                 item.ambiguous_name = true;
             }
         }
-
-        Ok(index)
-    }
-
-    /// Treats every server id as its own client id, for engines with no OTB.
-    fn assume_direct_ids(&mut self) {
-        for (id, item) in self.by_id.iter_mut() {
-            item.client_id = *id;
-            // Nothing says otherwise without an OTB, and a loot list of things
-            // the editor claims cannot be picked up would be worse than silence.
-            item.pickupable = true;
-        }
-        self.cross_check.missing_from_otb.clear();
     }
 
     /// Resolves every entry's client id through the OTB and records the delta
@@ -422,19 +597,7 @@ impl ItemIndex {
             }
         }
 
-        // Second pass: a name owned by several ids is the §13 drop hazard.
-        let ambiguous: Vec<u32> = index
-            .by_name
-            .values()
-            .filter(|ids| ids.len() > 1)
-            .flat_map(|ids| ids.iter().copied())
-            .collect();
-        for id in ambiguous {
-            if let Some(item) = index.by_id.get_mut(&id) {
-                item.ambiguous_name = true;
-            }
-        }
-
+        index.mark_ambiguous_names();
         Ok(index)
     }
 }
@@ -473,6 +636,61 @@ fn parse_attributes(body: &str) -> BTreeMap<String, String> {
             Some((key.to_string(), value))
         })
         .collect()
+}
+
+/// The inside of a `{…}` block, or the whole string if it is not braced.
+fn braced(value: &str) -> &str {
+    value
+        .trim()
+        .strip_prefix('{')
+        .and_then(|r| r.strip_suffix('}'))
+        .unwrap_or(value)
+        .trim()
+}
+
+/// Splits an `items.srv` brace block into its `Key=value` pairs.
+fn srv_pairs(value: &str) -> Vec<(String, String)> {
+    braced(value)
+        .split(',')
+        .filter_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            Some((k.trim().to_string(), unquote(v.trim())))
+        })
+        .collect()
+}
+
+/// One `items.srv` attribute in the `items.xml` spelling, where the two name
+/// the same thing.
+///
+/// Only the keys the Items browser filters on are renamed — an engine whose
+/// every filter matches nothing is worse than one whose keys read a little
+/// differently — and their enum values are lower-cased to match. `Waypoints`
+/// really is ground speed: `items.cpp` reads it into `ItemType::speed`.
+/// Anything absent from the table keeps its own spelling and its own value.
+fn srv_attr(key: &str, value: &str) -> (String, String) {
+    let renamed = match key.to_ascii_lowercase().as_str() {
+        "weight" => "weight",
+        "waypoints" => "speed",
+        "attack" => "attack",
+        "defense" => "defense",
+        "armorvalue" => "armor",
+        "capacity" => "containerSize",
+        "totalexpiretime" => "duration",
+        "expiretarget" => "decayTo",
+        "totaluses" => "charges",
+        "maxlength" => "maxTextLen",
+        "weapontype" => "weaponType",
+        "slottype" => "slotType",
+        "fluidsource" => "fluidSource",
+        _ => return (key.to_string(), value.to_string()),
+    };
+    let value = match renamed {
+        // `TWOHANDED` is `two-handed` in every other database MONx reads.
+        "slotType" if value.eq_ignore_ascii_case("twohanded") => "two-handed".to_string(),
+        "weaponType" | "slotType" | "fluidSource" => value.to_lowercase(),
+        _ => value.to_string(),
+    };
+    (renamed.to_string(), value)
 }
 
 /// Strips TOML quoting from a scalar. Inline tables and arrays are kept as

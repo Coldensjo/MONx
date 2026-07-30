@@ -333,9 +333,13 @@ pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
             ))
         }),
         items: slot(Some(&expanded.items), |dir| {
-            // BlackTek ships items.toml instead of items.xml.
-            if !dir.join("items.xml").is_file() && !dir.join("items.toml").is_file() {
-                return Err("no items.xml or items.toml here".to_string());
+            // BlackTek ships items.toml instead of items.xml, Nostalrius the
+            // 7.x items.srv.
+            if !["items.xml", "items.toml", "items.srv"]
+                .iter()
+                .any(|f| dir.join(f).is_file())
+            {
+                return Err("no items.xml, items.toml or items.srv here".to_string());
             }
             // `items.otb` is optional: the modern engines have no server↔client
             // id split and ship none.

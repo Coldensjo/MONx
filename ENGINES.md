@@ -585,6 +585,39 @@ rendered fine — a database fully loaded and entirely undrawable. `ItemIndex::c
 owns the question: OTB if there is one, the item's own `client_id` otherwise. The protocol asks
 the index, never the OTB, and the same code serves all six engines.
 
+### 7.3 Nostalrius's items — `items.srv`
+
+Not a Lua engine at all, but the last of the three item databases, and it belongs beside the
+other two. `items.srv` is inherited from GIMUD: a flat run of `Key = value` records, one item
+per `TypeID`, with `#` comments and two brace blocks — `Flags = {Take,Cumulative}` and
+`Attributes = {Weight=800,SlotType=BODY}`. The server reads it with a tokenizer that
+lower-cases every identifier, so the file's `TypeID` and the code's `typeid` are one key;
+nothing in the corpus wraps a block across lines, which is what makes a line reader enough.
+
+Two things about it are worth stating, because both were decisions rather than transcription:
+
+- **Names keep their article.** 3,503 of the 5,003 names begin "a " or "an ", and that string
+  *is* the name as far as the server is concerned. Splitting an `article` field out of it — the
+  shape `items.xml` uses — would break the very name lookup the field exists to serve.
+- **The keys are renamed into the `items.xml` vocabulary, but only the ones the UI asks
+  about.** The Items browser's filters were written against the XML spelling, and an engine
+  where every filter matches nothing is worse than one whose keys read a little differently.
+  `ArmorValue` becomes `armor`, `Waypoints` becomes `speed` (`items.cpp` reads it into
+  `ItemType::speed`, so they really are the same field), `TWOHANDED` becomes `two-handed`; the
+  `Take`, `Corpse`, `Shield` and `Rune` flags become the attributes their XML counterparts
+  carry. Everything else keeps its own spelling, and the whole `Flags` list is kept verbatim,
+  because in this format the flags *are* the item's properties.
+
+`Take` is also the one place a database tells MONx what an OTB otherwise would, so
+`assume_direct_ids` had to learn not to overwrite it: the other OTB-less engines get
+`pickupable = true` for everything, since a loot picker that claims nothing can be picked up is
+worse than silence, but here the server's own answer exists.
+
+All 5,003 items load, and every id the monster corpus actually uses resolves — 325 distinct
+loot ids and 114 corpse ids, none missing. **Sprites still need a client**: Nostalrius ships
+none, and its ids are the 7.x set, so a 10.98 or 12.x bundle would draw confident nonsense
+rather than nothing. Supply a matching `.spr`/`.dat` pair and the inherited engine draws it.
+
 ### Two findings worth the whole exercise
 
 - **`monster.skull` is fatal on Canary.** It calls `mtype:skull(…)`, and no such method is
@@ -599,20 +632,16 @@ the index, never the OTB, and the same code serves all six engines.
 
 ## 8. Still open
 
-**One engine still has no item database MONx can read.** Canary's and BlackTek's are done
-(§7.1, §7.2).
+**All six engines' item databases are read** (§7.1, §7.2, §7.3).
 
 | Engine | Ships | Status |
 |---|---|---|
 | Canary | `items.xml` + client asset bundle | **read** — 37,506 items, sprites, outfits |
 | BlackTek | `items.toml` + `assets.dat` (10.98) | **read** — 21,881 items, sprites, outfits |
-| Nostalrius | `items.srv` (7.x text) | not read — needs an `items.srv` parser |
+| Nostalrius | `items.srv` (7.x text) | **read** — 5,003 items; sprites need a 7.x client |
 
-`items.srv` is a text format and the smaller job of the two that were left; Nostalrius's sprites
-would come from an ordinary `.spr`/`.dat` pair, which MONx already reads if one is supplied.
-
-Its monsters open, lint and save correctly regardless — this is only about drawing them and
-naming their loot.
+What is left is a client for Nostalrius, and that is a matter of supplying one rather than of
+writing anything: its ids are the 7.x set, and MONx has always read `.spr`/`.dat`.
 
 **TVP's `speed=` collision is reported, not resolved.** The loader reads `speed` as the cast
 cadence and then, on a `speed` spell, again as the delta — so one node cannot carry both. MONx

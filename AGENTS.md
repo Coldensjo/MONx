@@ -4,11 +4,11 @@ A monster editor for the Ironcore Tibia server, and for five others. **Open work
 
 Opens a workspace of up to four folders: the server's `monster/` folder, its `items/` folder, a client folder and optionally `spells/`. Every outfit, corpse and loot item renders as a real sprite because the client assets are loaded alongside the monsters.
 
-**Only the monsters folder is required.** Canary and BlackTek ship no `items.otb`, so a workspace can open with monsters alone — reading, linting and saving all work regardless.
+**Only the monsters folder is required.** Canary and BlackTek ship no `items.otb` and Nostalrius no client, so a workspace can open with monsters alone — reading, linting and saving all work regardless.
 
 **The client slot takes either kind of client.** A `.spr`/`.dat` folder goes through the inherited SPRx engine; a modern asset bundle (a folder with `catalog-content.json`, as Canary and any 12.x+ client ship) goes through `assets.rs` + `appearances.rs` instead. BlackTek is a third case that needs no third reader: its `assets.dat` is a stock 10.98 `.dat` under another name, and `open_workspace` prefers one found in the items folder over the client folder's.
 
-**The item database is `items.xml` or `items.toml`** — BlackTek ships the latter, a narrow enough subset that `items.rs` reads it directly. `items.otb` is optional; without one the server id *is* the client id, which is how the modern engines and BlackTek address things. Ask `ItemIndex::client_id()` for the mapping rather than the OTB, or previews go blank on every engine that has no OTB.
+**The item database has three spellings**: `items.xml`, BlackTek's `items.toml`, and Nostalrius's 7.x `items.srv` — all three read by `items.rs` into one `ItemInfo`, so nothing above it asks which file it came from. `items.otb` is optional; without one the server id *is* the client id, which is how the modern engines, BlackTek and Nostalrius all address things. Ask `ItemIndex::client_id()` for the mapping rather than the OTB, or previews go blank on every engine that has no OTB.
 
 MONx is a fork of **SPRx** (kept at [SPRx/](SPRx/) for reference). The sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image server, the virtualized browsers — is inherited whole. What's new is the monster-XML layer on top.
 
@@ -119,7 +119,7 @@ cargo run --example probe_assets -- <assets-dir> [out_dir]
 │  assets.rs   — modern client bundle: LZMA sprite sheets    │
 │  appearances.rs — appearances.dat protobuf (12.x+ things)  │
 │  otb.rs      — items.otb server↔client id map            │
-│  items.rs    — items.xml / items.toml database + search  │
+│  items.rs    — items.xml/.toml/.srv database + search    │
 │  spr.rs      — .spr file reader (inherited, frozen)      │
 │  dat.rs      — .dat parser, thing composition (frozen)   │
 │  protocol.rs — monx:// image serving                     │

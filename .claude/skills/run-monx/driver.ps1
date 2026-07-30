@@ -259,12 +259,13 @@ function Resolve-WorkspaceFolders {
             Where-Object { (Get-ChildItem $_.FullName -Filter *.dat -File -EA SilentlyContinue) -and (Get-ChildItem $_.FullName -Filter *.spr -File -EA SilentlyContinue) } |
             Select-Object -First 1 -ExpandProperty FullName
     }
+    # Only the monsters folder is required. Canary and BlackTek ship no
+    # items.otb and Nostalrius no client, so demanding either here would make
+    # those corpora undrivable when the app itself opens them fine.
     if (-not $monsters) { throw "No monsters/ or monster/ folder under $root" }
-    if (-not (Test-Path $items)) { throw "No items/ folder under $root" }
-    if (-not $client) { throw "No client folder (Tibia.dat + Tibia.spr) under or beside $root" }
     return [pscustomobject]@{
         Monsters = $monsters
-        Items    = $items
+        Items    = (Test-Path $items) ? $items : $null
         Client   = $client
         Spells   = (Test-Path $spells) ? $spells : $null
     }
@@ -283,8 +284,8 @@ function Open-Workspace {
         Invoke-MonxElement -Name $w.Monsters | Out-Null
     } else {
         Set-Slot -SlotName "Monsters folder" -Path $w.Monsters
-        Set-Slot -SlotName "Items folder"    -Path $w.Items
-        Set-Slot -SlotName "Client folder"   -Path $w.Client
+        if ($w.Items)  { Set-Slot -SlotName "Items folder"  -Path $w.Items }
+        if ($w.Client) { Set-Slot -SlotName "Client folder" -Path $w.Client }
         if ($w.Spells) { Set-Slot -SlotName "Spells folder" -Path $w.Spells }
         Invoke-MonxElement -Name "Open workspace" | Out-Null
     }
