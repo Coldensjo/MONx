@@ -161,6 +161,8 @@ export default function Workspace({
 		label: string;
 		entry: EffectEntry | null;
 	} | null>(null);
+	/** Right-clicked outfit cell, for "Set as outfit for …". */
+	const [outfitMenu, setOutfitMenu] = useState<{ x: number; y: number; thing: ThingSummary } | null>(null);
 	const label = workspaceLabel(info.paths.monsters);
 
 	// The remembered monster opens once, on the first list the workspace hands
@@ -682,17 +684,16 @@ export default function Workspace({
 		return () => window.removeEventListener('keydown', onKey);
 	}, [undoEdit, redoEdit]);
 
-	// Double-clicking an outfit in the browser adopts it as the monster's look,
-	// after a confirmation — same mutation as dropping it on the Look section.
+	// Right-clicking an outfit adopts it as the monster's look — the same mutation
+	// as dropping it on the Look section. Asked for explicitly from a menu, so
+	// there is no confirm on top of it.
 	const pickOutfit = useCallback(
-		async (t: ThingSummary) => {
+		(t: ThingSummary) => {
 			if (!doc) return;
 			const label = t.name ? `${t.name} (${t.id})` : `#${t.id}`;
-			const ok = await confirm(`Set ${doc.name}'s outfit to ${label}?`, { title: 'Change outfit' });
-			if (!ok) return;
 			editDoc({ ...doc, look: { ...doc.look, mode: 'type', type: t.id } });
 			setView('monsters');
-			showToast('ok', `Outfit set to ${label}`);
+			showToast('ok', `${doc.name}'s outfit set to ${label}`);
 		},
 		[doc, editDoc, showToast]
 	);
@@ -1184,17 +1185,19 @@ export default function Workspace({
 
 	// Dismiss the context menus on any outside press or Escape, as MonsterList does.
 	useEffect(() => {
-		if (!itemMenu && !thingMenu && !tabMenu) return;
+		if (!itemMenu && !thingMenu && !tabMenu && !outfitMenu) return;
 		const onDown = () => {
 			setItemMenu(null);
 			setThingMenu(null);
 			setTabMenu(null);
+			setOutfitMenu(null);
 		};
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') {
 				setItemMenu(null);
 				setThingMenu(null);
 				setTabMenu(null);
+				setOutfitMenu(null);
 			}
 		};
 		window.addEventListener('mousedown', onDown);
@@ -1203,7 +1206,7 @@ export default function Workspace({
 			window.removeEventListener('mousedown', onDown);
 			window.removeEventListener('keydown', onKey);
 		};
-	}, [itemMenu, thingMenu, tabMenu]);
+	}, [itemMenu, thingMenu, tabMenu, outfitMenu]);
 
 	const allLints = useMemo(
 		() => [...visibleMonsterLints, ...visibleWorkspaceLints],
@@ -1572,14 +1575,45 @@ export default function Workspace({
 							view={view}
 							draggable={view === 'outfits'}
 							dragPayload={t => (view === 'outfits' ? { kind: 'outfit', type: t.id } : null)}
-							onPick={view === 'outfits' && doc ? t => void pickOutfit(t) : undefined}
 							onContextMenu={
-								view === 'effects' || view === 'missiles'
-									? (t, e) => thingContextMenu(t, e, view === 'effects' ? 'effect' : 'missile')
-									: undefined
+								view === 'outfits'
+									? (t, e) => setOutfitMenu({ x: e.clientX, y: e.clientY, thing: t })
+									: view === 'effects' || view === 'missiles'
+										? (t, e) => thingContextMenu(t, e, view === 'effects' ? 'effect' : 'missile')
+										: undefined
 							}
 							searchPlaceholder="Search client id or name"
 						/>
+					)}
+					{outfitMenu && (
+						<div
+							className="ss-context-menu"
+							style={{ left: outfitMenu.x, top: outfitMenu.y }}
+							onMouseDown={e => e.stopPropagation()}
+						>
+							{doc && (
+								<button
+									className="ss-menu-item"
+									onClick={() => {
+										setOutfitMenu(null);
+										pickOutfit(outfitMenu.thing);
+									}}
+								>
+									<PersonStanding size={14} />
+									Set as outfit for {doc.name}
+								</button>
+							)}
+							<button
+								className="ss-menu-item"
+								onClick={() => {
+									setOutfitMenu(null);
+									void navigator.clipboard.writeText(String(outfitMenu.thing.id));
+									showToast('ok', `Copied ${outfitMenu.thing.id}`);
+								}}
+							>
+								Copy id {outfitMenu.thing.id}
+							</button>
+						</div>
 					)}
 					{thingMenu && (
 						<div
