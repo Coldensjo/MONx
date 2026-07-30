@@ -404,6 +404,96 @@
 	color: var(--text-muted);
 }
 
+/* ---------- Quick-open ---------- */
+
+/* Sits high rather than centred: the eye is already at the top of the window
+   when the picker is summoned, and the list grows downwards. */
+.mx-qo-backdrop {
+	align-items: flex-start;
+	padding-top: 12vh;
+}
+
+.mx-qo-modal {
+	width: 560px;
+	max-width: calc(100vw - 64px);
+	padding: 0;
+	gap: 0;
+	overflow: hidden;
+}
+
+.mx-qo-search {
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	border-radius: 0;
+	padding: 10px 12px;
+}
+
+.mx-qo-search input {
+	font-size: 14px;
+}
+
+.mx-qo-list {
+	max-height: 46vh;
+	overflow: auto;
+	padding: 4px;
+}
+
+.mx-qo-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 5px 8px;
+	border: 0;
+	border-radius: var(--radius);
+	background: none;
+	color: var(--text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.mx-qo-row-active {
+	background: var(--accent-dim);
+}
+
+.mx-qo-name {
+	flex: 0 0 auto;
+	max-width: 60%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: 13px;
+}
+
+.mx-qo-hit {
+	background: none;
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.mx-qo-dirty {
+	margin-left: 6px;
+	color: var(--warn);
+}
+
+.mx-qo-file {
+	flex: 1 1 auto;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--text-muted);
+	font-size: 11px;
+	text-align: right;
+}
+
+.mx-qo-foot {
+	padding: 6px 12px;
+	border-top: 1px solid var(--border);
+	background: var(--surface-2);
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
 /* ---------- Hotkey manager ---------- */
 
 .mx-hk-modal {

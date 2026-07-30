@@ -59,6 +59,7 @@ import {
 } from './prefs';
 import ScaleLootDialog from './ScaleLootDialog';
 import BatchEditDialog from './BatchEditDialog';
+import QuickOpenDialog from './QuickOpenDialog';
 import PatchNotesDialog from './PatchNotesDialog';
 import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
 import { getThing, getThings, type ThingSummary } from './spr';
@@ -439,6 +440,7 @@ export default function Workspace({
 	 *  (`null` item id = the whole corpus, as the Tools menu opens it). */
 	const [scaling, setScaling] = useState<{ itemId: number | null } | null>(null);
 	const [batchOpen, setBatchOpen] = useState(false);
+	const [quickOpen, setQuickOpen] = useState(false);
 	/** Species the corpus actually uses, for the batch filter's dropdown. */
 	const speciesList = useMemo(
 		() => [...new Set(monsters.map(m => m.species).filter((s): s is string => !!s))].sort(),
@@ -1098,6 +1100,7 @@ export default function Workspace({
 	// construction.
 	const commands: Command[] = [
 		{ id: 'save-monster', label: 'Save monster', group: 'Monsters', enabled: !!doc && !saving, run: () => void save() },
+		{ id: 'quick-open', label: 'Go to monster…', group: 'Monsters', run: () => setQuickOpen(true) },
 		{ id: 'new-monster', label: 'New monster…', group: 'Monsters', run: () => listActions.current?.newMonster() },
 		{
 			id: 'duplicate-monster',
@@ -1276,6 +1279,7 @@ export default function Workspace({
 			label: 'File',
 			items: [
 				item('save-monster'),
+				item('quick-open', { separated: true }),
 				item('new-monster'),
 				item('duplicate-monster'),
 				item('rename-monster'),
@@ -1907,6 +1911,21 @@ export default function Workspace({
 						</div>
 					</div>
 				</div>
+			)}
+
+			{quickOpen && (
+				<QuickOpenDialog
+					monsters={monsters}
+					dirtyFiles={dirtyFiles}
+					onClose={() => setQuickOpen(false)}
+					onPick={file => {
+						setSelected(file);
+						setView('monsters');
+						// Opened deliberately by name, so the tab is pinned rather than
+						// left as a preview the next selection would replace.
+						pinTab(file);
+					}}
+				/>
 			)}
 
 			{hotkeysOpen && (

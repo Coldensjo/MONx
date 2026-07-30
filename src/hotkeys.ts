@@ -92,6 +92,7 @@ const bind = (primary: string | null, secondary: string | null = null): Binding 
  */
 export const DEFAULT_BINDINGS: Bindings = {
 	'save-monster': bind('Ctrl+S'),
+	'quick-open': bind('Ctrl+P'),
 	'close-workspace': bind('Ctrl+O'),
 	'new-monster': bind('Ctrl+N'),
 	'duplicate-monster': bind('Ctrl+D'),
