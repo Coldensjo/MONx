@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import {
 	AlertCircle,
@@ -7,6 +8,7 @@ import {
 	FolderOpen,
 	History,
 	Image,
+	Languages,
 	Loader2,
 	Package,
 	Pencil,
@@ -26,9 +28,14 @@ import {
 	type SavedWorkspace
 } from './settings';
 import { workspaceLabel } from './App';
+import { getLocale, LOCALES, setLocale, type Locale } from './i18n';
 
 /** The four folder rows. `engine` is on `WorkspacePaths` too, but it is a
- *  choice rather than a path and gets its own control below the rows. */
+ *  choice rather than a path and gets its own control below the rows.
+ *
+ *  `label` and `hint` are i18n keys — translated at the render site, so the
+ *  table can keep its JSX icons and stay a module constant. The hints that are
+ *  bare paths ("data/monster") simply have no dictionary entry and fall through. */
 type SlotKey = 'monsters' | 'items' | 'client' | 'spells';
 
 const SLOTS: { key: SlotKey; label: string; hint: string; icon: JSX.Element; optional?: boolean }[] = [
@@ -66,6 +73,7 @@ function slotOf(probe: WorkspaceProbe | null, key: SlotKey): SlotStatus | null {
 }
 
 export default function Landing({ error, opening, droppedPath, recent, onOpen, onOpenRecent }: Props) {
+	const { t } = useTranslation();
 	const [paths, setPaths] = useState<WorkspacePaths>(EMPTY);
 	const [probe, setProbe] = useState<WorkspaceProbe | null>(null);
 	const [probing, setProbing] = useState(false);
@@ -165,19 +173,34 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 	}, [naming, nameDraft, paths, probe, saved]);
 
 	const engineLabel = useCallback(
-		(key: string | null) => ENGINES.find(e => e.key === key)?.label ?? 'auto-detect',
-		[]
+		(key: string | null) => t(ENGINES.find(e => e.key === key)?.label ?? 'auto-detect'),
+		[t]
 	);
 
 	return (
 		<div className="ss-landing">
 			<img src="/icon.png" alt="" className="ss-landing-icon" width={40} height={40} />
 
+			{/* Always visible, and above everything else that needs reading. The
+			    engine picker below only appears once a workspace probes clean, so
+			    it is the wrong neighbour for the one control a user who cannot
+			    read this screen has to find first. */}
+			<label className="mx-lang-pick">
+				<Languages size={14} />
+				<select value={getLocale()} onChange={e => setLocale(e.target.value as Locale)}>
+					{LOCALES.map(l => (
+						<option key={l.key} value={l.key}>
+							{l.label}
+						</option>
+					))}
+				</select>
+			</label>
+
 			{error && <div className="ss-landing-error">{error}</div>}
 
 			{saved.length > 0 && (
 				<div className="mx-saved">
-					<div className="mx-saved-label">Saved workspaces</div>
+					<div className="mx-saved-label">{t('Saved workspaces')}</div>
 					{saved.map(entry => (
 						<div key={entry.id} className="mx-saved-row">
 							{naming === entry.id ? (
@@ -209,7 +232,7 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 							)}
 							<button
 								className="mx-saved-act"
-								title="Rename"
+								title={t('Rename')}
 								onClick={() => {
 									setNameDraft(entry.name);
 									setNaming(entry.id);
@@ -219,7 +242,7 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 							</button>
 							<button
 								className="mx-saved-act"
-								title="Forget this workspace"
+								title={t('Forget this workspace')}
 								onClick={() => setSaved(removeSavedWorkspace(entry.id))}
 							>
 								<Trash2 size={13} />
@@ -247,10 +270,10 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 							<span className="mx-slot-icon">{slot.icon}</span>
 							<span className="mx-slot-body">
 								<span className="mx-slot-label">
-									{slot.label}
-									{slot.optional && <span className="mx-slot-optional">optional</span>}
+									{t(slot.label)}
+									{slot.optional && <span className="mx-slot-optional">{t('optional')}</span>}
 								</span>
-								<span className="mx-slot-path mono">{path || slot.hint}</span>
+								<span className="mx-slot-path mono">{path || t(slot.hint)}</span>
 								{status && (status.summary || status.error) && (
 									<span className="mx-slot-status" data-ok={status.ok ? 'true' : 'false'}>
 										{status.ok ? <Check size={12} /> : <AlertCircle size={12} />}
@@ -265,14 +288,14 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 
 			{probe?.monsters.ok && (
 				<label className="mx-engine-pick">
-					<span className="mx-engine-pick-label">Engine</span>
+					<span className="mx-engine-pick-label">{t('Engine')}</span>
 					<select
 						value={paths.engine ?? probe.engine.best}
 						onChange={e => setPaths(p => ({ ...p, engine: e.target.value }))}
 					>
 						{ENGINES.map(e => (
 							<option key={e.key} value={e.key}>
-								{e.label} — {e.blurb}
+								{t(e.label)} — {t(e.blurb)}
 							</option>
 						))}
 					</select>
@@ -280,31 +303,34 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 					    every lint at once, so a close call is worth a sentence. */}
 					<span className="mx-engine-pick-note" data-weak={probe.engine.confident ? undefined : 'true'}>
 						{paths.engine
-							? 'chosen'
+							? t('chosen')
 							: probe.engine.confident
-								? `detected from ${probe.engine.candidates.find(c => c.key === probe.engine.best)?.evidence[0] ?? 'the corpus'}`
-								: 'could not tell confidently — check this'}
+								? t('detected from {{evidence}}', {
+										evidence:
+											probe.engine.candidates.find(c => c.key === probe.engine.best)?.evidence[0] ??
+											t('the corpus')
+									})
+								: t('could not tell confidently — check this')}
 					</span>
 				</label>
 			)}
 
 			{degraded && (
 				<div className="mx-engine-pick-note" data-weak="true">
-					No item database or client files — monsters open and save normally, but nothing is
-					drawn and loot ids stay numbers.
+					{t('No item database or client files — monsters open and save normally, but nothing is drawn and loot ids stay numbers.')}
 				</div>
 			)}
 
 			<div className="mx-landing-actions">
 				<button className="ss-btn ss-btn-primary" disabled={!ready} onClick={() => onOpen(paths)}>
 					{opening || probing ? <Loader2 size={15} className="ss-spin" /> : <FolderOpen size={15} />}
-					{opening ? 'Opening…' : probing ? 'Checking…' : 'Open workspace'}
+					{opening ? t('Opening…') : probing ? t('Checking…') : t('Open workspace')}
 				</button>
 				{naming === 'new' ? (
 					<input
 						className="mx-saved-input"
 						autoFocus
-						placeholder="Workspace name"
+						placeholder={t('Workspace name')}
 						value={nameDraft}
 						onChange={e => setNameDraft(e.target.value)}
 						onBlur={commitName}
@@ -317,21 +343,21 @@ export default function Landing({ error, opening, droppedPath, recent, onOpen, o
 					<button
 						className="ss-btn"
 						disabled={!ready}
-						title="Save these folders under a name, to open in one click"
+						title={t('Save these folders under a name, to open in one click')}
 						onClick={() => {
 							setNameDraft(workspaceLabel(paths.monsters));
 							setNaming('new');
 						}}
 					>
 						<Bookmark size={15} />
-						Save workspace
+						{t('Save workspace')}
 					</button>
 				)}
 			</div>
 
 			{recent.length > 0 && (
 				<div className="ss-recent">
-					<div className="ss-recent-label">Recent</div>
+					<div className="ss-recent-label">{t('Recent')}</div>
 					{recent.map(entry => (
 						<button
 							key={entry.paths.monsters}

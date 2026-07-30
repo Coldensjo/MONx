@@ -942,6 +942,21 @@
 	color: var(--ss-warn, #b58900);
 }
 
+/* The language picker sits at the top of the landing column, before anything
+   that has to be read. Deliberately quiet — it is findable, not prominent. */
+.mx-lang-pick {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: -4px 0 4px;
+	font-size: 12px;
+	color: var(--ss-text-dim);
+}
+
+.mx-lang-pick select {
+	font-size: 12px;
+}
+
 /* ---------- Landing: saved workspaces ---------- */
 
 .mx-saved {

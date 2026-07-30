@@ -1,5 +1,7 @@
+import { useTranslation } from 'react-i18next';
 import { DEFAULT_PREFS, visibleSectionIds, type Prefs } from './prefs';
 import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
+import { getLocale, LOCALES, setLocale, type Locale } from './i18n';
 
 interface Props {
 	prefs: Prefs;
@@ -14,6 +16,7 @@ interface Props {
  * behind the dialog shows what the choice means.
  */
 export default function PreferencesDialog({ prefs, onChange, onClose }: Props) {
+	const { t } = useTranslation();
 	const visible = visibleSectionIds(prefs);
 	const isDefault =
 		prefs.defaultSection === DEFAULT_PREFS.defaultSection &&
@@ -30,11 +33,33 @@ export default function PreferencesDialog({ prefs, onChange, onClose }: Props) {
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal mx-prefs-modal" onMouseDown={e => e.stopPropagation()}>
-				<div className="ss-modal-title">Preferences</div>
+				<div className="ss-modal-title">{t('Preferences')}</div>
+
+				{/* Language first: it is the one preference that changes every other
+				    word in this dialog, so it should not be below them. */}
+				<div className="ss-modal-desc">
+					<label className="mx-prefs-default">
+						{t('Language')}
+						<select
+							className="ss-ed-input"
+							value={getLocale()}
+							onChange={e => setLocale(e.target.value as Locale)}
+						>
+							{LOCALES.map(l => (
+								<option key={l.key} value={l.key}>
+									{l.label}
+								</option>
+							))}
+						</select>
+					</label>
+					<div className="ss-ed-field-note">
+						{t('Applies immediately. Only the interface is translated — monster data, item names and engine values are left exactly as the server writes them.')}
+					</div>
+				</div>
 
 				<div className="ss-modal-desc">
 					<label className="mx-prefs-default">
-						Open a monster on
+						{t('Open a monster on')}
 						<select
 							className="ss-ed-input"
 							value={prefs.defaultSection}
@@ -42,28 +67,29 @@ export default function PreferencesDialog({ prefs, onChange, onClose }: Props) {
 						>
 							{visible.map(id => (
 								<option key={id} value={id}>
-									{SECTION_LABEL[id]}
+									{t(SECTION_LABEL[id])}
 								</option>
 							))}
 						</select>
 					</label>
 					<div className="ss-ed-field-note">
-						Jumped to without animation, every time a monster is opened or a tab is activated.
+						{t('Jumped to without animation, every time a monster is opened or a tab is activated.')}
 					</div>
 				</div>
 
-				<div className="ss-modal-desc">Tabs</div>
+				<div className="ss-modal-desc">{t('Tabs')}</div>
 				<div className="mx-prefs-tabs">
 					{SECTION_IDS.map(id => (
 						<label key={id} className="mx-prefs-tab">
 							<input type="checkbox" checked={visible.includes(id)} onChange={() => toggle(id)} />
-							{SECTION_LABEL[id]}
+							{t(SECTION_LABEL[id])}
 						</label>
 					))}
 				</div>
 				<div className="ss-ed-field-note">
-					A hidden tab keeps its data — the file is written whole either way. Pacifist &amp; Events is hidden by
-					default.
+					{t('A hidden tab keeps its data — the file is written whole either way. {{tab}} is hidden by default.', {
+						tab: t(SECTION_LABEL.events)
+					})}
 				</div>
 
 				<div className="ss-modal-buttons">
@@ -73,11 +99,11 @@ export default function PreferencesDialog({ prefs, onChange, onClose }: Props) {
 						disabled={isDefault}
 						onClick={() => onChange(DEFAULT_PREFS)}
 					>
-						Restore defaults
+						{t('Restore defaults')}
 					</button>
 					<div className="ss-modal-buttons-spacer" />
 					<button type="button" className="ss-btn ss-btn-primary" onClick={onClose}>
-						Close
+						{t('Close')}
 					</button>
 				</div>
 			</div>

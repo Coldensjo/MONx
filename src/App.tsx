@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { confirm } from '@tauri-apps/plugin-dialog';
@@ -30,6 +31,7 @@ export function workspaceLabel(monstersPath: string): string {
 }
 
 export default function App() {
+	const { t } = useTranslation();
 	const [info, setInfo] = useState<WorkspaceInfo | null>(null);
 	const [monsters, setMonsters] = useState<MonsterSummary[]>([]);
 	const [openFile, setOpenFile] = useState<string | null>(null);
@@ -90,13 +92,13 @@ export default function App() {
 	);
 
 	const close = useCallback(async () => {
-		if (dirty && !(await confirm('You have unsaved changes. Close the workspace anyway?'))) return;
+		if (dirty && !(await confirm(t('You have unsaved changes. Close the workspace anyway?')))) return;
 		await closeWorkspace().catch(() => {});
 		setInfo(null);
 		setMonsters([]);
 		setOpenFile(null);
 		setDirty(false);
-	}, [dirty]);
+	}, [dirty, t]);
 
 	const refreshMonsters = useCallback((focusFile: string | null) => {
 		listMonsters()
@@ -183,14 +185,14 @@ export default function App() {
 	// Never let the window close on unsaved work.
 	useEffect(() => {
 		const un = getCurrentWindow().onCloseRequested(async event => {
-			if (dirty && !(await confirm('You have unsaved changes. Quit anyway?'))) {
+			if (dirty && !(await confirm(t('You have unsaved changes. Quit anyway?')))) {
 				event.preventDefault();
 			}
 		});
 		return () => {
 			void un.then(f => f());
 		};
-	}, [dirty]);
+	}, [dirty, t]);
 
 	const win = getCurrentWindow();
 	const title = info
@@ -206,7 +208,7 @@ export default function App() {
 					{info && (
 						<span className="ss-titlebar-file">
 							— {title}
-							{dirty && <span className="mx-dirty" title="Unsaved changes"> •</span>}
+							{dirty && <span className="mx-dirty" title={t('Unsaved changes')}> •</span>}
 						</span>
 					)}
 					{/* Which engine's rules are in force. Editing one server's corpus
@@ -215,9 +217,13 @@ export default function App() {
 					{info && (
 						<span
 							className="mx-engine-badge"
-							title={`Editing under ${info.engineLabel} rules${
-								info.engineDetection.confident ? '' : ' — detection was not confident'
-							}`}
+							title={
+								info.engineDetection.confident
+									? t('Editing under {{engine}} rules', { engine: info.engineLabel })
+									: t('Editing under {{engine}} rules — detection was not confident', {
+											engine: info.engineLabel
+										})
+							}
 							data-weak={info.engineDetection.confident ? undefined : 'true'}
 						>
 							{info.engineLabel}
@@ -228,18 +234,18 @@ export default function App() {
 				<button
 					className="ss-caption-button"
 					onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
-					title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-					aria-label="Toggle theme"
+					title={theme === 'dark' ? t('Switch to light mode') : t('Switch to dark mode')}
+					aria-label={t('Toggle theme')}
 				>
 					{theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
 				</button>
-				<button className="ss-caption-button" onClick={() => void win.minimize()} aria-label="Minimize">
+				<button className="ss-caption-button" onClick={() => void win.minimize()} aria-label={t('Minimize')}>
 					<Minus size={14} />
 				</button>
-				<button className="ss-caption-button" onClick={() => void win.toggleMaximize()} aria-label="Maximize">
+				<button className="ss-caption-button" onClick={() => void win.toggleMaximize()} aria-label={t('Maximize')}>
 					<Square size={11} />
 				</button>
-				<button className="ss-caption-button ss-caption-close" onClick={() => void win.close()} aria-label="Close">
+				<button className="ss-caption-button ss-caption-close" onClick={() => void win.close()} aria-label={t('Close')}>
 					<X size={14} />
 				</button>
 			</div>

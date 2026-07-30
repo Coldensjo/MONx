@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Filter, Plus, Search, X } from 'lucide-react';
 import {
 	createMonster,
@@ -65,8 +66,11 @@ interface MenuState {
 
 interface ListFilter {
 	key: string;
+	/** An i18n key, unless `raw` — the race and species filters are built from
+	 *  whatever the corpus contains, and corpus data is never translated. */
 	label: string;
 	section: string;
+	raw?: boolean;
 	test: (m: MonsterSummary) => boolean;
 }
 
@@ -108,6 +112,9 @@ const MonsterRow = memo(function MonsterRow({
 	onContextMenu: (e: React.MouseEvent, file: string) => void;
 	onOpen?: (file: string) => void;
 }) {
+	// A memo boundary does not re-render when the language changes unless it
+	// subscribes itself — every memo() in the app that renders prose needs this.
+	const { t } = useTranslation();
 	const drag = useDragSource(() => ({ kind: 'monster', file: monster.file, name: monster.name }), {
 		ghostSize: SPRITE
 	});
@@ -136,22 +143,25 @@ const MonsterRow = memo(function MonsterRow({
 			/>
 			<span className="ss-mon-name">{monster.name}</span>
 			{!monster.registered && (
-				<span className="ss-mon-badge ss-mon-badge-orphan" title="Not registered in monsters.xml">
-					orphan
+				<span className="ss-mon-badge ss-mon-badge-orphan" title={t('Not registered in monsters.xml')}>
+					{t('orphan')}
 				</span>
 			)}
 			{error > 0 && (
-				<span className="ss-mon-badge ss-mon-badge-error" title={`${error} errors`}>
+				<span className="ss-mon-badge ss-mon-badge-error" title={t('{{count}} error', { count: error })}>
 					{error}
 				</span>
 			)}
 			{warning > 0 && (
-				<span className="ss-mon-badge ss-mon-badge-warn" title={`${warning} warnings`}>
+				<span className="ss-mon-badge ss-mon-badge-warn" title={t('{{count}} warning', { count: warning })}>
 					{warning}
 				</span>
 			)}
 			{silent > 0 && (
-				<span className="ss-mon-badge ss-mon-badge-silent" title={`${silent} silent-data-loss issues`}>
+				<span
+					className="ss-mon-badge ss-mon-badge-silent"
+					title={t('{{count}} silent-data-loss issue', { count: silent })}
+				>
 					{silent}
 				</span>
 			)}
@@ -170,6 +180,7 @@ export default function MonsterList({
 	groups = [],
 	onReveal
 }: Props) {
+	const { t } = useTranslation();
 	const [search, setSearch] = useState('');
 	const [activeFilters, setActiveFilters] = useState<Map<string, FilterMode>>(new Map());
 	const [showFilters, setShowFilters] = useState(false);
@@ -229,11 +240,18 @@ export default function MonsterList({
 			},
 			{ key: 'has-errors', label: 'Has errors', section: 'Status', test: m => m.lintCounts.error > 0 },
 			{ key: 'no-raceid', label: 'Missing raceid', section: 'Status', test: m => m.raceid === null },
-			...races.map(r => ({ key: `race:${r}`, label: r, section: 'Race', test: (m: MonsterSummary) => m.race === r })),
+			...races.map(r => ({
+				key: `race:${r}`,
+				label: r,
+				section: 'Race',
+				raw: true,
+				test: (m: MonsterSummary) => m.race === r
+			})),
 			...species.map(s => ({
 				key: `species:${s}`,
 				label: s,
 				section: 'Species',
+				raw: true,
 				test: (m: MonsterSummary) => m.species === s
 			}))
 		];
@@ -381,14 +399,14 @@ export default function MonsterList({
 		try {
 			const doc = await createMonster(name, file, formGroup);
 			setDialog(null);
-			showToast('ok', `Created ${doc.file}`);
+			showToast('ok', t('Created {{file}}', { file: doc.file }));
 			onMutated(doc.file);
 		} catch (e) {
 			showToast('error', String(e));
 		} finally {
 			setBusy(false);
 		}
-	}, [formName, formFile, formGroup, suggestFile, showToast, onMutated]);
+	}, [formName, formFile, formGroup, suggestFile, showToast, onMutated, t]);
 
 	const runRename = useCallback(async () => {
 		if (!selected) return;
@@ -399,25 +417,25 @@ export default function MonsterList({
 		try {
 			const doc = await renameMonster(selected.file, name, file);
 			setDialog(null);
-			showToast('ok', `Renamed to ${doc.name}`);
+			showToast('ok', t('Renamed to {{name}}', { name: doc.name }));
 			onMutated(doc.file);
 		} catch (e) {
 			showToast('error', String(e));
 		} finally {
 			setBusy(false);
 		}
-	}, [selected, formName, formFile, showToast, onMutated]);
+	}, [selected, formName, formFile, showToast, onMutated, t]);
 
 	const runDuplicate = useCallback(async () => {
 		if (!selected) return;
 		try {
 			const doc = await duplicateMonster(selected.file, `${selected.name} copy`);
-			showToast('ok', `Duplicated to ${doc.file}`);
+			showToast('ok', t('Duplicated to {{file}}', { file: doc.file }));
 			onMutated(doc.file);
 		} catch (e) {
 			showToast('error', String(e));
 		}
-	}, [selected, showToast, onMutated]);
+	}, [selected, showToast, onMutated, t]);
 
 	const runDelete = useCallback(async () => {
 		if (!selected) return;
@@ -425,14 +443,14 @@ export default function MonsterList({
 		try {
 			await deleteMonster(selected.file);
 			setDialog(null);
-			showToast('ok', `Deleted ${selected.file}`);
+			showToast('ok', t('Deleted {{file}}', { file: selected.file }));
 			onMutated(null);
 		} catch (e) {
 			showToast('error', String(e));
 		} finally {
 			setBusy(false);
 		}
-	}, [selected, showToast, onMutated]);
+	}, [selected, showToast, onMutated, t]);
 
 	// The shell's hotkeys reach the list through here. Rebuilt whenever one of
 	// the actions changes identity, so a binding never fires a stale closure —
@@ -515,13 +533,13 @@ export default function MonsterList({
 					<Search size={13} />
 					<input
 						ref={searchRef}
-						placeholder="Search name, file, species, raceid"
+						placeholder={t('Search name, file, species, raceid')}
 						value={search}
 						onChange={e => setSearch(e.target.value)}
 						spellCheck={false}
 					/>
 					{search && (
-						<button className="ss-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+						<button className="ss-search-clear" onClick={() => setSearch('')} aria-label={t('Clear search')}>
 							<X size={12} />
 						</button>
 					)}
@@ -530,7 +548,7 @@ export default function MonsterList({
 					<button
 						className={`ss-icon-btn${activeFilters.size > 0 ? ' ss-filter-btn-active' : ''}`}
 						onClick={() => setShowFilters(s => !s)}
-						title="Filter the list"
+						title={t('Filter the list')}
 					>
 						<Filter size={14} />
 						{activeFilters.size > 0 && <span className="ss-filter-count">{activeFilters.size}</span>}
@@ -538,17 +556,17 @@ export default function MonsterList({
 					{showFilters && (
 						<div className="ss-filter-popover" onMouseDown={e => e.stopPropagation()}>
 							<div className="ss-filter-head">
-								<span>Filters</span>
+								<span>{t('Filters')}</span>
 								{activeFilters.size > 0 && (
 									<button className="ss-filter-reset" onClick={() => setActiveFilters(new Map())}>
-										Clear all
+										{t('Clear all')}
 									</button>
 								)}
 							</div>
 							<div className="ss-filter-search">
 								<Search size={13} />
 								<input
-									placeholder="Search filters"
+									placeholder={t('Search filters')}
 									value={filterSearch}
 									onChange={e => setFilterSearch(e.target.value)}
 									spellCheck={false}
@@ -556,10 +574,11 @@ export default function MonsterList({
 							</div>
 							{filterSections.map(([section, list]) => (
 								<div key={section}>
-									<div className="ss-filter-section">{section}</div>
+									<div className="ss-filter-section">{t(section)}</div>
 									<div className="ss-filter-list">
 										{list.map(f => {
 											const mode = activeFilters.get(f.key);
+											const name = f.raw ? f.label : t(f.label);
 											return (
 												<button
 													key={f.key}
@@ -568,10 +587,10 @@ export default function MonsterList({
 													onClick={() => cycleFilter(f.key)}
 													title={
 														mode === 'include'
-															? `Only ${f.label} — click to exclude instead`
+															? t('Only {{filter}} — click to exclude instead', { filter: name })
 															: mode === 'exclude'
-																? `Excluding ${f.label} — click to clear`
-																: `Only ${f.label}; click twice to exclude it`
+																? t('Excluding {{filter}} — click to clear', { filter: name })
+																: t('Only {{filter}}; click twice to exclude it', { filter: name })
 													}
 												>
 													<span className="mx-filter-box">
@@ -581,14 +600,16 @@ export default function MonsterList({
 															<X size={11} />
 														) : null}
 													</span>
-													{f.label}
+													{name}
 												</button>
 											);
 										})}
 									</div>
 								</div>
 							))}
-							{filterSections.length === 0 && <div className="ss-filter-empty">No matching filters</div>}
+							{filterSections.length === 0 && (
+								<div className="ss-filter-empty">{t('No matching filters')}</div>
+							)}
 						</div>
 					)}
 				</div>
@@ -596,7 +617,7 @@ export default function MonsterList({
 
 			<div className="ss-mon-scroll" ref={scrollRef} onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
 				<div className="ss-mon-inner" style={{ height: shown.length * ROW_H }}>
-					{shown.length === 0 && <div className="ss-grid-empty">No monsters match.</div>}
+					{shown.length === 0 && <div className="ss-grid-empty">{t('No monsters match.')}</div>}
 					{rows}
 				</div>
 			</div>
@@ -604,7 +625,7 @@ export default function MonsterList({
 			<div className="ss-mon-foot">
 				<button className="ss-btn" onClick={openNew}>
 					<Plus size={14} />
-					New
+					{t('New')}
 				</button>
 				<span className="ss-mon-count">
 					{shown.length === monsters.length ? `${monsters.length}` : `${shown.length} / ${monsters.length}`}
@@ -620,7 +641,7 @@ export default function MonsterList({
 							void runDuplicate();
 						}}
 					>
-						Duplicate
+						{t('Duplicate')}
 					</button>
 					<button
 						className="ss-menu-item"
@@ -629,7 +650,7 @@ export default function MonsterList({
 							openRename();
 						}}
 					>
-						Rename…
+						{t('Rename…')}
 					</button>
 					{onReveal && (
 						<button
@@ -639,7 +660,7 @@ export default function MonsterList({
 								onReveal(menu.file);
 							}}
 						>
-							Reveal in folder
+							{t('Reveal in folder')}
 						</button>
 					)}
 					<div className="ss-menu-sep" />
@@ -650,7 +671,7 @@ export default function MonsterList({
 							setDialog('delete');
 						}}
 					>
-						Delete…
+						{t('Delete…')}
 					</button>
 				</div>
 			)}
@@ -658,9 +679,9 @@ export default function MonsterList({
 			{dialog === 'new' && (
 				<div className="ss-backdrop" onMouseDown={() => setDialog(null)}>
 					<div className="ss-modal" onMouseDown={e => e.stopPropagation()}>
-						<div className="ss-modal-title">New monster</div>
+						<div className="ss-modal-title">{t('New monster')}</div>
 						<div className="ss-field-row">
-							<label className="ss-field-label">Name</label>
+							<label className="ss-field-label">{t('Name')}</label>
 							<input
 								className="ss-field"
 								value={formName}
@@ -670,7 +691,7 @@ export default function MonsterList({
 							/>
 						</div>
 						<div className="ss-field-row">
-							<label className="ss-field-label">File</label>
+							<label className="ss-field-label">{t('File')}</label>
 							<input
 								className="ss-field"
 								value={formFile}
@@ -680,9 +701,9 @@ export default function MonsterList({
 							/>
 						</div>
 						<div className="ss-field-row">
-							<label className="ss-field-label">Group</label>
+							<label className="ss-field-label">{t('Group')}</label>
 							<select className="ss-field" value={formGroup} onChange={e => setFormGroup(e.target.value)}>
-								<option value="">(none)</option>
+								<option value="">{t('(none)')}</option>
 								{groups.map(g => (
 									<option key={g} value={g}>
 										{g}
@@ -692,11 +713,11 @@ export default function MonsterList({
 						</div>
 						<div className="ss-modal-buttons">
 							<button className="ss-btn ss-btn-ghost" onClick={() => setDialog(null)}>
-								Cancel
+								{t('Cancel')}
 							</button>
 							<div className="ss-modal-buttons-spacer" />
 							<button className="ss-btn ss-btn-primary" disabled={busy || !formName.trim()} onClick={runCreate}>
-								Create
+								{t('Create')}
 							</button>
 						</div>
 					</div>
@@ -706,9 +727,9 @@ export default function MonsterList({
 			{dialog === 'rename' && selected && (
 				<div className="ss-backdrop" onMouseDown={() => setDialog(null)}>
 					<div className="ss-modal" onMouseDown={e => e.stopPropagation()}>
-						<div className="ss-modal-title">Rename {selected.name}</div>
+						<div className="ss-modal-title">{t('Rename {{name}}', { name: selected.name })}</div>
 						<div className="ss-field-row">
-							<label className="ss-field-label">Name</label>
+							<label className="ss-field-label">{t('Name')}</label>
 							<input
 								className="ss-field"
 								value={formName}
@@ -718,7 +739,7 @@ export default function MonsterList({
 							/>
 						</div>
 						<div className="ss-field-row">
-							<label className="ss-field-label">File</label>
+							<label className="ss-field-label">{t('File')}</label>
 							<input
 								className="ss-field"
 								value={formFile}
@@ -727,11 +748,11 @@ export default function MonsterList({
 							/>
 						</div>
 						<div className="ss-modal-desc">
-							Renaming rewrites the monsters.xml entry as well as the file on disk.
+							{t('Renaming rewrites the monsters.xml entry as well as the file on disk.')}
 						</div>
 						<div className="ss-modal-buttons">
 							<button className="ss-btn ss-btn-ghost" onClick={() => setDialog(null)}>
-								Cancel
+								{t('Cancel')}
 							</button>
 							<div className="ss-modal-buttons-spacer" />
 							<button
@@ -739,7 +760,7 @@ export default function MonsterList({
 								disabled={busy || !formName.trim() || !formFile.trim()}
 								onClick={runRename}
 							>
-								Rename
+								{t('Rename')}
 							</button>
 						</div>
 					</div>
@@ -749,18 +770,19 @@ export default function MonsterList({
 			{dialog === 'delete' && selected && (
 				<div className="ss-backdrop" onMouseDown={() => setDialog(null)}>
 					<div className="ss-modal" onMouseDown={e => e.stopPropagation()}>
-						<div className="ss-modal-title">Delete {selected.name}?</div>
+						<div className="ss-modal-title">{t('Delete {{name}}?', { name: selected.name })}</div>
 						<div className="ss-modal-desc">
-							{selected.file} is removed from disk and from monsters.xml. Anything summoning it, or referencing it
-							from an outfit spell, will silently stop working.
+							{t('{{file}} is removed from disk and from monsters.xml. Anything summoning it, or referencing it from an outfit spell, will silently stop working.', {
+								file: selected.file
+							})}
 						</div>
 						<div className="ss-modal-buttons">
 							<button className="ss-btn ss-btn-ghost" onClick={() => setDialog(null)}>
-								Cancel
+								{t('Cancel')}
 							</button>
 							<div className="ss-modal-buttons-spacer" />
 							<button className="ss-btn ss-btn-primary" disabled={busy} onClick={runDelete}>
-								Delete
+								{t('Delete')}
 							</button>
 						</div>
 					</div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Ban, Check, ChevronDown, Ghost, ShieldAlert, X } from 'lucide-react';
 import type { Lint, LintSeverity } from './monster';
 
@@ -8,10 +9,19 @@ import type { Lint, LintSeverity } from './monster';
 
 const SEVERITIES: LintSeverity[] = ['error', 'warning', 'silent'];
 
+/** Values are i18n keys — translated at the render site with t(). */
 const SEVERITY_LABEL: Record<LintSeverity, string> = {
 	error: 'Errors',
 	warning: 'Warnings',
 	silent: 'Silent'
+};
+
+/** The chip tooltips, spelled out rather than lower-cased from SEVERITY_LABEL.
+ *  Case is a property of the language, not something to do to a noun. */
+const SEVERITY_TITLE: Record<LintSeverity, string> = {
+	error: 'Show errors',
+	warning: 'Show warnings',
+	silent: 'Show silent findings'
 };
 
 // `silent` deliberately gets its own icon and its own hue (--silent in shell.css),
@@ -71,6 +81,7 @@ export default function LintPanel({
 	onToggleSeverity,
 	onIgnoreCode
 }: Props) {
+	const { t } = useTranslation();
 	const [tab, setTab] = useState<LintTab>('monster');
 	const [fixing, setFixing] = useState<string | null>(null);
 	/** Right-clicked row: the code is what an ignore applies to. */
@@ -146,14 +157,14 @@ export default function LintPanel({
 						className={`ss-filter-tab${tab === 'monster' ? ' ss-filter-tab-active' : ''}`}
 						onClick={() => setTab('monster')}
 					>
-						{file ?? 'Monster'}
+						{file ?? t('Monster')}
 						<span className="ss-filter-tab-meta">{monsterLints.length}</span>
 					</button>
 					<button
 						className={`ss-filter-tab${tab === 'workspace' ? ' ss-filter-tab-active' : ''}`}
 						onClick={() => setTab('workspace')}
 					>
-						Workspace
+						{t('Workspace')}
 						<span className="ss-filter-tab-meta">{workspaceLints.length}</span>
 					</button>
 				</div>
@@ -166,10 +177,10 @@ export default function LintPanel({
 								key={s}
 								className={`ss-lint-chip ss-lint-${s}${severities.has(s) ? ' ss-lint-chip-on' : ''}`}
 								onClick={() => onToggleSeverity(s)}
-								title={`Show ${SEVERITY_LABEL[s].toLowerCase()}`}
+								title={t(SEVERITY_TITLE[s])}
 							>
 								<Icon size={12} />
-								{SEVERITY_LABEL[s]}
+								{t(SEVERITY_LABEL[s])}
 								<span className="ss-lint-chip-count">{counts[s]}</span>
 							</button>
 						);
@@ -180,22 +191,24 @@ export default function LintPanel({
 					<button
 						className="ss-lint-fix"
 						onClick={onFixAll}
-						title="Apply every automatic fix for this monster"
+						title={t('Apply every automatic fix for this monster')}
 					>
-						Fix all ({monsterLints.filter(l => l.fixable).length})
+						{t('Fix all ({{count}})', { count: monsterLints.filter(l => l.fixable).length })}
 					</button>
 				)}
 				{onFixAllWorkspace && tab === 'workspace' && workspaceLints.some(l => l.fixable && l.file) && (
 					<button
 						className="ss-lint-fix"
 						onClick={onFixAllWorkspace}
-						title="Apply every automatic fix across the corpus — writes those files directly"
+						title={t('Apply every automatic fix across the corpus — writes those files directly')}
 					>
-						Fix all ({workspaceLints.filter(l => l.fixable && l.file).length})
+						{t('Fix all ({{count}})', {
+							count: workspaceLints.filter(l => l.fixable && l.file).length
+						})}
 					</button>
 				)}
 
-				<button className="ss-icon-btn" onClick={onClose} aria-label="Close lints">
+				<button className="ss-icon-btn" onClick={onClose} aria-label={t('Close lints')}>
 					<ChevronDown size={14} />
 				</button>
 			</div>
@@ -204,14 +217,14 @@ export default function LintPanel({
 				{shownCount === 0 && (
 					<div className="ss-lint-clean">
 						<Check size={14} />
-						{source.length === 0 ? 'No problems found.' : 'Nothing matches the current filter.'}
+						{source.length === 0 ? t('No problems found.') : t('Nothing matches the current filter.')}
 					</div>
 				)}
 				{groups.map(({ severity, lints }) =>
 					lints.length === 0 ? null : (
 						<div key={severity} className="ss-lint-group">
 							<div className={`ss-lint-group-head ss-lint-${severity}`}>
-								{SEVERITY_LABEL[severity]}
+								{t(SEVERITY_LABEL[severity])}
 								<span className="ss-lint-chip-count">{lints.length}</span>
 							</div>
 							{lints.map((lint, i) => {
@@ -231,7 +244,7 @@ export default function LintPanel({
 										<button
 											className="ss-lint-row-main"
 											onClick={() => onJump(lint)}
-											title={lint.path ? `Jump to ${lint.path}` : lint.code}
+											title={lint.path ? t('Jump to {{path}}', { path: lint.path }) : lint.code}
 										>
 											<span className="ss-lint-msg">{lint.message}</span>
 											<span className="ss-lint-meta mono">
@@ -247,10 +260,10 @@ export default function LintPanel({
 												className="ss-lint-fix"
 												onClick={() => runFix(lint)}
 												disabled={fixing === lint.code + (lint.path ?? '')}
-												title="Apply the fix"
+												title={t('Apply the fix')}
 											>
 												<Check size={12} />
-												Fix
+												{t('Fix')}
 											</button>
 										)}
 									</div>
@@ -280,7 +293,7 @@ export default function LintPanel({
 						}}
 					>
 						<Ban size={14} />
-						Ignore {rowMenu.code} everywhere
+						{t('Ignore {{code}} everywhere', { code: rowMenu.code })}
 					</button>
 					<button
 						className="ss-menu-item"
@@ -289,7 +302,7 @@ export default function LintPanel({
 							void navigator.clipboard.writeText(rowMenu.code);
 						}}
 					>
-						Copy code
+						{t('Copy code')}
 					</button>
 				</div>
 			)}
@@ -305,13 +318,14 @@ interface StatusProps {
 
 /** The status-bar summary that doubles as the drawer's toggle (DESIGN §11.2). */
 export function LintStatus({ lints, onOpen, open }: StatusProps) {
+	const { t } = useTranslation();
 	const counts = countLints(lints);
 	const total = counts.error + counts.warning + counts.silent;
 	return (
-		<button className="ss-lint-status" onClick={onOpen} title={open ? 'Hide lints' : 'Show lints'}>
+		<button className="ss-lint-status" onClick={onOpen} title={open ? t('Hide lints') : t('Show lints')}>
 			{total === 0 ? (
 				<>
-					<Check size={12} /> No lints
+					<Check size={12} /> {t('No lints')}
 				</>
 			) : (
 				<>
