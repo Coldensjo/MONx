@@ -48,7 +48,7 @@ bun run tauri:build:all        # NSIS installer + portable .exe
 bun run tauri:build            # NSIS installer only
 ```
 
-On Linux use `./monx.sh` (release binary) or `./monx.sh dev` (hot-reloading dev app) — it forces XWayland and disables WebKitGTK's dmabuf renderer, which crashes under Wayland.
+On Linux use `./monx.sh` — it runs the hot-reloading dev app, forcing XWayland and disabling WebKitGTK's dmabuf renderer, which crashes under Wayland.
 
 **Outputs**
 
