@@ -171,11 +171,14 @@ src/
   QuickOpenDialog.tsx  Ctrl+P fuzzy jump to a monster
   PatchNotesDialog.tsx Patch notes since the user's cut-off point (Tools menu)
   HotkeysDialog.tsx    The hotkey manager (Preferences menu)
-  PreferencesDialog.tsx  Editor tab visibility + default tab (Preferences menu)
+  PreferencesDialog.tsx  Language, editor tab visibility + default tab (Preferences menu)
   UiInspector.tsx      Hold-F2 element inspector overlay
   monster.ts           Monster/workspace types, invoke wrappers, protocol URL builders
   spr.ts               Inherited invoke wrappers + protocol URLs
   settings.ts          localStorage (monx.* keys)
+  i18n.ts              Language layer: locale registry, i18next init (monx.locale)
+  locales/             en.ts (plural forms only), pl.ts, pt.ts — keyed by the
+                       English source string, so a missing entry reads as English
   prefs.ts             Editor tab preferences (monx.prefs) + linter display
                        and ignored codes (monx.lint)
   hotkeys.ts           Command type, chord parsing, defaults, dispatch hook (monx.hotkeys)

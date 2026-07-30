@@ -390,7 +390,7 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 						lints={lintAt('max')}
 						note={
 							Math.abs(block.min) > Math.abs(block.max)
-								? 'The loader swaps min and max when |min| > |max|. Write them in canonical order.'
+								? t('The loader swaps min and max when |min| > |max|. Write them in canonical order.')
 								: undefined
 						}
 					>
@@ -429,8 +429,8 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 								lints={lintAt('condition.start')}
 								note={
 									block.condition.start > Math.abs(block.min)
-										? 'Larger than the per-tick damage — the engine silently ignores it.'
-										: 'Immediate damage on application.'
+										? t('Larger than the per-tick damage — the engine silently ignores it.')
+										: t('Immediate damage on application.')
 								}
 							>
 								<NumberField
@@ -574,13 +574,13 @@ export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, l
 						value={block.area?.shape ?? 'none'}
 						onChange={v => set({ area: v === 'none' ? null : emptyArea(v as AreaShape) })}
 						options={[
-							{ value: 'none', label: 'Single target' },
-							{ value: 'beam', label: 'Beam', title: 'Fires along the monster’s facing' },
-							{ value: 'radius', label: 'Radius', title: 'Filled circle' },
+							{ value: 'none', label: t('Single target') },
+							{ value: 'beam', label: t('Beam'), title: t('Fires along the monster’s facing') },
+							{ value: 'radius', label: t('Radius'), title: t('Filled circle') },
 							// The 7.x loaders never read `ring`; offering it would
 							// produce a spell that quietly hits one tile.
 							...(info.geometryRing
-								? [{ value: 'ring', label: 'Ring', title: 'Hollow ring' }]
+								? [{ value: 'ring', label: t('Ring'), title: t('Hollow ring') }]
 								: [])
 						]}
 						disabled={readOnly}

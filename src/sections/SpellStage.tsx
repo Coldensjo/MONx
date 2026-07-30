@@ -310,7 +310,7 @@ export function SpellStage({ block, look, parent }: Props) {
 					className="ss-btn mx-stage-btn"
 					onClick={() => setTarget({ dx: defaultDistance(block), dy: 0 })}
 					title={t('Reset the target')}
-					aria-label="Reset the target"
+					aria-label={t('Reset the target')}
 				>
 					<RotateCcw size={13} />
 				</button>
