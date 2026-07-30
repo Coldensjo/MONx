@@ -332,6 +332,20 @@ body.ss-dragging {
 	justify-content: center;
 }
 
+/* The preset picker is one of the stack's rows, so it matches the buttons
+   rather than the editor inputs it borrows its class from: full width, the
+   button's 32px, and no `flex: 1` — in a column that grows the *height*. */
+.ss-loot-tray-actions .mx-preset-pick {
+	flex: none;
+	width: 100%;
+	max-width: none;
+	min-height: 32px;
+	padding: 6px 10px;
+	background: var(--surface-2);
+	text-align: center;
+	text-align-last: center;
+}
+
 .ss-loot-tray-empty {
 	grid-row: 1 / -1;
 	white-space: nowrap;

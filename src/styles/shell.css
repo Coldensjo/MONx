@@ -876,10 +876,6 @@
 
 /* ---------- Loot presets ---------- */
 
-.mx-preset-pick {
-	max-width: 150px;
-}
-
 .mx-preset-row {
 	display: flex;
 	align-items: center;
