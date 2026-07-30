@@ -114,6 +114,30 @@
 	font-variant-numeric: tabular-nums;
 }
 
+/* Copy / paste / add for the section's block. `margin-left: auto` when there is
+   no summary, so the buttons sit right whether or not one is rendered. */
+.ss-ed-section-blocks {
+	display: flex;
+	gap: 2px;
+	margin-left: auto;
+}
+
+.ss-ed-section-summary ~ .ss-ed-section-blocks {
+	margin-left: 0;
+}
+
+/* Quiet until the header is under the cursor — six sections carrying three
+   buttons each would otherwise be the loudest thing in the editor. */
+.ss-ed-section-blocks {
+	opacity: 0.25;
+	transition: opacity 0.12s;
+}
+
+.ss-ed-section-head:hover .ss-ed-section-blocks,
+.ss-ed-section-blocks:focus-within {
+	opacity: 1;
+}
+
 .ss-ed-section-body {
 	padding: 12px;
 	display: flex;

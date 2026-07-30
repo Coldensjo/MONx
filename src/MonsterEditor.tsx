@@ -5,6 +5,16 @@ import { loadSetting, saveSetting } from './settings';
 import { PreviewProvider, ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
 import { DEFAULT_PREFS, landingSection, visibleSectionIds, type Prefs } from './prefs';
+import {
+	applyBlock,
+	BLOCK_LABEL,
+	BlockContext,
+	loadBlock,
+	readBlock,
+	saveBlock,
+	type Block,
+	type BlockControls
+} from './blocks';
 import { Identity } from './sections/Identity';
 import { LookSection } from './sections/LookSection';
 import { Combat } from './sections/Combat';
@@ -66,6 +76,8 @@ export interface MonsterEditorProps {
 	 *  request left standing would re-fire on every remount and beat the default
 	 *  tab the next time a monster is opened. */
 	onJumped?: () => void;
+	/** Feedback for the block clipboard; silent without it. */
+	onToast?: (kind: 'ok' | 'error', message: string) => void;
 }
 
 export function MonsterEditor({
@@ -85,7 +97,8 @@ export function MonsterEditor({
 	thingAnim,
 	prefs = DEFAULT_PREFS,
 	jumpRequest = null,
-	onJumped
+	onJumped,
+	onToast
 }: MonsterEditorProps) {
 	const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => new Set(loadState().collapsed));
 	const [active, setActive] = useState<SectionId>(() => landingSection(prefs) ?? 'identity');
@@ -122,6 +135,39 @@ export function MonsterEditor({
 			onChange({ ...doc, ...p });
 		},
 		[doc, onChange]
+	);
+
+	// ---- Block clipboard ----
+	// Held in state so the paste buttons light up the moment something is
+	// copied; localStorage is the durable copy, read once on mount.
+	const [clipboard, setClipboard] = useState<Block | null>(loadBlock);
+	const blocks = useMemo<BlockControls>(
+		() => ({
+			clipboard,
+			readOnly,
+			copy: kind => {
+				const block = readBlock(doc, kind);
+				saveBlock(block);
+				setClipboard(block);
+				onToast?.('ok', `Copied ${block.count} ${BLOCK_LABEL[kind]} from ${doc.name}`);
+			},
+			paste: (kind, mode) => {
+				if (readOnly || !clipboard || clipboard.kind !== kind) return;
+				const p = applyBlock(doc, clipboard, mode);
+				if (!p) {
+					onToast?.('error', `That ${BLOCK_LABEL[kind]} block could not be read`);
+					return;
+				}
+				patch(p);
+				onToast?.(
+					'ok',
+					`${mode === 'replace' ? 'Replaced' : 'Added'} ${clipboard.count} ${BLOCK_LABEL[kind]} from ${
+						clipboard.from
+					}`
+				);
+			}
+		}),
+		[clipboard, doc, patch, readOnly, onToast]
 	);
 
 	const toggle = useCallback((id: SectionId) => {
@@ -195,6 +241,7 @@ export function MonsterEditor({
 	return (
 		<PreviewProvider value={previewUrl ?? null}>
 			<ThingAnimProvider value={thingAnim ?? null}>
+			<BlockContext.Provider value={blocks}>
 			<div className="ss-ed">
 				<nav className="ss-ed-bar">
 					{visible.map(id => (
@@ -248,6 +295,7 @@ export function MonsterEditor({
 					</div>
 				</div>
 			</div>
+			</BlockContext.Provider>
 			</ThingAnimProvider>
 		</PreviewProvider>
 	);

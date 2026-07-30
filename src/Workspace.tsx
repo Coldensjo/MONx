@@ -1543,6 +1543,7 @@ export default function Workspace({
 								prefs={prefs}
 								jumpRequest={jumpRequest}
 								onJumped={() => setJumpRequest(null)}
+								onToast={showToast}
 							/>
 						) : (
 							<div className="mx-empty">Select a monster</div>

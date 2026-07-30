@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardPaste, ClipboardPlus, Copy } from 'lucide-react';
 import type { ItemIndex, MonsterDoc, SpellName } from '../monster';
 import type { LintAt } from '../fields/Field';
+import { BLOCK_LABEL, isBlockKind, useBlocks } from '../blocks';
 
 export const SECTION_IDS = [
 	'identity',
@@ -70,9 +71,53 @@ export function Section({ id, collapsed, onToggle, summary, children }: ShellPro
 					<h2>{SECTION_LABEL[id]}</h2>
 				</button>
 				{summary && <span className="ss-ed-section-summary">{summary}</span>}
+				<BlockButtons id={id} />
 			</header>
 			{!collapsed && <div className="ss-ed-section-body">{children}</div>}
 		</section>
+	);
+}
+
+/**
+ * Copy / paste for the section's own slice of the document. Rendered here
+ * rather than in each section so the six that carry a block need no changes of
+ * their own — the shell provides the controls through context, and a section
+ * rendered without it (fixtures) simply has no buttons.
+ */
+function BlockButtons({ id }: { id: SectionId }) {
+	const blocks = useBlocks();
+	if (!blocks || !isBlockKind(id)) return null;
+	const held = blocks.clipboard?.kind === id ? blocks.clipboard : null;
+	const label = BLOCK_LABEL[id];
+	return (
+		<span className="ss-ed-section-blocks">
+			<button
+				type="button"
+				className="ss-btn ss-btn-ghost ss-ed-mini"
+				title={`Copy this monster's ${label}`}
+				onClick={() => blocks.copy(id)}
+			>
+				<Copy size={13} />
+			</button>
+			<button
+				type="button"
+				className="ss-btn ss-btn-ghost ss-ed-mini"
+				disabled={!held || blocks.readOnly}
+				title={held ? `Replace with ${held.count} ${label} from ${held.from}` : `No ${label} copied`}
+				onClick={() => blocks.paste(id, 'replace')}
+			>
+				<ClipboardPaste size={13} />
+			</button>
+			<button
+				type="button"
+				className="ss-btn ss-btn-ghost ss-ed-mini"
+				disabled={!held || blocks.readOnly}
+				title={held ? `Add ${held.count} ${label} from ${held.from} to what is here` : `No ${label} copied`}
+				onClick={() => blocks.paste(id, 'merge')}
+			>
+				<ClipboardPlus size={13} />
+			</button>
+		</span>
 	);
 }
 
