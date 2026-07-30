@@ -17,7 +17,7 @@ import {
 	type Phase,
 	type Tile
 } from '../spellsim';
-import { usePreviewUrl, useThingAnim } from '../fields/preview';
+import { frameMs, usePreviewUrl, useThingAnim } from '../fields/preview';
 
 // A live re-enactment of one spell block: the caster waits out its cooldown,
 // rolls `chance`, throws its projectile and lights up every tile the area
@@ -206,10 +206,26 @@ export function SpellStage({ block, look, parent }: Props) {
 	}, [playing, speed, block.chance, begin, fire]);
 
 	// Effect sprites step on their own clock; the impact phase just gates them.
+	// A modern bundle states how long each phase is held, so the area effect's
+	// own timing drives the tick where it has one — the sim runs at the speed
+	// the client would play it.
 	useEffect(() => {
-		const t = setInterval(() => setFrame(f => f + 1), EFFECT_FRAME_MS / speed);
-		return () => clearInterval(t);
-	}, [speed]);
+		let timer: ReturnType<typeof setTimeout>;
+		const step = (f: number) => {
+			timer = setTimeout(
+				() => {
+					setFrame(f + 1);
+					step(f + 1);
+				},
+				frameMs(areaAnim, areaAnim ? f % Math.max(1, areaAnim.frames) : 0, EFFECT_FRAME_MS) / speed
+			);
+		};
+		step(frame);
+		return () => clearTimeout(timer);
+		// `frame` is deliberately not a dependency: it is what this loop drives,
+		// and restarting on every tick would reset the chain each time.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [speed, areaAnim]);
 
 	// A floater outlives its cast phase, so it clears itself.
 	useEffect(() => {

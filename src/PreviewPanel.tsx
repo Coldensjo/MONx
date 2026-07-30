@@ -25,7 +25,7 @@ import {
 	type BalanceVerdict
 } from './derive';
 import { useDropTarget } from './dnd';
-import { useThingAnim } from './fields/preview';
+import { frameMs, useThingAnim } from './fields/preview';
 
 // The right-hand column: the monster's look rendered live, the numbers the XML
 // never states, and an advisory balance hint (DESIGN §14).
@@ -151,18 +151,29 @@ export default function PreviewPanel({
 	const firstFrame = outfitAnim?.animateAlways || frames < 2 ? 0 : 1;
 
 	// `typeex` renders an item, which has nothing to animate.
+	//
+	// Each frame is held for as long as the client's own data says, which is a
+	// chained timeout rather than one interval — a modern bundle gives every
+	// phase its own duration, and they differ within a single outfit. The
+	// `.spr`/`.dat` engines state none, so those fall back to the fixed tick
+	// their client used for everything.
 	useEffect(() => {
 		if (!playing || typeex || frames <= firstFrame + 1) {
 			setFrame(firstFrame);
 			return;
 		}
 		setFrame(firstFrame);
-		const t = setInterval(
-			() => setFrame(f => (f + 1 < frames ? f + 1 : firstFrame)),
-			ANIM_INTERVAL_MS
-		);
-		return () => clearInterval(t);
-	}, [playing, typeex, frames, firstFrame]);
+		let timer: ReturnType<typeof setTimeout>;
+		const step = (current: number) => {
+			timer = setTimeout(() => {
+				const next = current + 1 < frames ? current + 1 : firstFrame;
+				setFrame(next);
+				step(next);
+			}, frameMs(outfitAnim, current, ANIM_INTERVAL_MS));
+		};
+		step(firstFrame);
+		return () => clearTimeout(timer);
+	}, [playing, typeex, frames, firstFrame, outfitAnim]);
 
 	const drop = useDropTarget(['outfit'], p => {
 		if (p.kind === 'outfit') onLookType?.(p.type);

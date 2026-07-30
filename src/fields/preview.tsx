@@ -38,6 +38,17 @@ export interface ThingAnim {
 	 *  animation rather than a standing pose — a fire elemental burns while it
 	 *  stands still, so skipping frame 0 leaves it frozen. */
 	animateAlways: boolean;
+	/** Milliseconds each frame is held, in frame order. Empty when the client's
+	 *  format carries no durations — the `.spr`/`.dat` engines held every thing
+	 *  at one fixed tick, and a modern bundle states a duration per phase. */
+	durations: number[];
+}
+
+/** How long frame `i` should be held, given a thing's durations and the fixed
+ *  tick to fall back on. A zero or missing entry means the thing animates but
+ *  never said how fast. */
+export function frameMs(anim: ThingAnim | null, i: number, fallback: number): number {
+	return anim?.durations?.[i] || fallback;
 }
 
 export type ThingAnimLookup = (kind: 'effect' | 'missile' | 'outfit' | 'item', id: number) => Promise<ThingAnim | null>;

@@ -46,6 +46,10 @@ export interface ThingBrowserProps<T> {
 	draggable?: boolean;
 	/** Persists zoom under `monx.zoom.<view>`. */
 	view: string;
+	/** Milliseconds per grid animation step. Defaults to the fixed tick the
+	 *  `.spr`/`.dat` client used for everything; a modern bundle states a
+	 *  duration per phase, and the caller passes the one that dominates. */
+	frameInterval?: number;
 
 	// ---- optional hooks; every one of these is off by default ----
 
@@ -333,6 +337,7 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		selectionMode,
 		draggable = false,
 		view,
+		frameInterval,
 		searchText,
 		searchId,
 		cellFrames,
@@ -686,6 +691,11 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		[shown, animateEnabled, cellFrames]
 	);
 
+	// One clock for the whole grid, not one per cell: a contact sheet of two
+	// hundred things cannot afford two hundred timers, and the format's own
+	// `synchronized` flag says a shared clock is what the client does too.
+	// `frameInterval` lets the caller set that clock from the client's declared
+	// durations — 300 ms for a modern walk cycle against the `.dat`'s fixed 220.
 	useEffect(() => {
 		if (!gridAnimates) {
 			setGridFrame(0);
@@ -693,10 +703,10 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		}
 		const t = setInterval(
 			() => setGridFrame(f => f + 1),
-			view === 'items' ? ITEM_ANIM_INTERVAL_MS : ANIM_INTERVAL_MS
+			frameInterval ?? (view === 'items' ? ITEM_ANIM_INTERVAL_MS : ANIM_INTERVAL_MS)
 		);
 		return () => clearInterval(t);
-	}, [gridAnimates, view]);
+	}, [gridAnimates, view, frameInterval]);
 
 	return (
 		<>

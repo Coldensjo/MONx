@@ -574,6 +574,29 @@ layer learned a new concept.
 Addons are the other disagreement, and smaller: a bitmask over separate sprites in the `.dat`,
 the pattern-y axis here. `look.addons` indexes that axis directly, and mounts index z.
 
+**And the animation is not three frames at 220 ms.** That was the `.dat`'s shape and MONx's
+fixed tick, and both were being applied to Canary — every monster walking on frames 1 and 2 of
+an assumed three, at the speed a 7.x client ran. Neither number is in the modern data:
+
+| | `.spr`/`.dat` | modern bundle |
+|---|---|---|
+| Outfit strip | 3 frames, typically | **9** for 994 of 1,443; 16 for 234; 3 for 164 |
+| Frame duration | none stated — one fixed tick | `SpritePhase{duration_min, duration_max}` per frame |
+| Walk cycle | 220 ms/frame, MONx's constant | **300 ms** for 10,269 of the declared phases |
+| Effects | 220 ms/frame | 100 ms mostly, but 40/50/60/70/135 all appear |
+
+`SpriteAnimation` is now parsed — phases, `default_start_phase`, `synchronized`, `loop_count` —
+and `Thing::strip_durations` returns the per-frame milliseconds in strip order. The preview
+holds each frame for as long as its own phase says, which is a chained timeout rather than one
+interval, because the durations differ *within* a single outfit: a dragon lord is
+`[0, 300 × 8]`, the leading zero being the standing pose that is held until something moves.
+
+Two places still run one clock for many things, and deliberately. The browser grid gets the
+duration that dominates its category — a contact sheet of two hundred things cannot afford two
+hundred timers, and `synchronized` says the client shares a clock too. The `.spr`/`.dat`
+engines state no durations at all, so they keep the fixed tick their client used; the fallback
+is not a guess there, it is the format's actual answer.
+
 `items.otb` also became optional as part of this. The modern engines have no server↔client id
 split, so the file does not exist and requiring it cost the entire item database — every loot
 name and icon — for an indirection that is not there. Canary loads 37,506 items from

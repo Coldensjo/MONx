@@ -34,6 +34,36 @@ pub enum Kind {
     Missile,
 }
 
+/// How long one animation phase is held, in milliseconds.
+///
+/// The client picks a value in `[min, max]` afresh each time it plays the
+/// phase; the two are equal for all but a handful of things. MONx previews at
+/// the midpoint, which is the only number a fixed-step preview can honestly
+/// show for a range.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Phase {
+    pub min_ms: u32,
+    pub max_ms: u32,
+}
+
+impl Phase {
+    pub fn mid_ms(&self) -> u32 {
+        (self.min_ms + self.max_ms) / 2
+    }
+}
+
+/// A frame group's animation block. The `.spr`/`.dat` format has no equivalent
+/// — its client held every thing at one fixed tick — so this is the only place
+/// a real frame duration can come from.
+#[derive(Debug, Clone, Default)]
+pub struct Animation {
+    pub default_start_phase: u32,
+    pub synchronized: bool,
+    pub random_start_phase: bool,
+    pub loop_count: u32,
+    pub phases: Vec<Phase>,
+}
+
 /// One frame group. Outfits have two — idle and moving — and everything else
 /// has one.
 #[derive(Debug, Clone, Default)]
@@ -44,6 +74,7 @@ pub struct FrameGroup {
     pub layers: u32,
     pub frames: u32,
     pub sprite_ids: Vec<u32>,
+    pub animation: Option<Animation>,
 }
 
 impl FrameGroup {
@@ -125,6 +156,26 @@ impl Thing {
     /// the fire elementals, whose flames must not freeze in the browser.
     pub fn animates_always(&self) -> bool {
         self.idle().is_none_or(|g| g.frames > 1)
+    }
+
+    /// How long each strip frame is held, in milliseconds, in strip order.
+    ///
+    /// Empty when the thing declares no phase durations — the caller then
+    /// falls back to a fixed tick, which is all the `.dat` engines ever had.
+    /// A group that animates without saying how fast contributes zeroes, so
+    /// the list stays aligned with `strip_frame` either way.
+    pub fn strip_durations(&self) -> Vec<u32> {
+        let mut out = Vec::new();
+        for group in &self.groups {
+            match group.animation.as_ref().filter(|a| !a.phases.is_empty()) {
+                Some(a) => out.extend(a.phases.iter().map(Phase::mid_ms)),
+                None => out.extend(std::iter::repeat_n(0, group.frames.max(1) as usize)),
+            }
+        }
+        if out.iter().all(|d| *d == 0) {
+            return Vec::new();
+        }
+        out
     }
 }
 
@@ -224,6 +275,7 @@ fn parse_sprite_info(body: &[u8]) -> Option<FrameGroup> {
         layers: 1,
         frames: 1,
         sprite_ids: Vec::new(),
+        animation: None,
     };
     let mut r = Reader::new(body);
     while let Some((field, wire)) = r.tag() {
@@ -242,10 +294,11 @@ fn parse_sprite_info(body: &[u8]) -> Option<FrameGroup> {
             }
             (5, 0) => g.sprite_ids.push(r.varint()? as u32),
             (6, 2) => {
-                let phases = count_phases(r.bytes()?);
-                if phases > 0 {
-                    g.frames = phases;
+                let anim = parse_animation(r.bytes()?);
+                if !anim.phases.is_empty() {
+                    g.frames = anim.phases.len() as u32;
                 }
+                g.animation = Some(anim);
             }
             _ => r.skip(wire)?,
         }
@@ -264,20 +317,60 @@ fn parse_sprite_info(body: &[u8]) -> Option<FrameGroup> {
     Some(g)
 }
 
-/// `SpriteAnimation.sprite_phase` count — the number of animation frames.
-fn count_phases(body: &[u8]) -> u32 {
-    let mut n = 0;
+/// `SpriteAnimation` — the phase list, which is both the frame count and the
+/// only source of real frame durations MONx has.
+///
+/// ```text
+/// SpriteAnimation { 1 default_start_phase  2 synchronized  3 random_start_phase
+///                   4 loop_type  5 loop_count  6 sprite_phase[] }
+/// SpritePhase     { 1 duration_min  2 duration_max }
+/// ```
+fn parse_animation(body: &[u8]) -> Animation {
+    let mut a = Animation::default();
     let mut r = Reader::new(body);
     while let Some((field, wire)) = r.tag() {
-        if field == 6 && wire == 2 {
-            if r.bytes().is_some() {
-                n += 1;
-            }
-        } else if r.skip(wire).is_none() {
+        let ok = match (field, wire) {
+            (1, 0) => r.varint().map(|v| a.default_start_phase = v as u32).is_some(),
+            (2, 0) => r.varint().map(|v| a.synchronized = v != 0).is_some(),
+            (3, 0) => r.varint().map(|v| a.random_start_phase = v != 0).is_some(),
+            (5, 0) => r.varint().map(|v| a.loop_count = v as u32).is_some(),
+            (6, 2) => match r.bytes() {
+                Some(p) => {
+                    a.phases.push(parse_phase(p));
+                    true
+                }
+                None => false,
+            },
+            _ => r.skip(wire).is_some(),
+        };
+        if !ok {
             break;
         }
     }
-    n
+    a
+}
+
+fn parse_phase(body: &[u8]) -> Phase {
+    let mut p = Phase::default();
+    let mut r = Reader::new(body);
+    while let Some((field, wire)) = r.tag() {
+        let ok = match (field, wire) {
+            (1, 0) => r.varint().map(|v| p.min_ms = v as u32).is_some(),
+            (2, 0) => r.varint().map(|v| p.max_ms = v as u32).is_some(),
+            _ => r.skip(wire).is_some(),
+        };
+        if !ok {
+            break;
+        }
+    }
+    // One of the two absent means it is not a range.
+    if p.max_ms == 0 {
+        p.max_ms = p.min_ms;
+    }
+    if p.min_ms == 0 {
+        p.min_ms = p.max_ms;
+    }
+    p
 }
 
 // ---------- Wire reader ----------

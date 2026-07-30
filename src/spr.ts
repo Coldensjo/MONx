@@ -55,6 +55,10 @@ export interface ThingSummary {
 	/** Names of the thing's attribute flags (e.g. "stackable", "light"). */
 	propNames: string[];
 	name?: string;
+	/** Milliseconds each frame is held, in frame order. Absent for the
+	 *  .spr/.dat engines — that format carries no durations, so their preview
+	 *  runs at the fixed tick their client did. */
+	frameDurations?: number[];
 }
 
 export interface ThingProp {

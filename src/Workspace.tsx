@@ -65,7 +65,7 @@ import PatchNotesDialog from './PatchNotesDialog';
 import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
 import { loadFavourites, saveFavourites } from './favourites';
 import { loadPresets, savePresets, upsertPreset, type LootPreset } from './lootpresets';
-import { getThing, getThings, type ThingSummary } from './spr';
+import { getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { workspaceLabel, type Toast } from './App';
 
@@ -419,23 +419,62 @@ export default function Workspace({
 	);
 
 	/** Frame and pattern counts, so the spell stage animates the real cycle length. */
+	// Answered from the lists already loaded rather than from the `.dat`: a
+	// bundle workspace has no `.dat` to ask, and the round-trip failed silently
+	// there, leaving every Canary monster on the fallback three-frame loop.
+	const thingIndex = useMemo(() => {
+		const byId = (list: ThingSummary[]) => new Map(list.map(t => [t.id, t]));
+		return {
+			outfit: byId(things.outfit),
+			effect: byId(things.effect),
+			missile: byId(things.missile)
+		};
+	}, [things]);
+
+	// The grid runs one clock for every cell, so it gets the duration that
+	// dominates the category rather than any single thing's: 300 ms for a modern
+	// walk cycle, 100 ms for effects, and undefined for the `.spr`/`.dat`
+	// engines, which state none and keep the fixed tick their client used.
+	const thingIntervals = useMemo(() => {
+		const modal = (list: ThingSummary[]) => {
+			const counts = new Map<number, number>();
+			for (const t of list) {
+				for (const d of t.frameDurations ?? []) {
+					if (d > 0) counts.set(d, (counts.get(d) ?? 0) + 1);
+				}
+			}
+			let best: number | undefined;
+			let seen = 0;
+			for (const [ms, n] of counts) {
+				if (n > seen) {
+					seen = n;
+					best = ms;
+				}
+			}
+			return best;
+		};
+		return {
+			outfits: modal(things.outfit),
+			effects: modal(things.effect),
+			missiles: modal(things.missile)
+		};
+	}, [things]);
+
 	const thingAnim = useCallback<ThingAnimLookup>(
 		async (kind, id) => {
 			if (kind === 'item') return null;
-			try {
-				const t = await getThing(info.datPath, kind, id);
-				return {
-					frames: t.frames,
-					patternX: t.patternX,
-					patternY: t.patternY,
-					animateAlways: t.animateAlways
-				};
-			} catch {
-				// An unknown id is a lint elsewhere; here it just means "don't animate".
-				return null;
-			}
+			const t = thingIndex[kind].get(id);
+			// An unknown id is a lint elsewhere; here it just means "don't animate".
+			if (!t) return null;
+			return {
+				frames: t.frames,
+				patternX: t.patternX,
+				patternY: t.patternY,
+				animateAlways: t.animateAlways,
+				durations: t.frameDurations ?? []
+			};
 		},
-		[info.datPath]
+		[thingIndex]
 	);
 
 	const monsterNames = useMemo(() => monsters.map(m => m.name), [monsters]);
@@ -1899,6 +1938,7 @@ export default function Workspace({
 							}
 							searchId={t => t.id}
 							searchText={t => t.name ?? ''}
+							frameInterval={thingIntervals[view as ThingView]}
 							filters={view === 'outfits' ? outfitFilters : undefined}
 							selectionMode="single"
 							view={view}

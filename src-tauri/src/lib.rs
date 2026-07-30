@@ -76,6 +76,11 @@ struct ThingSummary {
     prop_names: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
+    /// Milliseconds each frame is held, in frame order. Empty for the
+    /// `.spr`/`.dat` engines, whose format carries no durations at all — their
+    /// client ran everything at one fixed tick, and so does the preview.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    frame_durations: Vec<u32>,
 }
 
 
@@ -111,6 +116,7 @@ fn get_things(
             animate_always: dat::thing_animate_always(t),
             prop_names: t.props.iter().map(|p| p.name.clone()).collect(),
             name: t.name.clone(),
+            frame_durations: Vec::new(),
         })
         .collect())
 }
@@ -150,6 +156,7 @@ fn bundle_things(bundle: &assets::Bundle, cat: Category) -> Vec<ThingSummary> {
                 // only offered where they exist.
                 prop_names: Vec::new(),
                 name: t.name.clone(),
+                frame_durations: t.strip_durations(),
             }
         })
         .collect();
