@@ -1,11 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
 import { COMMON_IMMUNITY_PRESET, CONDITION_IMMUNITIES, damageTypes, type DamageType } from '../catalog';
 import { elementPercent, isImmune, type DamageType as CombatType } from '../derive';
 import { FieldLint } from '../fields/Field';
 import { PercentSlider } from '../fields/PercentSlider';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
-import { Section, SubGroup, type SectionId, type SectionProps } from './section';
+import { Section, SubGroup, useMonsterState, type SectionId, type SectionProps } from './section';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -30,7 +29,7 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 	// would flip the row to Normal and unmount the slider mid-gesture. Types
 	// the user has put (or edited) in percent mode stay there until they pick
 	// another mode, even at 0.
-	const [pinnedPercent, setPinnedPercent] = useState<Set<string>>(new Set());
+	const [pinnedPercent, setPinnedPercent] = useMonsterState(doc.file, () => new Set<string>());
 	const pinPercent = (d: DamageType, on: boolean) =>
 		setPinnedPercent(prev => {
 			if (prev.has(d.key) === on) return prev;

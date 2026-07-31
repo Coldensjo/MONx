@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { ReactNode } from 'react';
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { ChevronDown, ChevronRight, ClipboardPaste, ClipboardPlus, Copy } from 'lucide-react';
 import type { ItemIndex, MonsterDoc, SpellName } from '../monster';
 import type { LintAt } from '../fields/Field';
@@ -70,6 +70,31 @@ export interface SectionProps {
 	onBrowseCorpses?: () => void;
 	/** Opens the Items browser unfiltered, for the Look section's typeex picker. */
 	onBrowseItems?: () => void;
+}
+
+/**
+ * Section-local UI state that belongs to *one* monster — a pinned slider mode, a
+ * row selection, an unlocked field.
+ *
+ * The editor used to be keyed on `doc.file`, so opening another monster threw the
+ * whole tree away and this state went with it. That remount is also what made the
+ * switch flicker: every DOM node and every sprite `<img>` was rebuilt from
+ * scratch, so the column redrew from nothing instead of updating in place. The
+ * editor now reconciles, and the handful of things that really were per-monster
+ * re-seed here instead.
+ *
+ * Re-seeding during render rather than in an effect is deliberate: an effect
+ * would paint one frame of the previous monster's state first, which is the very
+ * thing this is meant to avoid.
+ */
+export function useMonsterState<T>(file: string, seed: () => T): [T, Dispatch<SetStateAction<T>>] {
+	const [state, setState] = useState(seed);
+	const [seen, setSeen] = useState(file);
+	if (seen !== file) {
+		setSeen(file);
+		setState(() => seed());
+	}
+	return [state, setState];
 }
 
 interface ShellProps {

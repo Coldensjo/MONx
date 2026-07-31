@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { tauriItemIndex, type ItemIndex, type Lint, type MonsterDoc, type SpellName } from './monster';
 import { loadSetting, saveSetting } from './settings';
@@ -218,30 +218,40 @@ export function MonsterEditor({
 			next.delete(id);
 			return next;
 		});
-		document.getElementById(`ss-ed-${id}`)?.scrollIntoView({ behavior, block: 'start' });
+		// The container is scrolled directly rather than by scrollIntoView, which
+		// walks *every* scrollable ancestor and nudges the shell around the editor
+		// as well. Subtracting the column's own top padding means landing on the
+		// first section is a scroll to 0 — no movement at all, rather than a 20px
+		// twitch every time a monster is opened.
+		const box = scrollRef.current;
+		const el = document.getElementById(`ss-ed-${id}`);
+		if (!box || !el) return;
+		const pad = parseFloat(getComputedStyle(box).paddingTop) || 0;
+		const top = box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - pad;
+		box.scrollTo({ top: Math.max(0, top), behavior });
 	}, []);
 
 	// Opening a monster lands on the default tab, instantly: this is where the
 	// work starts, so animating there would only be a delay. Keyed on the file,
 	// so switching tabs or reloading a monster re-lands but editing does not.
-	useEffect(() => {
+	//
+	// A *layout* effect, and no requestAnimationFrame: the new document's sections
+	// are already in the DOM by the time this runs, so waiting a frame only bought
+	// one painted frame at the old scroll position — the flicker you saw switching
+	// monsters. Scrolling here happens before the browser paints at all.
+	useLayoutEffect(() => {
 		const id = landingSection(prefs);
 		if (!id) return;
-		// One frame late, so the sections the new doc renders exist to scroll to.
-		const frame = requestAnimationFrame(() => jump(id, 'auto'));
-		return () => cancelAnimationFrame(frame);
+		jump(id, 'auto');
 	}, [doc.file, prefs, jump]);
 
 	// A jump asked for from outside the editor. Declared after the landing effect
 	// so that when both fire — clicking Loot → Edit while a browser held the centre
 	// column remounts the editor — the request is the one that sticks.
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!jumpRequest) return;
-		const frame = requestAnimationFrame(() => {
-			if (visible.includes(jumpRequest)) jump(jumpRequest, 'auto');
-			onJumped?.();
-		});
-		return () => cancelAnimationFrame(frame);
+		if (visible.includes(jumpRequest)) jump(jumpRequest, 'auto');
+		onJumped?.();
 	}, [jumpRequest, visible, jump, onJumped]);
 
 	const lintCounts = useMemo(() => {

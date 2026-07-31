@@ -58,6 +58,7 @@ export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed,
 				renderRow={(block, i) => (
 					<SpellCard
 						block={block}
+						file={doc.file}
 						onChange={next => setBlocks(blocks.map((b, j) => (j === i ? next : b)))}
 						spells={spells}
 						engine={doc.engine}

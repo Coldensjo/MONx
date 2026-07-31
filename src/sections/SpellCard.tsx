@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import {
 	BUILTIN_SPELLS,
@@ -18,7 +18,7 @@ import { engineInfo } from '../engine';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
-import { Banner, SubGroup } from './section';
+import { Banner, SubGroup, useMonsterState } from './section';
 
 const REGISTERED_GROUP = 'Registered (###)';
 
@@ -40,6 +40,9 @@ function emptyArea(shape: AreaShape) {
 
 interface Props {
 	block: SpellBlock;
+	/** The monster this card belongs to — cards are keyed by position, so the
+	 *  stage must be told to close when another monster is opened. */
+	file: string;
 	onChange: (b: SpellBlock) => void;
 	spells: SpellName[];
 	/** Already scoped to this block, so the card asks for `min`, not `attacks[2].min`. */
@@ -59,10 +62,10 @@ interface Props {
  * actually reads — picking a different name reshapes it — because every other
  * field is silently ignored by the loader (§8.1, §9).
  */
-export function SpellCard({ block, onChange, spells, lintAt, readOnly, parent, look, engine }: Props) {
+export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, parent, look, engine }: Props) {
 	const { t } = useTranslation();
 	const info = engineInfo(engine);
-	const [staged, setStaged] = useState(false);
+	const [staged, setStaged] = useMonsterState(file, () => false);
 	const family = familyOf(block);
 	const registered = family === 'registered';
 	const scripted = family === 'script';

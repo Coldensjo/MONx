@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
 import { Link2, PackageSearch, Unlink, X } from 'lucide-react';
 import { itemUrl, type Look } from '../monster';
 import { engineInfo } from '../engine';
@@ -11,7 +10,7 @@ import { ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { DecayChain } from '../fields/DecayChain';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
 import { useDropTarget } from '../dnd';
-import { Banner, Section, SubGroup, type SectionId, type SectionProps } from './section';
+import { Banner, Section, SubGroup, useMonsterState, type SectionId, type SectionProps } from './section';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -42,7 +41,7 @@ export function LookSection({
 	const engine = engineInfo(doc.engine);
 	// Health stays locked unless the author deliberately wants a monster that
 	// spawns damaged; the loader clamps now > max and warns (§4).
-	const [healthUnlocked, setHealthUnlocked] = useState(doc.health.now !== doc.health.max);
+	const [healthUnlocked, setHealthUnlocked] = useMonsterState(doc.file, () => doc.health.now !== doc.health.max);
 
 	const look = doc.look;
 	const setLook = (p: Partial<Look>) => patch({ look: { ...look, ...p } });
@@ -95,7 +94,7 @@ export function LookSection({
 							) : (
 								// No cell param — native composed size, as the corpse shows.
 								<img
-									className="ss-ed-item-sprite"
+									className="ss-ed-item-sprite ss-ed-item-sprite-native"
 									src={itemUrl(look.typeex)}
 									alt=""
 									draggable={false}
@@ -207,7 +206,7 @@ export function LookSection({
 							// No cell param: /item.png returns the corpse at its native
 							// composed size, so a 2×2-tile corpse reads as 64×64.
 							<img
-								className="ss-ed-item-sprite"
+								className="ss-ed-item-sprite ss-ed-item-sprite-native"
 								src={itemUrl(look.corpse)}
 								alt=""
 								draggable={false}

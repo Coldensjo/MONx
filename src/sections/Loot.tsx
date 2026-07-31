@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t } from 'i18next';
 import { ChevronDown, ChevronRight, Dices, Package, Plus, Trash2 } from 'lucide-react';
@@ -11,7 +11,7 @@ import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
 import { ItemPicker, ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { reorder, useDragSource, useDropTarget } from '../dnd';
-import { Section, type SectionId, type SectionProps } from './section';
+import { Section, useMonsterState, type SectionId, type SectionProps } from './section';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -79,6 +79,10 @@ function draftChance(raw: string): number | null {
 
 interface RowProps {
 	entry: LootEntry;
+	/** The monster this row belongs to. Rows are keyed by position, so opening
+	 *  another monster reuses them — which is what keeps the sprites from
+	 *  blinking — and this is how the row knows to drop its own open state. */
+	file: string;
 	path: string;
 	index: ItemIndex;
 	lintAt: LintAt;
@@ -96,6 +100,7 @@ interface RowProps {
 
 const LootRow = memo(function LootRow({
 	entry,
+	file,
 	path,
 	index,
 	lintAt,
@@ -110,9 +115,9 @@ const LootRow = memo(function LootRow({
 }: RowProps) {
 	// memo boundary — subscribes so a language change reaches these rows.
 	const { t } = useTranslation();
-	const [expanded, setExpanded] = useState(false);
+	const [expanded, setExpanded] = useMonsterState(file, () => false);
 	/** Percent being typed into the chance field; null when it is not focused. */
-	const [chanceDraft, setChanceDraft] = useState<number | null>(null);
+	const [chanceDraft, setChanceDraft] = useMonsterState<number | null>(file, () => null);
 	const shownChance = chanceDraft ?? entry.chance;
 	const info = useItemInfo(index, entry.id, entry.name);
 	const serverId = entry.id ?? info?.serverId ?? null;
@@ -272,6 +277,7 @@ const LootRow = memo(function LootRow({
 				<LootRow
 					key={i}
 					entry={child}
+					file={file}
 					path={`${path}.children[${i}]`}
 					index={index}
 					lintAt={lintAt}
@@ -289,11 +295,12 @@ const LootRow = memo(function LootRow({
 
 export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle }: Props) {
 	const { t } = useTranslation();
-	const [adding, setAdding] = useState(false);
-	const [simulating, setSimulating] = useState(false);
-	/** Top-level row indices in the multi-selection. */
-	const [checked, setChecked] = useState<Set<number>>(new Set());
-	const [scalePct, setScalePct] = useState(100);
+	const [adding, setAdding] = useMonsterState(doc.file, () => false);
+	const [simulating, setSimulating] = useMonsterState(doc.file, () => false);
+	/** Top-level row indices in the multi-selection. Indices only mean anything
+	 *  within one monster, so this re-seeds when the file changes. */
+	const [checked, setChecked] = useMonsterState(doc.file, () => new Set<number>());
+	const [scalePct, setScalePct] = useMonsterState(doc.file, () => 100);
 
 	const setLoot = (next: LootEntry[]) => {
 		patch({ loot: next });
@@ -361,6 +368,7 @@ export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle 
 					<LootRow
 						key={i}
 						entry={entry}
+						file={doc.file}
 						path={`loot[${i}]`}
 						index={items}
 						lintAt={lintAt}

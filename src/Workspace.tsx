@@ -1882,8 +1882,13 @@ export default function Workspace({
 					)}
 					{view === 'monsters' ? (
 						doc ? (
+							// Deliberately *not* keyed on doc.file. A key here threw the whole
+							// editor away on every monster switch — every DOM node and every
+							// sprite image rebuilt from nothing, which is what made the column
+							// flicker. Reconciling in place keeps the old sprite on screen until
+							// the new one has decoded; the handful of section-local things that
+							// really are per-monster re-seed through useMonsterState instead.
 							<MonsterEditor
-								key={doc.file}
 								doc={doc}
 								onChange={editDoc}
 								lints={visibleMonsterLints}

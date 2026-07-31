@@ -1062,6 +1062,15 @@
 	display: inline-block;
 }
 
+/* The corpse and typeex previews are the only sprites shown at their native
+   composed size — a 2×2 corpse has to read as 64×64 — so they carry no
+   width/height and measure zero until the PNG arrives. One tile is reserved for
+   them, or the row collapses and springs open again on every monster switch. */
+.ss-ed-item-sprite-native {
+	min-width: 32px;
+	min-height: 32px;
+}
+
 .ss-ed-loot-name {
 	flex: 1;
 	min-width: 0;

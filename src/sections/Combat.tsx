@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
 import { BOOLEAN_FLAGS, FLAG_GROUP_LABEL, NUMERIC_FLAGS } from '../catalog';
 import { engineInfo } from '../engine';
 import { maxMeleeDamage } from '../derive';
@@ -7,7 +6,7 @@ import type { AttacksStats } from '../monster';
 import { Field } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { Toggle } from '../fields/Toggle';
-import { Banner, Section, SubGroup, type SectionId, type SectionProps } from './section';
+import { Banner, Section, SubGroup, useMonsterState, type SectionId, type SectionProps } from './section';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -21,8 +20,9 @@ const blankAttacks = (s: AttacksStats | null): AttacksStats => s ?? { attack: 0,
 export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
 	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
-	const [showPacifist, setShowPacifist] = useState(
-		doc.flags.pacifist === true || doc.flags.deaggroonkill === true || doc.flags.singletarget === true
+	const [showPacifist, setShowPacifist] = useMonsterState(
+		doc.file,
+		() => doc.flags.pacifist === true || doc.flags.deaggroonkill === true || doc.flags.singletarget === true
 	);
 
 	const setFlag = (key: string, value: boolean | number) => patch({ flags: { ...doc.flags, [key]: value } });
