@@ -6,12 +6,18 @@ differ; this file records where MONx currently gets that difference wrong.
 
 Every entry cites both sides. Where this document and the C++/Lua disagree, the server wins.
 
+All seven engines were read. Six come from `sources/`; **Ironcore was read at
+`C:\Servers\Ironcore\src`**, which is outside this repo — see §5, and note that no probe gate
+can reach it.
+
 **What was checked and found correct**, so it does not appear below:
 
-- All eleven magic-effect and shoot-effect tables (`ME_TFS`, `ANI_TFS`, `ME_7X`, `ANI_TVP`,
-  `ANI_NOS`, `ME_CANARY`, `ANI_CANARY`, `ME_CRYSTAL`, `ANI_CRYSTAL`, `ME_BLACKTEK`,
-  `ANI_BLACKTEK`) are **name-for-name and id-for-id identical** to the engines' own tables.
-  Only the `*_NONE`/`*_LAST`/`CONST_ANI_WEAPONTYPE` sentinels are absent, correctly.
+- All thirteen magic-effect and shoot-effect tables (`MAGIC_EFFECTS`, `SHOOT_EFFECTS`,
+  `ME_TFS`, `ANI_TFS`, `ME_7X`, `ANI_TVP`, `ANI_NOS`, `ME_CANARY`, `ANI_CANARY`, `ME_CRYSTAL`,
+  `ANI_CRYSTAL`, `ME_BLACKTEK`, `ANI_BLACKTEK`) are **name-for-name and id-for-id identical**
+  to the engines' own tables. Only the `*_NONE`/`*_LAST`/`CONST_ANI_WEAPONTYPE` sentinels are
+  absent, correctly. Ironcore's two deliberate defects — a name-table entry that lies and two
+  enum constants with no name — are reproduced exactly (§5).
 - TFS/TVP/Nostalrius flag names, race names, skull names, immunity names, element attributes,
   melee-condition ticks and their default tick values.
 - `spell_range_max = 22` on the three XML engines (`Map::maxViewportX * 2`), and Nostalrius's
@@ -241,12 +247,12 @@ nothing for an individually absent weight.
 - `flag.targetdistance-under-1` warns on TFS (`:962`) and TVP (`:922`), but Nostalrius clamps
   with a bare `std::max<int32_t>(1, …)` at `:674` and says nothing. One severity covers both.
 
-### 3.6 Summon `force` is Ironcore/TVP/Nostalrius only
+### 3.6 Summon `force` — withdrawn
 
-`monster.rs:1078` lists `force` among the known summon attributes for every profile, and
-`:3142` writes it. TVP (`monsters.cpp`, summons block) and Nostalrius (`:932`+) both read
-`summonNode.attribute("force")`; **TFS does not**, and neither Lua registrar passes it to
-`addSummon`. Setting it on those engines is inert with no lint.
+An earlier revision of this document claimed TFS does not read `summonNode.attribute("force")`.
+It does, at `monsters.cpp:1438`; so do Ironcore (`:1376`), TVP and Nostalrius. MONx handling it
+unconditionally is correct on all four XML engines. The Lua registrars do not pass it to
+`addSummon`, which is minor and covered by §1.8.
 
 ---
 
@@ -275,16 +281,59 @@ the loader does not perform.
 
 ---
 
-## 5. Ironcore is unverifiable from this repo
+## 5. Ironcore
 
-`sources/` holds the six foreign servers. Ironcore's own tree is not there, so every Ironcore
-claim in `catalog.rs`, `lint.rs` and the `IRONCORE` profile rests on `MONSTER_EDITOR_REFERENCE.md`
-(removed; `git show f050169^:MONSTER_EDITOR_REFERENCE.md`) and on the fixture corpus.
+Checked against `C:\Servers\Ironcore\src` (`monsters.cpp`, `tools.cpp`, `const.h`,
+`monster.cpp`) — not in `sources/`, so it is outside the repo and outside the probe gates.
 
-What the corpus does confirm: every flag name used across its 381 files —
-including `singletarget`, `leashradius`, `deaggroonkill`, `cannotmove`, `whiteskullonattack`,
-`canpushplayers`, `corpseunmovable` and `pacifist` — is covered by `catalog::BOOL_FLAGS` /
-`NUM_FLAGS`, with no unknowns.
+**The `IRONCORE` profile and `catalog.rs` are otherwise exact.** All 28 flag names in the
+loader's `if/else` chain (`monsters.cpp:907`–`:973`) are present and correctly split into
+`BOOL_FLAGS` / `NUM_FLAGS`; the 36 XML spell names match the `deserializeSpell` guard;
+`IMMUNITIES_10`, `ELEMENTS_10`, `RACES_5`, `SKULLS_7`, the nine melee conditions **in the
+loader's precedence order with their exact ticks**, the thirteen `CONDITION_TICKS` defaults,
+`MAX_LOOT_COUNTMAX = 100`, `MAX_LOOTCHANCE = 100000`, `MAX_SPELL_RANGE = 22`, the optional
+`<inside>` loot wrapper, `aoeShootEffect` as a third spell effect key, `raceid` lower-case,
+`corpseactionid` on `<look>`, and `target_strategy: None` (no `<targetstrategies>` node is read
+at all) are all confirmed.
+
+Three claims worth recording as *confirmed*, because they are the ones that look like bugs:
+
+- **`CONST_ANI_KNIFE` really is mapped to `CONST_ANI_PITCHFORK`.** `tools.cpp:656` is
+  literally `{"CONST_ANI_KNIFE", CONST_ANI_PITCHFORK}`, though the enum declares
+  `CONST_ANI_KNIFE = 70` (`const.h:170`). `catalog.rs:518` and
+  `effect.knife-renders-pitchfork` are right.
+- **`CONST_ANI_FROSTARROW` (43) and `CONST_ANI_MAGMASTAR` (45) are declared in the enum and
+  absent from `shootTypeNames`.** `SHOOT_EFFECTS_UNREACHABLE` (`catalog.rs:537`) names exactly
+  those two and no others — I diffed the whole enum against the whole name table.
+- **The pacifist sub-flags really are inert without `pacifist`.** Every read of
+  `singleTarget`, `deaggroOnKill` and `leashRadius` in `monster.cpp` (`:498`, `:935`, `:2076`,
+  `:2170`, …) is gated on `isPacifist`. `PACIFIST_SUBFLAGS` is right.
+
+Also confirmed: per-spell cooldowns are a runtime behaviour (`monster.cpp:1018` keys a
+cooldown map by spell rather than sharing one timer), not an XML attribute — so there is
+nothing for MONx to model, and AGENTS.md's mention of them is about semantics only.
+
+### 5.1 `species` is not read by the server
+
+`monsterNode.attribute(…)` is called for exactly ten names in `monsters.cpp`: `experience`,
+`file`, `manacost`, `name`, `nameDescription`, `race`, `raceid`, `script`, `skull`, `speed`.
+`species` is not among them, there is no `species` field on `MonsterType` (`monsters.h`), and
+the string appears nowhere in the Ironcore tree outside NPC dialogue.
+
+It is nonetheless on 380 of the 381 fixture files and 532 files in the live
+`data/monster` folder — `species="rare"` ×94, `"humanoid"` ×55, `"undead"` ×40, and so on. It
+is author metadata the loader steps straight over.
+
+MONx sets `has_species: true` (`engine.rs:802`), reads it (`monster.rs:1117`), writes it
+(`:3382`), and gives `species=` the joint-highest Ironcore detection weight (`engine.rs:1912`,
+50 points). None of that is wrong as an *editing* affordance — the attribute is real, the
+corpus depends on it, and round-trip must preserve it. As a *detection* signal it is excellent
+precisely because no other engine has it.
+
+What is missing is that nothing tells the user the server ignores it. A field the loader never
+reads is the purest case of the `silent` severity — "the server would say nothing" — and it is
+currently the one Ironcore field presented with no indication that it is documentation rather
+than behaviour.
 
 ---
 
@@ -301,3 +350,5 @@ including `singletarget`, `leashradius`, `deaggroonkill`, `cannotmove`, `whitesk
 6. §1.6, §3.3, §3.4 — lint coverage gaps.
 7. §4 — either wire the three dead fields up or delete them; leaving them is what let §3.1 and
    §3.2 drift in the first place.
+8. §5.1 — `species` needs a `silent` finding saying the loader ignores it. Cheapest item here
+   and the only Ironcore one.
