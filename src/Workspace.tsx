@@ -88,29 +88,12 @@ import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
-import { ThingAnimProvider, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { ThingAnimProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 
 /** The speed the Outfits grid animates at, having no creature to read one from.
  *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
  *  the same cap, so the exact value only matters for the very fastest. */
 const NOMINAL_SPEED = 100;
-
-/** The value that occurs most often, ignoring zeroes. */
-function commonest(values: Iterable<number>): number | undefined {
-	const counts = new Map<number, number>();
-	for (const v of values) {
-		if (v > 0) counts.set(v, (counts.get(v) ?? 0) + 1);
-	}
-	let best: number | undefined;
-	let seen = 0;
-	for (const [value, n] of counts) {
-		if (n > seen) {
-			seen = n;
-			best = value;
-		}
-	}
-	return best;
-}
 
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */

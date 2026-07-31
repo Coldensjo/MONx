@@ -120,6 +120,31 @@ export function ThingAnimProvider({ value, children }: { value: ThingAnimLookup 
 	return <ThingAnimContext.Provider value={value}>{children}</ThingAnimContext.Provider>;
 }
 
+/** The raw lookup, for callers resolving a whole grid at once. `useThingAnim`
+ *  is one hook per thing, which is the wrong shape for eighty cells. */
+export function useThingAnimLookup(): ThingAnimLookup | null {
+	return useContext(ThingAnimContext);
+}
+
+/** The value that occurs most often, ignoring zeroes. A thing's phases can
+ *  declare different holds; one rate for the cell is what a contact sheet can
+ *  actually drive, and the commonest is the one it reads as. */
+export function commonest(values: Iterable<number>): number | undefined {
+	const counts = new Map<number, number>();
+	for (const v of values) {
+		if (v > 0) counts.set(v, (counts.get(v) ?? 0) + 1);
+	}
+	let best: number | undefined;
+	let seen = 0;
+	for (const [value, n] of counts) {
+		if (n > seen) {
+			seen = n;
+			best = value;
+		}
+	}
+	return best;
+}
+
 /**
  * Frame count for one thing, or null while it loads or when nothing can resolve
  * it. Callers must cope with null — a stage that waits for this would never

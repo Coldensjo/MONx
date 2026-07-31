@@ -543,6 +543,15 @@
 	flex-shrink: 0;
 }
 
+/* An animating cell holds every phase at once and shows one. The box is sized
+   so the cell does not resize as phases of different sprite footprints come
+   round, and so it still measures 32 before any of them have decoded. */
+.ss-ed-effect-sprite-anim {
+	display: block;
+	width: 32px;
+	height: 32px;
+}
+
 .ss-ed-effect-chip {
 	display: inline-flex;
 	align-items: center;
