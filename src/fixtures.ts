@@ -249,9 +249,9 @@ export const FIXTURE_DEMON: MonsterDoc = {
 
 export const FIXTURE_WORKSPACE: WorkspaceInfo = {
 	paths: {
-		monsters: 'C:\\Servers\\Software\\MONx\\assets\\monsters',
-		items: 'C:\\Servers\\Software\\MONx\\assets\\items',
-		client: 'C:\\Servers\\Software\\MONx\\assets\\client',
+		monsters: 'C:\\Ironcore\\data\\monsters',
+		items: 'C:\\Ironcore\\data\\items',
+		client: 'C:\\Ironcore\\client',
 		spells: null,
 		engine: 'ironcore'
 	},
@@ -263,8 +263,8 @@ export const FIXTURE_WORKSPACE: WorkspaceInfo = {
 	orphanCount: 11,
 	itemCount: 11863,
 	otbVersion: 'OTB 2.7.2',
-	sprPath: 'C:\\Servers\\Software\\MONx\\assets\\client\\Tibia.spr',
-	datPath: 'C:\\Servers\\Software\\MONx\\assets\\client\\Tibia.dat',
+	sprPath: 'C:\\Ironcore\\client\\Tibia.spr',
+	datPath: 'C:\\Ironcore\\client\\Tibia.dat',
 	spriteCount: 10313,
 	transparent: false,
 	enhancedAnimations: false,

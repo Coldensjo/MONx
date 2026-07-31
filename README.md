@@ -83,6 +83,23 @@ GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
 - [AGENTS.md](AGENTS.md) — architecture, conventions, directory map
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to get set up and send a change
 
+## Credits
+
+MONx is a fork of SPRx, a sprite browser for the same client formats, and
+inherits its sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image
+server and the virtualized browsers. SPRx in turn took part of its `.spr`
+parser from [Sprite Forge](https://github.com/Frenvius/sprite-forge) by
+Frenvius, which is MIT-licensed; that notice is retained in
+[LICENSE](LICENSE).
+
+## Legal
+
+MONx is an unofficial, fan-made tool. It is not affiliated with, endorsed by,
+or sponsored by CipSoft GmbH. Tibia is a registered trademark of CipSoft GmbH.
+
+MONx ships no game data. It reads the client and server files you already have
+— no client assets, item databases or monster files are distributed with it.
+
 ## Sponsor
 
 MONx is free and MIT-licensed. If it saves you time, you can support the work through [GitHub Sponsors](https://github.com/sponsors/Coldensjo).

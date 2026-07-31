@@ -1,6 +1,9 @@
-// Adapted from SpriteForge's spr_manager.rs, with automatic detection of the
+// Adapted from Sprite Forge's spr_manager.rs, with automatic detection of the
 // sprite-count width (u16 legacy vs u32 extended) so any client version opens
 // without asking the user.
+//
+// Sprite Forge (https://github.com/Frenvius/sprite-forge) is MIT-licensed; its
+// notice is retained in this repository's LICENSE under "Third-party notices".
 //
 // The whole .spr file is read into memory at open time (like DatReader):
 // sprite extraction becomes bounds-checked slicing instead of seek+read
