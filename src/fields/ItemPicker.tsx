@@ -5,8 +5,22 @@ import { itemUrl, type ItemIndex, type ItemInfo } from '../monster';
 
 // Resolutions are stable for the life of a workspace and every loot row wants
 // one, so they are cached per key rather than refetched per render.
+//
+// **For the life of a workspace, and no longer.** An id and a name mean
+// different things on different engines: `2148` is a gold coin under Ironcore's
+// OTB and spikes on Canary, which addresses items by client id; "gold coin" is
+// 2148 on one and 3031 on the other. Carrying a resolution across an open
+// therefore renders the wrong sprite under the right name — see
+// `clearItemInfoCache`, which the shell calls beside the protocol cache-buster
+// for exactly the same reason.
 const byIdCache = new Map<number, ItemInfo | null>();
 const byNameCache = new Map<string, ItemInfo | null>();
+
+/** Drops every cached resolution. Called when a workspace opens. */
+export function clearItemInfoCache(): void {
+	byIdCache.clear();
+	byNameCache.clear();
+}
 
 export function useItemInfo(index: ItemIndex, id: number | null, name: string | null): ItemInfo | null {
 	const [info, setInfo] = useState<ItemInfo | null>(() => {

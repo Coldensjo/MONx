@@ -15,6 +15,7 @@ import {
 	type WorkspacePaths
 } from './monster';
 import { openDat, openSpr } from './spr';
+import { clearItemInfoCache } from './fields/ItemPicker';
 import { loadSetting, loadWorkspaces, saveSetting, saveWorkspace, type RecentWorkspace } from './settings';
 import Landing from './Landing';
 import Workspace from './Workspace';
@@ -74,6 +75,10 @@ export default function App() {
 				// the managers already hold them, this just names them for the
 				// inherited SPRx URL builders.
 				setProtocolCacheKey(Date.now());
+				// Item resolutions leak the same way and are worse when they do:
+				// an id or a name resolved under the previous engine's database
+				// draws that engine's sprite under this one's label.
+				clearItemInfoCache();
 				await Promise.all([
 					openSpr(loaded.sprPath).catch(() => null),
 					openDat(loaded.datPath).catch(() => null)
