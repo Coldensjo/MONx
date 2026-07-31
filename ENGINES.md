@@ -4,11 +4,13 @@
 `engine.rs` is the authority for what MONx does about it. §6 records what shipped against the
 original phasing, §7 the Lua engines, and §8–9 what is still open.
 
-Gates, run against each engine's own shipped corpus — 4,261 files in total: round-trip
+Gates, run against each engine's own shipped corpus — 5,925 files in total: round-trip
 byte-identical, canonical re-read equal, `--mutate` equal after an edit and within the diff
-budget, `--crud` consistent. Detection identifies all six unaided.
+budget, `--crud` consistent. Detection identifies six of the seven unaided; CrystalServer is a
+fork of Canary and shares its every structural marker, so it is picked out only when the
+sample lands on one of the monsters Crystal added — see §9.
 
-Six engines are in scope, in **two formats**:
+Seven engines are in scope, in **two formats**:
 
 | Key | Engine | Format | Source read | Era |
 |-----|--------|--------|-------------|-----|
@@ -17,6 +19,7 @@ Six engines are in scope, in **two formats**:
 | `tvp` | TheVioletProject | XML | `sources/TVP-main/src/monsters.cpp` | 7.x |
 | `nostalrius` | Nostalrius | XML | `sources/Nostalrius-master/src/monsters.cpp` | 7.x |
 | `canary` | Canary / OTServBR | **Lua** | `sources/canary-main/src/lua/functions/creatures/monster/` | 13.x |
+| `crystal` | CrystalServer | **Lua** | `sources/crystalserver-main/src/` | 13.x, Canary fork |
 | `blacktek` | BlackTek | **Lua** | `sources/BlackTek-Server-master/src/` | TFS 1.x fork |
 
 The format split is the deepest difference in the table and is covered in §7. Everything from
@@ -499,7 +502,7 @@ Result: a five-field edit touches about five lines, on a boss with 150.
 
 Both engines write `name = "combat", type = COMBAT_FIREDAMAGE` where the XML engines write
 `name="fire"`. The reader folds that into the XML form so there is one spell model, one set of
-lints and one editor across all six engines — and the writer unfolds it, **but only where the
+lints and one editor across all seven engines — and the writer unfolds it, **but only where the
 file already spoke that way**. BlackTek inherited TFS's habit of naming the spell after the
 damage type (`name = "lifedrain"`), and rewriting all 740 of its files into the `combat` form
 would be a diff nobody asked for.
@@ -695,7 +698,7 @@ That last point is where it first went wrong. The item and look protocol routes 
 `items.otb` for the mapping and got nothing, so every preview came back blank while the list
 rendered fine — a database fully loaded and entirely undrawable. `ItemIndex::client_id()` now
 owns the question: OTB if there is one, the item's own `client_id` otherwise. The protocol asks
-the index, never the OTB, and the same code serves all six engines.
+the index, never the OTB, and the same code serves all seven engines.
 
 ### 7.3 Nostalrius's items — `items.srv`
 
@@ -775,3 +778,86 @@ Smaller ones:
   a monster referencing a Lua-registered spell by name lints as an unknown spell name unless
   the profile learns to defer, exactly as `spells.rs` already defers for `###` names. This is
   most of TFS's remaining 145 `spell.name-unverifiable` findings.
+
+---
+
+## 9. CrystalServer
+
+CrystalServer is a fork of Canary, and the fork line runs almost exactly where the monster
+layer ends. `data/libs/functions/revscriptsys.lua` — the file that turns `monster.*` table keys
+into `MonsterType` setter calls, and therefore the whole surface MONx reads — is **byte for
+byte identical** in both trees. A Crystal monster file is a Canary monster file: the two
+corpora share `demon.lua` down to the whitespace and differ only in balance numbers.
+
+So this is a profile, not an engine. `CRYSTAL` in `engine.rs` is a copy of `CANARY` with four
+edits, and everything else — the flags table, `strategiesTarget`, the bestiary and bosstiary
+blocks, the loot shape — is Canary's.
+
+### 9.1 The four differences
+
+**Effect constants were renamed in place.** Crystal kept Canary's magic-effect *ids* for
+269 and 272–303 and changed the *names*:
+
+| id | Canary | CrystalServer |
+|----|--------|---------------|
+| 269 | `CONST_ME_SIRUP` | `CONST_ME_SIURP` |
+| 272–275 | `CONST_ME_HITAREA_GREEN` … | `CONST_ME_GREEN_HITAREA` … |
+| 276–278 | `CONST_ME_WHIRLWIND_BLOW_*` | `CONST_ME_*_FLURRYOFBLOWS` |
+| 279–281 | `CONST_ME_PULSE_*` | `CONST_ME_*_ENERGYPULSE` |
+| 282–284 | `CONST_ME_CLAW_*` | `CONST_ME_*_TIGERCLASH` |
+| 285–288 | `CONST_ME_BLOW_*` | `CONST_ME_*_EXPLOSIONHIT` |
+| 289–291 | `CONST_ME_OUTBURST_*` | `CONST_ME_*_ENERGYSHOCK` |
+| 292 | `CONST_ME_INK_EXPLOSION` | `CONST_ME_INK_SPLASH` |
+| 294–296 | `CONST_ME_WOODEN_STAKES`, `_FIRE_SPARKLES`, `_OPENING_MAGIC_BOOK` | `CONST_ME_SPIKES`, `_BLOOD_RAIN`, `_OPEN_BOOKMACHINE` |
+| 297–300 | — | four new small energy shocks |
+| 301–303 | `CONST_ME_*_ELECTRIC_SPARK` | `CONST_ME_SMALL*_ENERGY_SPARK` |
+| 304–309 | — | the six weapon-attack effects |
+
+That is what `ME_CRYSTAL` exists for. An effect picker offering Canary's spelling on a Crystal
+corpus would write an identifier the engine has never defined — the same class of mistake as
+offering `firearea` to Ironcore. `ANI_CRYSTAL` is Canary's shoot table plus five storm arrows
+(64–68).
+
+**`skull` is real here.** Canary registers no skull setter at all, so `mtype:skull(…)` raises
+"attempt to call a nil value" and the monster never loads — which is why `lint.rs` errors on
+the field under the Canary profile and `engine.ts` leaves Canary's skull picker empty. Crystal
+*does* register one (`monster_type_functions.cpp`), so the field is offered and the lint, being
+keyed on the Canary profile itself, stays quiet.
+
+**`COMBAT_AGONYDAMAGE`** is an eleventh damage type (`creatures_definitions.hpp:813`), used by
+eleven monsters in the shipped corpus. It is in `catalog.rs` `DAMAGE_TYPES` with a zero mask —
+nothing reads the mask, and the row exists so the Lua reader and writer round-trip an
+`{ type = COMBAT_AGONYDAMAGE }` element instead of dropping it on save. Which engines *offer*
+it is `EngineProfile::elements`, and on the frontend `catalog.ts` `damageTypes(engine)`. It is
+deliberately absent from `BatchEditDialog`, whose `TARGETS` list is built before a workspace
+exists and so cannot ask which engine this is.
+
+**Setters MONx does not model.** `canWalk`, `canTarget` and `getSurpriseBagLoot` are Crystal
+additions with no corpus use; `monster.respawnType` and a top-level `monster.onSpawn` each
+appear once. All ride along as raw regions, which is the failure mode the document layer is
+designed for.
+
+### 9.2 Detection
+
+Crystal cannot be told from Canary by structure, because there is no marker in *most* Crystal
+files that is absent from Canary. The two corpora diverge only in the monsters Crystal added
+and the effect constants it renamed, and all of those are sparse — `BESTY_RACE_INKBORN` in 22
+files of 1,800, `COMBAT_AGONYDAMAGE` in 11, `monster.respawnType` in 1.
+
+So the shared Canary signals vote for both, with Crystal five points lower on each. A corpus
+showing only those resolves to Canary outright rather than stalling on a tie, and Crystal has
+to be won on its own evidence: the sparse markers are priced at 90 each, enough for any one of
+them to clear Canary's lead. The detector samples 24 files spread across the corpus
+(`DETECT_SAMPLE`), so a Crystal workspace whose sample misses every marker detects as Canary —
+which reads it correctly bar a handful of effect names. The engine dropdown is the remedy, and
+this is stated here because it is a real limitation rather than a bug to be found later.
+
+### 9.3 What Crystal cost the document layer
+
+`darklight_striker.lua` assigns `monster.attacks` **twice** — the first block is dead code, and
+Lua's last-write-wins means the server runs the second. `LuaDoc::get` took the first, so MONx
+would have shown the wrong spells, and `write_with` applied an edit to every assignment of a
+key, rewriting 70 lines for a five-field edit. Both are fixed: `get` reads the last assignment
+and the writer edits only that one, copying earlier duplicates through untouched rather than
+deleting a block the user never asked to lose. No file in any other corpus has a duplicate
+assignment, which is why this waited for Crystal to surface.

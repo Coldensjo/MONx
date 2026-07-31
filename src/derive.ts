@@ -17,7 +17,8 @@ export type DamageType =
 	| 'drown'
 	| 'ice'
 	| 'holy'
-	| 'death';
+	| 'death'
+	| 'agony';
 
 export const DAMAGE_TYPES: DamageType[] = [
 	'physical',
@@ -29,7 +30,10 @@ export const DAMAGE_TYPES: DamageType[] = [
 	'death',
 	'drown',
 	'lifedrain',
-	'manadrain'
+	'manadrain',
+	// CrystalServer only. Every other engine leaves it absent, and an absent
+	// type reads as 0%, so carrying it in the derived list costs them nothing.
+	'agony'
 ];
 
 export const DAMAGE_TYPE_LABEL: Record<DamageType, string> = {
@@ -42,7 +46,8 @@ export const DAMAGE_TYPE_LABEL: Record<DamageType, string> = {
 	death: 'Death',
 	drown: 'Drown',
 	lifedrain: 'Life drain',
-	manadrain: 'Mana drain'
+	manadrain: 'Mana drain',
+	agony: 'Agony'
 };
 
 // §10/§11 accept aliases (`poison` ≡ `earth`, `invisibility` ≡ `invisible`) and
@@ -58,7 +63,8 @@ const IMMUNITY_KEYS: Record<DamageType, string[]> = {
 	death: ['death'],
 	drown: ['drown'],
 	lifedrain: ['lifedrain'],
-	manadrain: ['manadrain']
+	manadrain: ['manadrain'],
+	agony: ['agony']
 };
 
 const ELEMENT_KEYS: Record<DamageType, string[]> = {
@@ -71,7 +77,8 @@ const ELEMENT_KEYS: Record<DamageType, string[]> = {
 	death: ['deathPercent', 'death'],
 	drown: ['drownPercent', 'drown'],
 	lifedrain: ['lifedrainPercent', 'lifedrain'],
-	manadrain: ['manadrainPercent', 'manadrain']
+	manadrain: ['manadrainPercent', 'manadrain'],
+	agony: ['agonyPercent', 'agony']
 };
 
 /** True when `<immunities>` grants damage immunity to this type. */

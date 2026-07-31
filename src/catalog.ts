@@ -17,6 +17,10 @@ export interface DamageType {
 	elementKeys: string[];
 	/** Swatch colour for the resistance row icon. */
 	color: string;
+	/** Engines that have this damage type at all. Absent means every engine —
+	 *  only CrystalServer's agony is narrower, and offering it elsewhere would
+	 *  write an element the loader has no case for. */
+	engines?: string[];
 }
 
 // COMBAT_WATERDAMAGE and COMBAT_ARCANEDAMAGE are deliberately absent — they
@@ -32,7 +36,13 @@ export const DAMAGE_TYPES: DamageType[] = [
 	{ key: 'ice',       label: 'Ice',        spellNames: ['ice'],                        immunityKeys: ['ice'],             elementKeys: ['icePercent'],       color: '#7ec8e0' },
 	{ key: 'holy',      label: 'Holy',       spellNames: ['holy'],                       immunityKeys: ['holy'],            elementKeys: ['holyPercent'],      color: '#e8d47a' },
 	{ key: 'death',     label: 'Death',      spellNames: ['death'],                      immunityKeys: ['death'],           elementKeys: ['deathPercent'],     color: '#6b5a7a' },
+	{ key: 'agony',     label: 'Agony',      spellNames: ['agony'],                      immunityKeys: ['agony'],           elementKeys: ['agonyPercent'],     color: '#b05a8c', engines: ['crystal'] },
 ];
+
+/** The damage types one engine actually has. */
+export function damageTypes(engine: string | null | undefined): DamageType[] {
+	return DAMAGE_TYPES.filter(d => !d.engines || d.engines.includes(engine ?? ''));
+}
 
 /** §10 — immunity keywords that grant a condition rather than a damage type. */
 export const CONDITION_IMMUNITIES: { key: string; label: string; note?: string }[] = [

@@ -98,7 +98,13 @@ const TARGETS: TargetOption[] = [
 		ops: ['set', 'scale', 'clear'] as Op[]
 	})),
 
-	...DAMAGE_TYPES.map(d => ({
+	// `TARGETS` is built once, before a workspace exists, so it cannot ask which
+	// engine this is. That is harmless for a field the wrong engine ignores, but
+	// not for one it would reject: agony exists on CrystalServer alone, and
+	// writing `agonyPercent` into an Ironcore file would be MONx inventing an
+	// attribute. It stays out of the batch tool and lives in Resistances, which
+	// does know the engine.
+	...DAMAGE_TYPES.filter(d => !d.engines).map(d => ({
 		id: `element:${d.elementKeys[0]}`,
 		kind: 'element' as const,
 		key: d.elementKeys[0],
@@ -109,7 +115,10 @@ const TARGETS: TargetOption[] = [
 		percent: true
 	})),
 
-	...[...DAMAGE_TYPES.map(d => ({ key: d.immunityKeys[0], label: d.label })), ...CONDITION_IMMUNITIES].map(i => ({
+	...[
+		...DAMAGE_TYPES.filter(d => !d.engines).map(d => ({ key: d.immunityKeys[0], label: d.label })),
+		...CONDITION_IMMUNITIES
+	].map(i => ({
 		id: `immunity:${i.key}`,
 		kind: 'immunity' as const,
 		key: i.key,

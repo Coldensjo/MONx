@@ -91,6 +91,12 @@ pub const DAMAGE_TYPES: &[(&str, u32, &str, &str)] = &[
     ("COMBAT_ICEDAMAGE", 512, "ice", "icePercent"),
     ("COMBAT_HOLYDAMAGE", 1024, "holy", "holyPercent"),
     ("COMBAT_DEATHDAMAGE", 2048, "death", "deathPercent"),
+    // CrystalServer only (`creatures_definitions.hpp:813`). It has no Ironcore
+    // bit and no XML spelling, so the mask is 0 — nothing reads it, and the row
+    // exists so the Lua reader and writer can round-trip an
+    // `{ type = COMBAT_AGONYDAMAGE }` element instead of dropping it on save.
+    // Which engines *offer* it is `EngineProfile::elements`, not this table.
+    ("COMBAT_AGONYDAMAGE", 0, "agony", "agonyPercent"),
 ];
 
 // ---------- §10 Immunities ----------

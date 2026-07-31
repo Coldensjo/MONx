@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { COMMON_IMMUNITY_PRESET, CONDITION_IMMUNITIES, DAMAGE_TYPES, type DamageType } from '../catalog';
+import { COMMON_IMMUNITY_PRESET, CONDITION_IMMUNITIES, damageTypes, type DamageType } from '../catalog';
 import { elementPercent, isImmune, type DamageType as CombatType } from '../derive';
 import { FieldLint } from '../fields/Field';
 import { PercentSlider } from '../fields/PercentSlider';
@@ -69,7 +69,9 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 	};
 
 	const presetApplied = COMMON_IMMUNITY_PRESET.every(k => doc.immunities[k] === true);
-	const immuneCount = DAMAGE_TYPES.filter(d => isImmune(doc, combatType(d))).length;
+	// Agony is CrystalServer's alone; the rest are common to all six engines.
+	const types = damageTypes(doc.engine);
+	const immuneCount = types.filter(d => isImmune(doc, combatType(d))).length;
 
 	return (
 		<Section
@@ -79,7 +81,7 @@ export function Resistances({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 			summary={t('{{count}} immune', { count: immuneCount })}
 		>
 			<div className="ss-ed-resists">
-				{DAMAGE_TYPES.map(d => {
+				{types.map(d => {
 					const immune = isImmune(doc, combatType(d));
 					const percent = elementPercent(doc, combatType(d));
 					const mode: Mode = immune ? 'immune' : percent !== 0 || pinnedPercent.has(d.key) ? 'percent' : 'normal';

@@ -9,7 +9,7 @@
 
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 
-export type EngineKey = 'ironcore' | 'tfs' | 'tvp' | 'nostalrius' | 'canary' | 'blacktek';
+export type EngineKey = 'ironcore' | 'tfs' | 'tvp' | 'nostalrius' | 'canary' | 'crystal' | 'blacktek';
 
 /** How effect values are spelled. Ironcore matches `CONST_ME_*`
  *  case-sensitively; everyone else lower-cases a short name before lookup. */
@@ -333,6 +333,20 @@ const CANARY: EngineInfo = {
 	shootEffects: SHOOT_EFFECTS
 };
 
+// CrystalServer is a fork of Canary, and a monster file is the same file on
+// both. Everything the *editor* cares about is Canary's, bar one thing: Crystal
+// registers a `skull` setter where Canary registers none, so the picker that
+// must stay empty there can be filled here. The renamed effect constants and
+// the agony damage type are real differences too, but they are backend-side —
+// see `engine.rs` `CRYSTAL` and `catalog.ts` `damageTypes`.
+const CRYSTAL: EngineInfo = {
+	...CANARY,
+	key: 'crystal',
+	label: 'CrystalServer',
+	blurb: 'Canary fork: renamed effect constants, agony damage, skull setter',
+	skulls: ['none', 'yellow', 'green', 'white', 'red', 'black', 'orange']
+};
+
 const BLACKTEK: EngineInfo = {
 	key: 'blacktek',
 	label: 'BlackTek',
@@ -369,7 +383,7 @@ const BLACKTEK: EngineInfo = {
 	shootEffects: SHOOT_EFFECTS
 };
 
-export const ENGINES: EngineInfo[] = [IRONCORE, TFS, TVP, NOSTALRIUS, CANARY, BLACKTEK];
+export const ENGINES: EngineInfo[] = [IRONCORE, TFS, TVP, NOSTALRIUS, CANARY, CRYSTAL, BLACKTEK];
 
 const BY_KEY = new Map(ENGINES.map(e => [e.key, e]));
 

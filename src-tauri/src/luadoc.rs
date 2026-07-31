@@ -200,9 +200,15 @@ pub struct LuaDoc {
 }
 
 impl LuaDoc {
+    /// The *last* assignment of a key, because that is the one the server sees.
+    /// A file may assign the same key twice — CrystalServer's
+    /// `darklight_striker.lua` has two `monster.attacks` blocks, the first of
+    /// which is dead code — and Lua's table assignment is last-write-wins.
+    /// Reading the first would show the editor a monster the server never runs.
     pub fn get(&self, key: &str) -> Option<&LuaValue> {
         self.assignments
             .iter()
+            .rev()
             .find(|a| a.key == key)
             .map(|a| &a.value)
     }
@@ -944,9 +950,21 @@ pub fn write_with(doc: &LuaDoc, edits: &[(String, Option<LuaValue>)]) -> Vec<u8>
 
     let find = |key: &str| edits.iter().find(|(k, _)| k == key).map(|(_, v)| v);
 
-    for a in &doc.assignments {
+    // An edit belongs to the last assignment of its key — the one `get` read it
+    // from and the one the server obeys. Earlier duplicates are dead code and
+    // get copied through untouched: applying the edit to both would rewrite a
+    // block nothing reads, and dropping them would be a deletion the user never
+    // asked for.
+    let last_of = |key: &str, at: usize| {
+        doc.assignments
+            .iter()
+            .rposition(|a| a.key == key)
+            .is_some_and(|i| i == at)
+    };
+
+    for (idx, a) in doc.assignments.iter().enumerate() {
         out.extend_from_slice(&doc.bytes[cursor..a.span.start]);
-        match find(&a.key) {
+        match find(&a.key).filter(|_| last_of(&a.key, idx)) {
             // Untouched: copy the original bytes, comments and spacing included.
             None => out.extend_from_slice(&doc.bytes[a.span.clone()]),
             Some(None) => {

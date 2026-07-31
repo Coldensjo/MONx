@@ -520,6 +520,45 @@ const ELEMENTS_10: &[&str] = &[
     "manadrainPercent",
 ];
 
+/// CrystalServer adds an eleventh damage type, `COMBAT_AGONYDAMAGE`
+/// (`creatures_definitions.hpp:813`). Its corpus resists it like any other.
+const ELEMENTS_CRYSTAL: &[&str] = &[
+    "physicalPercent",
+    "icePercent",
+    "poisonPercent",
+    "earthPercent",
+    "firePercent",
+    "energyPercent",
+    "holyPercent",
+    "deathPercent",
+    "drownPercent",
+    "lifedrainPercent",
+    "manadrainPercent",
+    "agonyPercent",
+];
+
+/// As `IMMUNITIES_10`, plus the agony damage type and its condition.
+const IMMUNITIES_CRYSTAL: &[&str] = &[
+    "physical",
+    "energy",
+    "fire",
+    "poison",
+    "earth",
+    "drown",
+    "ice",
+    "holy",
+    "death",
+    "lifedrain",
+    "manadrain",
+    "paralyze",
+    "outfit",
+    "drunk",
+    "invisible",
+    "invisibility",
+    "bleed",
+    "agony",
+];
+
 /// The 7.x engines read six (`monsters.cpp` TVP `:1187`, Nostalrius `:912`).
 const ELEMENTS_6: &[&str] = &[
     "physicalPercent",
@@ -1150,6 +1189,106 @@ const ANI_CANARY: &[(&str, u16)] = &[
     ("CONST_ANI_CANDYCANE", 61), ("CONST_ANI_CHERRYBOMB", 62),
 ];
 
+/// CrystalServer's `MagicEffectClasses`. Crystal forked Canary and then
+/// *renamed* ids 269 and 272–303 in place — `CONST_ME_PULSE_WHITE` (279) is
+/// `CONST_ME_WHITE_ENERGYPULSE` there, `CONST_ME_WOODEN_STAKES` (294) is
+/// `CONST_ME_SPIKES`, and so on. Same numbers, different constants: offering
+/// Canary's spelling on a Crystal corpus would write an identifier the engine
+/// has never heard of, so the table has to be its own rather than a suffix on
+/// `ME_CANARY`.
+const ME_CRYSTAL: &[(&str, u16)] = &[
+    ("CONST_ME_DRAWBLOOD", 1), ("CONST_ME_LOSEENERGY", 2), ("CONST_ME_POFF", 3),
+    ("CONST_ME_BLOCKHIT", 4), ("CONST_ME_EXPLOSIONAREA", 5), ("CONST_ME_EXPLOSIONHIT", 6),
+    ("CONST_ME_FIREAREA", 7), ("CONST_ME_YELLOW_RINGS", 8), ("CONST_ME_GREEN_RINGS", 9),
+    ("CONST_ME_HITAREA", 10), ("CONST_ME_TELEPORT", 11), ("CONST_ME_ENERGYHIT", 12),
+    ("CONST_ME_MAGIC_BLUE", 13), ("CONST_ME_MAGIC_RED", 14), ("CONST_ME_MAGIC_GREEN", 15),
+    ("CONST_ME_HITBYFIRE", 16), ("CONST_ME_HITBYPOISON", 17), ("CONST_ME_MORTAREA", 18),
+    ("CONST_ME_SOUND_GREEN", 19), ("CONST_ME_SOUND_RED", 20), ("CONST_ME_POISONAREA", 21),
+    ("CONST_ME_SOUND_YELLOW", 22), ("CONST_ME_SOUND_PURPLE", 23), ("CONST_ME_SOUND_BLUE", 24),
+    ("CONST_ME_SOUND_WHITE", 25), ("CONST_ME_BUBBLES", 26), ("CONST_ME_CRAPS", 27),
+    ("CONST_ME_GIFT_WRAPS", 28), ("CONST_ME_FIREWORK_YELLOW", 29), ("CONST_ME_FIREWORK_RED", 30),
+    ("CONST_ME_FIREWORK_BLUE", 31), ("CONST_ME_STUN", 32), ("CONST_ME_SLEEP", 33),
+    ("CONST_ME_WATERCREATURE", 34), ("CONST_ME_GROUNDSHAKER", 35), ("CONST_ME_HEARTS", 36),
+    ("CONST_ME_FIREATTACK", 37), ("CONST_ME_ENERGYAREA", 38), ("CONST_ME_SMALLCLOUDS", 39),
+    ("CONST_ME_HOLYDAMAGE", 40), ("CONST_ME_BIGCLOUDS", 41), ("CONST_ME_ICEAREA", 42),
+    ("CONST_ME_ICETORNADO", 43), ("CONST_ME_ICEATTACK", 44), ("CONST_ME_STONES", 45),
+    ("CONST_ME_SMALLPLANTS", 46), ("CONST_ME_CARNIPHILA", 47), ("CONST_ME_PURPLEENERGY", 48),
+    ("CONST_ME_YELLOWENERGY", 49), ("CONST_ME_HOLYAREA", 50), ("CONST_ME_BIGPLANTS", 51),
+    ("CONST_ME_CAKE", 52), ("CONST_ME_GIANTICE", 53), ("CONST_ME_WATERSPLASH", 54),
+    ("CONST_ME_PLANTATTACK", 55), ("CONST_ME_TUTORIALARROW", 56), ("CONST_ME_TUTORIALSQUARE", 57),
+    ("CONST_ME_MIRRORHORIZONTAL", 58), ("CONST_ME_MIRRORVERTICAL", 59), ("CONST_ME_SKULLHORIZONTAL", 60),
+    ("CONST_ME_SKULLVERTICAL", 61), ("CONST_ME_ASSASSIN", 62), ("CONST_ME_STEPSHORIZONTAL", 63),
+    ("CONST_ME_BLOODYSTEPS", 64), ("CONST_ME_STEPSVERTICAL", 65), ("CONST_ME_YALAHARIGHOST", 66),
+    ("CONST_ME_BATS", 67), ("CONST_ME_SMOKE", 68), ("CONST_ME_INSECTS", 69),
+    ("CONST_ME_DRAGONHEAD", 70), ("CONST_ME_ORCSHAMAN", 71), ("CONST_ME_ORCSHAMAN_FIRE", 72),
+    ("CONST_ME_THUNDER", 73), ("CONST_ME_FERUMBRAS", 74), ("CONST_ME_CONFETTI_HORIZONTAL", 75),
+    ("CONST_ME_CONFETTI_VERTICAL", 76), ("CONST_ME_BLACKSMOKE", 158), ("CONST_ME_REDSMOKE", 167),
+    ("CONST_ME_YELLOWSMOKE", 168), ("CONST_ME_GREENSMOKE", 169), ("CONST_ME_PURPLESMOKE", 170),
+    ("CONST_ME_EARLY_THUNDER", 171), ("CONST_ME_RAGIAZ_BONECAPSULE", 172), ("CONST_ME_CRITICAL_DAMAGE", 173),
+    ("CONST_ME_PLUNGING_FISH", 175), ("CONST_ME_BLUE_ENERGY_SPARK", 176), ("CONST_ME_ORANGE_ENERGY_SPARK", 177),
+    ("CONST_ME_GREEN_ENERGY_SPARK", 178), ("CONST_ME_PINK_ENERGY_SPARK", 179), ("CONST_ME_WHITE_ENERGY_SPARK", 180),
+    ("CONST_ME_YELLOW_ENERGY_SPARK", 181), ("CONST_ME_MAGIC_POWDER", 182), ("CONST_ME_PIXIE_EXPLOSION", 184),
+    ("CONST_ME_PIXIE_COMING", 185), ("CONST_ME_PIXIE_GOING", 186), ("CONST_ME_STORM", 188),
+    ("CONST_ME_STONE_STORM", 189), ("CONST_ME_BLUE_GHOST", 191), ("CONST_ME_PINK_VORTEX", 193),
+    ("CONST_ME_TREASURE_MAP", 194), ("CONST_ME_PINK_BEAM", 195), ("CONST_ME_GREEN_FIREWORKS", 196),
+    ("CONST_ME_ORANGE_FIREWORKS", 197), ("CONST_ME_PINK_FIREWORKS", 198), ("CONST_ME_BLUE_FIREWORKS", 199),
+    ("CONST_ME_SUPREME_CUBE", 201), ("CONST_ME_BLACK_BLOOD", 202), ("CONST_ME_PRISMATIC_SPARK", 203),
+    ("CONST_ME_THAIAN", 204), ("CONST_ME_THAIAN_GHOST", 205), ("CONST_ME_GHOST_SMOKE", 206),
+    ("CONST_ME_WATER_BLOCK_FLOATING", 208), ("CONST_ME_WATER_BLOCK", 209), ("CONST_ME_ROOTS", 210),
+    ("CONST_ME_GHOSTLY_SCRATCH", 213), ("CONST_ME_GHOSTLY_BITE", 214), ("CONST_ME_BIG_SCRATCH", 215),
+    ("CONST_ME_SLASH", 216), ("CONST_ME_BITE", 217), ("CONST_ME_CHIVALRIOUS_CHALLENGE", 219),
+    ("CONST_ME_DIVINE_DAZZLE", 220), ("CONST_ME_ELECTRICALSPARK", 221), ("CONST_ME_PURPLETELEPORT", 222),
+    ("CONST_ME_REDTELEPORT", 223), ("CONST_ME_ORANGETELEPORT", 224), ("CONST_ME_GREYTELEPORT", 225),
+    ("CONST_ME_LIGHTBLUETELEPORT", 226), ("CONST_ME_FATAL", 230), ("CONST_ME_DODGE", 231),
+    ("CONST_ME_HOURGLASS", 232), ("CONST_ME_DAZZLING", 233), ("CONST_ME_SPARKLING", 234),
+    ("CONST_ME_FERUMBRAS_1", 235), ("CONST_ME_GAZHARAGOTH", 236), ("CONST_ME_MAD_MAGE", 237),
+    ("CONST_ME_HORESTIS", 238), ("CONST_ME_DEVOVORGA", 239), ("CONST_ME_FERUMBRAS_2", 240),
+    ("CONST_ME_WHITE_SMOKE", 241), ("CONST_ME_WHITE_SMOKES", 242), ("CONST_ME_WATER_DROP", 243),
+    ("CONST_ME_AVATAR_APPEAR", 244), ("CONST_ME_DIVINE_GRENADE", 245), ("CONST_ME_DIVINE_EMPOWERMENT", 246),
+    ("CONST_ME_WATER_FLOATING_THRASH", 247), ("CONST_ME_AGONY", 249), ("CONST_ME_LOOT_HIGHLIGHT", 252),
+    ("CONST_ME_MELTING_CREAM", 263), ("CONST_ME_REAPER", 264), ("CONST_ME_POWERFUL_HEARTS", 265),
+    ("CONST_ME_CREAM", 266), ("CONST_ME_GENTLE_BUBBLE", 267), ("CONST_ME_STARBURST", 268),
+    ("CONST_ME_SIURP", 269), ("CONST_ME_CACAO", 270), ("CONST_ME_CANDY_FLOSS", 271),
+    ("CONST_ME_GREEN_HITAREA", 272), ("CONST_ME_RED_HITAREA", 273), ("CONST_ME_BLUE_HITAREA", 274),
+    ("CONST_ME_YELLOW_HITAREA", 275), ("CONST_ME_WHITE_FLURRYOFBLOWS", 276), ("CONST_ME_GREEN_FLURRYOFBLOWS", 277),
+    ("CONST_ME_PINK_FLURRYOFBLOWS", 278), ("CONST_ME_WHITE_ENERGYPULSE", 279), ("CONST_ME_GREEN_ENERGYPULSE", 280),
+    ("CONST_ME_PINK_ENERGYPULSE", 281), ("CONST_ME_WHITE_TIGERCLASH", 282), ("CONST_ME_GREEN_TIGERCLASH", 283),
+    ("CONST_ME_PINK_TIGERCLASH", 284), ("CONST_ME_WHITE_EXPLOSIONHIT", 285), ("CONST_ME_GREEN_EXPLOSIONHIT", 286),
+    ("CONST_ME_BLUE_EXPLOSIONHIT", 287), ("CONST_ME_PINK_EXPLOSIONHIT", 288), ("CONST_ME_WHITE_ENERGYSHOCK", 289),
+    ("CONST_ME_GREEN_ENERGYSHOCK", 290), ("CONST_ME_YELLOW_ENERGYSHOCK", 291), ("CONST_ME_INK_SPLASH", 292),
+    ("CONST_ME_PAPER_PLANE", 293), ("CONST_ME_SPIKES", 294), ("CONST_ME_BLOOD_RAIN", 295),
+    ("CONST_ME_OPEN_BOOKMACHINE", 296), ("CONST_ME_OPEN_BOOKSPELL", 297), ("CONST_ME_SMALL_WHITE_ENERGYSHOCK", 298),
+    ("CONST_ME_SMALL_GREEN_ENERGYSHOCK", 299), ("CONST_ME_SMALL_PINK_ENERGYSHOCK", 300), ("CONST_ME_SMALLWHITE_ENERGY_SPARK", 301),
+    ("CONST_ME_SMALLGREEN_ENERGY_SPARK", 302), ("CONST_ME_SMALLPINK_ENERGY_SPARK", 303), ("CONST_ME_SWORD_ATTACK", 304),
+    ("CONST_ME_CLUB_ATTACK", 305), ("CONST_ME_AXE_ATTACK", 306), ("CONST_ME_MONK_STAFF_ATTACK", 307),
+    ("CONST_ME_MONK_DAGGERS_ATTACK", 308), ("CONST_ME_FIST_ATTACK", 309),
+];
+
+/// CrystalServer's `ShootType_t` — Canary's plus the five storm arrows (64–68).
+const ANI_CRYSTAL: &[(&str, u16)] = &[
+    ("CONST_ANI_SPEAR", 1), ("CONST_ANI_BOLT", 2), ("CONST_ANI_ARROW", 3),
+    ("CONST_ANI_FIRE", 4), ("CONST_ANI_ENERGY", 5), ("CONST_ANI_POISONARROW", 6),
+    ("CONST_ANI_BURSTARROW", 7), ("CONST_ANI_THROWINGSTAR", 8), ("CONST_ANI_THROWINGKNIFE", 9),
+    ("CONST_ANI_SMALLSTONE", 10), ("CONST_ANI_DEATH", 11), ("CONST_ANI_LARGEROCK", 12),
+    ("CONST_ANI_SNOWBALL", 13), ("CONST_ANI_POWERBOLT", 14), ("CONST_ANI_POISON", 15),
+    ("CONST_ANI_INFERNALBOLT", 16), ("CONST_ANI_HUNTINGSPEAR", 17), ("CONST_ANI_ENCHANTEDSPEAR", 18),
+    ("CONST_ANI_REDSTAR", 19), ("CONST_ANI_GREENSTAR", 20), ("CONST_ANI_ROYALSPEAR", 21),
+    ("CONST_ANI_SNIPERARROW", 22), ("CONST_ANI_ONYXARROW", 23), ("CONST_ANI_PIERCINGBOLT", 24),
+    ("CONST_ANI_WHIRLWINDSWORD", 25), ("CONST_ANI_WHIRLWINDAXE", 26), ("CONST_ANI_WHIRLWINDCLUB", 27),
+    ("CONST_ANI_ETHEREALSPEAR", 28), ("CONST_ANI_ICE", 29), ("CONST_ANI_EARTH", 30),
+    ("CONST_ANI_HOLY", 31), ("CONST_ANI_SUDDENDEATH", 32), ("CONST_ANI_FLASHARROW", 33),
+    ("CONST_ANI_FLAMMINGARROW", 34), ("CONST_ANI_SHIVERARROW", 35), ("CONST_ANI_ENERGYBALL", 36),
+    ("CONST_ANI_SMALLICE", 37), ("CONST_ANI_SMALLHOLY", 38), ("CONST_ANI_SMALLEARTH", 39),
+    ("CONST_ANI_EARTHARROW", 40), ("CONST_ANI_EXPLOSION", 41), ("CONST_ANI_CAKE", 42),
+    ("CONST_ANI_TARSALARROW", 44), ("CONST_ANI_VORTEXBOLT", 45), ("CONST_ANI_PRISMATICBOLT", 48),
+    ("CONST_ANI_CRYSTALLINEARROW", 49), ("CONST_ANI_DRILLBOLT", 50), ("CONST_ANI_ENVENOMEDARROW", 51),
+    ("CONST_ANI_GLOOTHSPEAR", 53), ("CONST_ANI_SIMPLEARROW", 54), ("CONST_ANI_LEAFSTAR", 56),
+    ("CONST_ANI_DIAMONDARROW", 57), ("CONST_ANI_SPECTRALBOLT", 58), ("CONST_ANI_ROYALSTAR", 59),
+    ("CONST_ANI_CANDYCANE", 61), ("CONST_ANI_CHERRYBOMB", 62), ("CONST_ANI_SHATTERSTORMARROW", 64),
+    ("CONST_ANI_FIRESTORMARROW", 65), ("CONST_ANI_TERRASTORMARROW", 66), ("CONST_ANI_FROSTSTORMARROW", 67),
+    ("CONST_ANI_THUNDERSTORMARROW", 68),
+];
+
 /// BlackTek's `MagicEffectClasses` (`const.h`) — the TFS 1.x set.
 const ME_BLACKTEK: &[(&str, u16)] = &[
     ("CONST_ME_DRAWBLOOD", 1), ("CONST_ME_LOSEENERGY", 2), ("CONST_ME_POFF", 3),
@@ -1459,12 +1598,109 @@ pub static BLACKTEK: EngineProfile = EngineProfile {
     ],
 };
 
+/// CrystalServer is a Canary fork, and the fork line runs almost exactly where
+/// the monster layer ends: `data/libs/functions/revscriptsys.lua` — the file
+/// that turns `monster.*` table keys into `MonsterType` setter calls — is byte
+/// for byte the same in both trees, and a Crystal monster file is a Canary
+/// monster file. Four things make it its own profile rather than an alias:
+///
+/// - **Effect names.** Crystal renamed magic-effect ids 269 and 272–303 in
+///   place. Canary's spellings would write identifiers Crystal has never heard
+///   of, and the picker is the whole point of having the table.
+/// - **`skull`.** Canary registers no skull setter, so `lint.rs` errors on the
+///   field there; Crystal registers one (`monster_type_functions.cpp`), so the
+///   field is real and the lint must not fire.
+/// - **`COMBAT_AGONYDAMAGE`.** An eleventh damage type, used by eleven monsters
+///   in the shipped corpus. Without it in `elements` the writer drops those
+///   entries on save, which is the one failure mode this file exists to prevent.
+/// - **Five new shoot effects** (the storm arrows, 64–68).
+///
+/// Everything else — the flags table, `strategiesTarget`, the bestiary and
+/// bosstiary blocks, sounds, the loot shape — is Canary's, so this is a copy of
+/// `CANARY` with those four edits and nothing else.
+pub static CRYSTAL: EngineProfile = EngineProfile {
+    key: "crystal",
+    label: "CrystalServer",
+    format: Format::Lua,
+    blurb: "Canary fork: renamed effect constants, agony damage, skull setter",
+    raceid_attr: None,
+    has_species: false,
+    has_bestiary: true,
+    races: RACES_CANARY,
+    skulls: SKULLS_7,
+    recursive_corpus: true,
+    has_registry: false,
+    extension: "lua",
+    look_addons: true,
+    look_mount: true,
+    look_corpseactionid: false,
+    bool_flags: FLAGS_CANARY_BOOL,
+    num_flags: FLAGS_CANARY_NUM,
+    has_pacifist: false,
+    canpush_overrides_pushable: false,
+    clamps_health: true,
+    immunities: IMMUNITIES_CRYSTAL,
+    elements: ELEMENTS_CRYSTAL,
+    target_strategy: Some(("strategiesTarget", STRATEGY_KEYS_CANARY)),
+    target_strategy_sums_100: false,
+    cadence: Cadence::Interval,
+    builtin_spells: SPELLS_LUA,
+    melee: MeleeKind::SpellBlock,
+    melee_conditions: MELEE_COND_FULL,
+    melee_skill_progression: false,
+    geometry_ring: true,
+    speed_spell: SpeedSpell::SpeedChange,
+    condition_spell: ConditionSpell::TickStart,
+    spell_range_max: 22,
+    spell_range_default: 0,
+    effect_naming: EffectNaming::ConstMe,
+    magic_effects: ME_CRYSTAL,
+    shoot_effects: ANI_CRYSTAL,
+    spell_effect_keys: &["shootEffect", "effect"],
+    summon_effect_keys: &[],
+    loot_inside_wrapper: false,
+    loot_validates_ids: true,
+    loot_countmax_max: None,
+    warns_missing_targetchange_interval: false,
+    summon_interval: true,
+    summon_delay: false,
+    voices_interval: true,
+    voices_chance: true,
+    // Canary's list verbatim. `lua.skull-unsupported` is not here because it is
+    // keyed on the Canary profile itself and never fires for Crystal.
+    suppressed_lints: &[
+        "spell.name-unverifiable",
+        "bestiary.unknown-difficulty",
+        "registry.",
+        "flag.pacifist-forces-hostile-off",
+        "flag.pacifist-subflag-without-pacifist",
+        "flag.pushable-overridden",
+        "effect.knife-renders-pitchfork",
+        "effect.unreachable",
+        "loot.actionid-wrong-case",
+        "summons.maxsummons-wrong-case",
+        "raceid.wrong-case",
+        "health.missing-now",
+        "health.missing-max",
+        "spell.missing-chance",
+        "targetchange.missing-interval",
+        "targetchange.missing-chance",
+        "voices.missing-interval",
+        "voices.missing-chance",
+        "summons.maxsummons-missing",
+        "flag.multiple-attributes",
+        "immunity.multiple-attributes",
+        "element.multiple-attributes",
+    ],
+};
+
 pub static ALL: &[&EngineProfile] = &[
     &IRONCORE,
     &TFS,
     &TVP,
     &NOSTALRIUS,
     &CANARY,
+    &CRYSTAL,
     &BLACKTEK,
 ];
 
@@ -1514,28 +1750,99 @@ const SIGNALS: &[Signal] = &[
     // BlackTek monster opens with it.
     Signal {
         needle: "Game.createMonsterType",
-        votes: &[("canary", 40), ("blacktek", 40)],
+        votes: &[("canary", 40), ("crystal", 35), ("blacktek", 40)],
         label: "Game.createMonsterType (Lua monsters)",
     },
+    // Everything Canary-shaped is also Crystal-shaped — Crystal is a fork of
+    // Canary and a monster file is identical between them apart from balance
+    // numbers. So these all vote for both, and Crystal takes five points less
+    // on each so that a corpus showing *only* the shared markers still resolves
+    // to Canary outright rather than stalling on a tie. Crystal has to be won
+    // on its own evidence, below.
     Signal {
         needle: "monster.Bestiary",
-        votes: &[("canary", 50)],
+        votes: &[("canary", 50), ("crystal", 45)],
         label: "monster.Bestiary",
     },
     Signal {
         needle: "monster.bosstiary",
-        votes: &[("canary", 40)],
+        votes: &[("canary", 40), ("crystal", 35)],
         label: "monster.bosstiary",
     },
     Signal {
         needle: "monster.strategiesTarget",
-        votes: &[("canary", 40)],
+        votes: &[("canary", 40), ("crystal", 35)],
         label: "monster.strategiesTarget",
     },
     Signal {
         needle: "monster.light",
-        votes: &[("canary", 20)],
+        votes: &[("canary", 20), ("crystal", 15)],
         label: "monster.light",
+    },
+    // Crystal's own evidence. There is no marker in *most* Crystal files that
+    // is absent from Canary — the two corpora only diverge in the monsters
+    // Crystal added and the effect constants it renamed — so these are all
+    // sparse, and each is priced to clear Canary's lead on its own. A Crystal
+    // corpus whose sample happens to miss every one of them detects as Canary,
+    // which reads it correctly bar a handful of effect names; the engine
+    // dropdown is the remedy.
+    Signal {
+        needle: "BESTY_RACE_INKBORN",
+        votes: &[("crystal", 90)],
+        label: "BESTY_RACE_INKBORN (Crystal-only bestiary race)",
+    },
+    Signal {
+        needle: "COMBAT_AGONYDAMAGE",
+        votes: &[("crystal", 90)],
+        label: "COMBAT_AGONYDAMAGE",
+    },
+    Signal {
+        needle: "monster.respawnType",
+        votes: &[("crystal", 90)],
+        label: "monster.respawnType",
+    },
+    // The renamed 272–303 block. Any one of these is a constant Canary does not
+    // define, so a file using it could not load there at all.
+    Signal {
+        needle: "CONST_ME_WHITE_ENERGYPULSE",
+        votes: &[("crystal", 90)],
+        label: "CONST_ME_WHITE_ENERGYPULSE (Crystal effect naming)",
+    },
+    Signal {
+        needle: "CONST_ME_WHITE_TIGERCLASH",
+        votes: &[("crystal", 90)],
+        label: "CONST_ME_WHITE_TIGERCLASH (Crystal effect naming)",
+    },
+    Signal {
+        needle: "CONST_ME_SPIKES",
+        votes: &[("crystal", 90)],
+        label: "CONST_ME_SPIKES (Crystal effect naming)",
+    },
+    Signal {
+        needle: "CONST_ME_BLOOD_RAIN",
+        votes: &[("crystal", 90)],
+        label: "CONST_ME_BLOOD_RAIN (Crystal effect naming)",
+    },
+    Signal {
+        needle: "STORMARROW",
+        votes: &[("crystal", 90)],
+        label: "CONST_ANI_*STORMARROW (Crystal shoot effects)",
+    },
+    // …and the mirror image: constants Canary defines that Crystal renamed away.
+    Signal {
+        needle: "CONST_ME_PULSE_",
+        votes: &[("canary", 60)],
+        label: "CONST_ME_PULSE_* (Canary effect naming)",
+    },
+    Signal {
+        needle: "CONST_ME_CLAW_",
+        votes: &[("canary", 60)],
+        label: "CONST_ME_CLAW_* (Canary effect naming)",
+    },
+    Signal {
+        needle: "CONST_ME_WOODEN_STAKES",
+        votes: &[("canary", 60)],
+        label: "CONST_ME_WOODEN_STAKES (Canary effect naming)",
     },
     // Canary keeps these inside `monster.flags`; BlackTek keeps them at the top
     // level, exactly as TFS did in XML. Column zero is the whole distinction.
