@@ -30,7 +30,7 @@ use std::path::Path;
 
 use crate::catalog;
 use crate::items::ItemIndex;
-use crate::engine::EngineProfile;
+use crate::engine::{CustomEffects, EngineProfile};
 use crate::monster::{
     self, Child, FlagValue, Lint, MonsterDoc, MonsterSummary, Node, Parsed, SpellBlock,
 };
@@ -43,14 +43,28 @@ const SILENT: &str = "silent";
 
 struct Report {
     profile: &'static EngineProfile,
+    /// Effects the user has declared on top of the engine's own tables. Owned
+    /// rather than borrowed: it is a handful of entries, and a lifetime here
+    /// would spread `Report<'_>` through forty rule signatures to save a clone
+    /// that costs nothing.
+    custom: CustomEffects,
     file: Option<String>,
     lints: Vec<Lint>,
 }
 
 impl Report {
     fn new(profile: &'static EngineProfile, file: Option<String>) -> Report {
+        Report::with_custom(profile, &CustomEffects::default(), file)
+    }
+
+    fn with_custom(
+        profile: &'static EngineProfile,
+        custom: &CustomEffects,
+        file: Option<String>,
+    ) -> Report {
         Report {
             profile,
+            custom: custom.clone(),
             file,
             lints: Vec::new(),
         }
@@ -87,8 +101,9 @@ pub fn lint_monster(
     doc: &MonsterDoc,
     spells: &SpellIndex,
     items: &ItemIndex,
+    custom: &CustomEffects,
 ) -> Vec<Lint> {
-    let mut r = Report::new(profile, Some(doc.file.clone()));
+    let mut r = Report::with_custom(profile, custom, Some(doc.file.clone()));
 
     identity(doc, &mut r);
     engine_shape(doc, &mut r);
@@ -550,6 +565,17 @@ fn effect_value(value: Option<&str>, key: &str, path: &str, r: &mut Report) {
     }
     let is_shoot = key == "shootEffect";
 
+    // A name the user has declared is known, and the check stops here: MONx has
+    // been told this server defines it, so warning that the loader drops it
+    // would be asserting something MONx cannot see and the user can.
+    if is_shoot {
+        if r.custom.is_shoot(r.profile.effect_naming, value) {
+            return;
+        }
+    } else if r.custom.is_magic(r.profile.effect_naming, value) {
+        return;
+    }
+
     let known = if is_shoot {
         r.profile.is_shoot_effect(value)
     } else {
@@ -579,8 +605,12 @@ fn effect_value(value: Option<&str>, key: &str, path: &str, r: &mut Report) {
     match fix {
         Some(correct) => r.add(WARNING, "effect.wrong-case", Some(path), true,
             format!("{key} \"{value}\" is matched case-sensitively — write \"{correct}\"")),
+        // Worth saying where the claim comes from. MONx knows this engine's
+        // shipped table and nothing else, so on a server that added the effect
+        // the finding is wrong — and the user is the only one who can say so.
         None => r.add(WARNING, "effect.unknown", Some(path), false,
-            format!("Unknown {key} \"{value}\" — the effect is dropped")),
+            format!("Unknown {key} \"{value}\" — not in this engine's table, so a stock loader drops it. \
+                     If your server adds it, declare it under Preferences → Custom effects.")),
     }
 }
 
@@ -606,14 +636,22 @@ fn summons(doc: &MonsterDoc, r: &mut Report) {
         }
         for (key, value) in [("effect", &e.effect), ("masterEffect", &e.master_effect)] {
             let Some(value) = value else { continue };
-            if !r.profile.is_magic_effect(value) {
-                let path = format!("{path}.{key}");
-                match r.profile.magic_effect_case_fix(value) {
-                    Some(correct) => r.add(WARNING, "effect.wrong-case", Some(&path), true,
-                        format!("{key} \"{value}\" is matched case-sensitively — write \"{correct}\"")),
-                    None => r.add(WARNING, "effect.unknown", Some(&path), false,
-                        format!("Unknown {key} \"{value}\"")),
-                }
+            // Same three exemptions as `effect_value`: a raw id is the value
+            // itself, and a declared name is one MONx has been told about.
+            let numeric = !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit());
+            if numeric
+                || r.custom.is_magic(r.profile.effect_naming, value)
+                || r.profile.is_magic_effect(value)
+            {
+                continue;
+            }
+            let path = format!("{path}.{key}");
+            match r.profile.magic_effect_case_fix(value) {
+                Some(correct) => r.add(WARNING, "effect.wrong-case", Some(&path), true,
+                    format!("{key} \"{value}\" is matched case-sensitively — write \"{correct}\"")),
+                None => r.add(WARNING, "effect.unknown", Some(&path), false,
+                    format!("Unknown {key} \"{value}\" — not in this engine's table, so a stock loader drops it. \
+                             If your server adds it, declare it under Preferences → Custom effects.")),
             }
         }
     }
@@ -1050,11 +1088,12 @@ pub fn summaries(
     docs: &[MonsterDoc],
     spells: &SpellIndex,
     items: &ItemIndex,
+    custom: &CustomEffects,
 ) -> Vec<MonsterSummary> {
     docs.iter()
         .map(|doc| {
             let mut summary = monster::summarise(doc);
-            for l in lint_monster(profile, doc, spells, items) {
+            for l in lint_monster(profile, doc, spells, items, custom) {
                 match l.severity.as_str() {
                     ERROR => summary.lint_counts.error += 1,
                     WARNING => summary.lint_counts.warning += 1,

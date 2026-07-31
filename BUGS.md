@@ -6,9 +6,14 @@ Rust modules that sit under the commands (`lib.rs`, `protocol.rs`, `items.rs`,
 `otb.rs`, `registry.rs`, `spells.rs`, `workspace.rs`).
 
 Nothing here has been fixed. Each entry says what is wrong, what a user sees, and
-where. `monster.rs`, `lint.rs`, `engine.rs`, `luadoc.rs`, `monster_lua.rs`,
-`dat.rs` and `spr.rs` were **not** covered — they are the largest files and are
-gated by `probe_monster` / `probe_dat`, so they want a pass of their own.
+where. The remaining Rust modules are covered in **Part 2** below.
+
+> **Line numbers in Part 1 are stale for `lib.rs`.** They were taken before the
+> uncommitted `CustomEffects` work landed in the tree, which shifted everything
+> below line ~260 by about fifty lines. The findings themselves still hold —
+> `save_monster` is now at 519, `scale_loot_chances`'s save loop at ~886,
+> `batch_edit`'s at ~982. Part 2's line numbers are current as of that same
+> working tree.
 
 ---
 

@@ -605,6 +605,18 @@
 	background: var(--accent-dim);
 }
 
+/* A cell that did not come out of an engine's source. Dashed for a declared
+   effect, warning-coloured for one nothing accounts for — the difference
+   matters, because the second is a value that may not load. */
+.ss-ed-effect-cell-custom {
+	border-style: dashed;
+}
+
+.ss-ed-effect-cell-off {
+	border-style: dashed;
+	border-color: var(--warn);
+}
+
 .ss-ed-effect-none {
 	display: flex;
 	align-items: center;

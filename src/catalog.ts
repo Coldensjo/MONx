@@ -128,6 +128,13 @@ export interface EffectEntry {
 	unreachable?: string;
 	/** Set when the name resolves to a different sprite than it claims (§21). */
 	mislabeled?: string;
+	/** Declared by the user, not read from an engine's source — see
+	 *  `customeffects.ts`. Shown so it is never mistaken for a shipped entry. */
+	custom?: boolean;
+	/** Present in the file but in neither the engine's table nor the user's
+	 *  declarations. Synthesised by the picker so an unrecognised value is
+	 *  visible instead of reading as "(none)" and being overwritten. */
+	offCatalogue?: boolean;
 }
 
 export const MAGIC_EFFECTS: EffectEntry[] = [

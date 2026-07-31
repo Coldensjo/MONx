@@ -106,6 +106,10 @@ pub struct Workspace {
     /// `.spr`/`.dat` pair. Canary ships these; the protocol routes prefer it
     /// when present and fall back to the inherited sprite engine otherwise.
     pub bundle: Option<std::sync::Arc<crate::assets::Bundle>>,
+    /// Effects this server adds that no shipped table knows about. Pushed in by
+    /// the frontend, which owns the setting; the backend holds a copy only so
+    /// the linter can stop calling a declared effect unknown.
+    pub custom_effects: crate::engine::CustomEffects,
 }
 
 impl Default for Workspace {
@@ -122,6 +126,7 @@ impl Default for Workspace {
             dat_path: String::new(),
             transparent: false,
             bundle: None,
+            custom_effects: crate::engine::CustomEffects::default(),
         }
     }
 }

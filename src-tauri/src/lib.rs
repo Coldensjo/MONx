@@ -24,6 +24,17 @@ use spr::{SprInfo, SprManager, SprManagerState};
 use tauri::State;
 use workspace::WorkspaceState;
 
+/// Every engine's declared custom effects, keyed by engine key.
+///
+/// Deliberately **not** part of `Workspace`: it has to be readable while
+/// `open_workspace` is still building one, because the lint counts in the
+/// monster list are computed there and a declared effect must already be known
+/// by then. Closing a workspace leaves it alone — the declarations describe the
+/// user's servers, not the folder that happens to be open.
+type CustomEffectsState = std::sync::Arc<
+    std::sync::RwLock<std::collections::HashMap<String, engine::CustomEffects>>,
+>;
+
 #[tauri::command]
 fn open_spr(
     state: State<SprManagerState>,
@@ -252,6 +263,7 @@ fn open_workspace(
     state: State<WorkspaceState>,
     spr_state: State<SprManagerState>,
     dat_state: State<DatManagerState>,
+    custom_state: State<CustomEffectsState>,
     paths: WorkspacePaths,
 ) -> Result<WorkspaceInfo, String> {
     let monsters_dir = workspace::resolve_folder(&paths.monsters)
@@ -351,10 +363,18 @@ fn open_workspace(
 
     let registered_count = docs.iter().filter(|d| d.registered).count() as u32;
     let orphan_count = docs.len() as u32 - registered_count;
+    // The profile is only settled here, so this is the first point at which the
+    // right engine's declarations can be picked out of the map.
+    let custom = custom_state
+        .read()
+        .map_err(|e| format!("lock: {e}"))?
+        .get(profile.key)
+        .cloned()
+        .unwrap_or_default();
     let mut lints = lint::lint_workspace(profile, &docs, &registry, &spells, &index, &monsters_dir);
     lints.extend(read_errors);
     lints.extend(item_lints(&index));
-    let monsters = lint::summaries(profile, &docs, &spells, &index);
+    let monsters = lint::summaries(profile, &docs, &spells, &index, &custom);
 
     let info = WorkspaceInfo {
         paths: WorkspacePaths {
@@ -392,8 +412,37 @@ fn open_workspace(
     ws.dat_path = info.dat_path.clone();
     ws.transparent = transparent;
     ws.bundle = bundle;
+    ws.custom_effects = custom;
 
     Ok(info)
+}
+
+/// Replaces the whole per-engine declaration map, and refreshes the open
+/// workspace's copy and its lint counts so the monster list stops showing
+/// findings the user has just answered.
+#[tauri::command]
+fn set_custom_effects(
+    state: State<WorkspaceState>,
+    custom_state: State<CustomEffectsState>,
+    effects: std::collections::HashMap<String, engine::CustomEffects>,
+) -> Result<(), String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    let mine = effects.get(ws.profile.key).cloned().unwrap_or_default();
+    *custom_state.write().map_err(|e| format!("lock: {e}"))? = effects;
+    if ws.custom_effects != mine {
+        // Through the guard the whole workspace is one borrow; reborrowing the
+        // struct lets the disjoint fields be read while `monsters` is written.
+        let ws = &mut *ws;
+        ws.custom_effects = mine;
+        ws.monsters = lint::summaries(
+            ws.profile,
+            &ws.docs,
+            &ws.spells,
+            &ws.items,
+            &ws.custom_effects,
+        );
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -444,7 +493,7 @@ fn refresh(ws: &mut workspace::Workspace) {
     let dir = ws.monsters_dir();
     ws.registry = registry::Registry::load(&dir.join("monsters.xml"));
     let (docs, _) = monster::read_corpus(ws.profile, &dir, &ws.registry, &ws.spells);
-    ws.monsters = lint::summaries(ws.profile, &docs, &ws.spells, &ws.items);
+    ws.monsters = lint::summaries(ws.profile, &docs, &ws.spells, &ws.items, &ws.custom_effects);
     ws.docs = docs;
 }
 
@@ -470,7 +519,7 @@ fn save_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<Vec<Lin
     let lints = monster::save(ws.profile, &ws.monsters_dir(), &ws.registry, &doc)?;
     refresh(&mut ws);
     let mut all = lints;
-    all.extend(lint::lint_monster(ws.profile, &doc, &ws.spells, &ws.items));
+    all.extend(lint::lint_monster(ws.profile, &doc, &ws.spells, &ws.items, &ws.custom_effects));
     Ok(all)
 }
 
@@ -572,7 +621,7 @@ fn lint_workspace(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
 #[tauri::command]
 fn lint_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<Vec<Lint>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    Ok(lint::lint_monster(ws.profile, &doc, &ws.spells, &ws.items))
+    Ok(lint::lint_monster(ws.profile, &doc, &ws.spells, &ws.items, &ws.custom_effects))
 }
 
 #[tauri::command]
@@ -1166,7 +1215,7 @@ fn all_lints(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
         &ws.monsters_dir(),
     );
     for doc in &ws.docs {
-        all.extend(lint::lint_monster(ws.profile, doc, &ws.spells, &ws.items));
+        all.extend(lint::lint_monster(ws.profile, doc, &ws.spells, &ws.items, &ws.custom_effects));
     }
     Ok(all)
 }
@@ -1222,6 +1271,7 @@ pub fn run() {
     let spr_manager: SprManagerState = Arc::new(RwLock::new(SprManager::new()));
     let dat_manager: DatManagerState = Arc::new(RwLock::new(DatManager::new()));
     let workspace: WorkspaceState = Arc::new(RwLock::new(workspace::Workspace::default()));
+    let custom_effects: CustomEffectsState = Arc::new(RwLock::new(Default::default()));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1229,6 +1279,7 @@ pub fn run() {
         .manage(spr_manager)
         .manage(dat_manager)
         .manage(workspace)
+        .manage(custom_effects)
         .invoke_handler(tauri::generate_handler![
             open_external,
             open_spr,
@@ -1240,6 +1291,7 @@ pub fn run() {
             probe_workspace,
             open_workspace,
             close_workspace,
+            set_custom_effects,
             list_monsters,
             get_monster,
             save_monster,

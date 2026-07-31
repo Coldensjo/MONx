@@ -1,4 +1,7 @@
+import { useMemo } from 'react';
 import { engineInfo } from '../engine';
+import { mergeEffects } from '../customeffects';
+import { useCustomEffects } from './customctx';
 import { EffectGrid } from './EffectGrid';
 
 interface Props {
@@ -24,9 +27,19 @@ interface Props {
  */
 export function EffectSelect({ kind, value, onChange, disabled, noneLabel = '(none)', engine }: Props) {
 	const info = engineInfo(engine);
+	const custom = useCustomEffects();
+	// The catalogue offered is the engine's table plus whatever this server was
+	// declared to add — see `customeffects.ts` for why the two are kept apart.
+	const entries = useMemo(
+		() =>
+			kind === 'area'
+				? mergeEffects(info.magicEffects, custom.magic)
+				: mergeEffects(info.shootEffects, custom.shoot),
+		[kind, info, custom]
+	);
 	return (
 		<EffectGrid
-			entries={kind === 'area' ? info.magicEffects : info.shootEffects}
+			entries={entries}
 			kind={kind}
 			value={value}
 			onChange={onChange}

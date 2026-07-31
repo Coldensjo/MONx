@@ -177,6 +177,7 @@ src/
   PatchNotesDialog.tsx Patch notes since the user's cut-off point (Tools menu)
   HotkeysDialog.tsx    The hotkey manager (Preferences menu)
   PreferencesDialog.tsx  Language, editor tab visibility + default tab (Preferences menu)
+  CustomEffectsDialog.tsx  Effects this server adds on top of its engine's (Preferences menu)
   UiInspector.tsx      Hold-F2 element inspector overlay
   monster.ts           Monster/workspace types, invoke wrappers, protocol URL builders
   spr.ts               Inherited invoke wrappers + protocol URLs
@@ -193,6 +194,7 @@ src/
   favourites.ts        Starred item ids (monx.favourites)
   lootpresets.ts       Named loot-tray sets (monx.lootPresets)
   fixtures.ts          Fixture data for component development
+  customeffects.ts     Declared effects: storage, the backend push, the merge
   catalog.ts  derive.ts  dnd.ts  spellsim.ts
   index.css            SPRx base stylesheet — frozen
   styles/              shell.css, editor.css, browse.css, inspect.css
@@ -218,6 +220,7 @@ MONx also opens **TheForgottenServer 1.x, TheVioletProject, Nostalrius, Canary/O
 The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the product in `DESIGN.md`; both were derived from the server's own source and have since been removed from the repo. The `§n` markers throughout the code cite them. What they said now lives in the code, and that is where to look — or to add to:
 
 - `catalog.rs` / `catalog.ts` — the enum tables (flags, damage and condition types, races, skulls, `CONST_ME_*`, `CONST_ANI_*`, built-in spells), each citing its section.
+- `customeffects.ts` / `engine.rs` `CustomEffects` — the escape hatch for the tables above. Every effect table is read out of a shipped server's source, which is what makes it trustworthy and what makes it wrong for anyone who modified their own. A user declares the extras (Preferences → Custom effects, `monx.customEffects`), the picker appends them to the engine's list, and the linter stops calling them unknown. **The probes deliberately pass `CustomEffects::default()`** — a gate a setting can quieten is not a gate. Effects that are neither shipped nor declared still show in the picker as off-catalogue rather than reading as `(none)`, because a value the editor renders as "nothing" is a value the next click deletes.
 - `lint.rs` — every engine rule with an observable consequence, as stable machine codes (87 of them). If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text.
 - `monster.rs` — the reader and writer comments, which record why the model is shaped the way it is (why `pacifist`/`leash` are fields and not lines, why `<flag>` keeps only its first attribute, and so on).
 - `git log` — the two files are in history if you need the prose: `git show f050169^:MONSTER_EDITOR_REFERENCE.md`.

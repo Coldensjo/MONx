@@ -47,6 +47,16 @@ import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 import { applyLintFix } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
 import PreferencesDialog from './PreferencesDialog';
+import CustomEffectsDialog from './CustomEffectsDialog';
+import {
+	effectsFor,
+	loadCustomEffects,
+	pushCustomEffects,
+	saveCustomEffects,
+	type CustomEffects,
+	type CustomEffectsByEngine
+} from './customeffects';
+import { CustomEffectsProvider } from './fields/customctx';
 import {
 	LINT_SEVERITIES,
 	lintShown,
@@ -167,6 +177,12 @@ export default function Workspace({
 	/** Command id → chords. Defaults merged with the user's overrides. */
 	const [bindings, setBindings] = useState<Bindings>(loadBindings);
 	const [hotkeysOpen, setHotkeysOpen] = useState(false);
+	/** Declared effects for every engine, and the dialog over them. Kept whole
+	 *  rather than per-engine so switching workspaces never loses another
+	 *  server's declarations. */
+	const [customFx, setCustomFx] = useState<CustomEffectsByEngine>(loadCustomEffects);
+	const [customFxOpen, setCustomFxOpen] = useState(false);
+	const engineFx = effectsFor(customFx, info.engine);
 	/** The monster list's own actions, so a hotkey can reach its dialogs. */
 	const listActions = useRef<ListActions | null>(null);
 	// Per workspace. A single global key restored one corpus's file into
@@ -657,6 +673,39 @@ export default function Workspace({
 	);
 	const undoEdit = useCallback(() => applyHistory(undoRef.current, redoRef.current), [applyHistory]);
 	const redoEdit = useCallback(() => applyHistory(redoRef.current, undoRef.current), [applyHistory]);
+
+	// The backend linter needs the declarations too, or the drawer keeps
+	// reporting an effect the picker has just started showing. Pushed on mount
+	// as well as on change: the map outlives any one workspace, and this is the
+	// first point after an open where the engine in force is known.
+	useEffect(() => {
+		pushCustomEffects(customFx);
+	}, [customFx]);
+
+	/** Saves the declarations, pushes them, and re-lints what is on screen so
+	 *  the answer is visible without reopening the monster. */
+	const updateCustomFx = useCallback(
+		(next: CustomEffects) => {
+			const all = { ...customFx, [info.engine]: next };
+			saveCustomEffects(all);
+			setCustomFx(all);
+			pushCustomEffects(all);
+			const current = docRef.current;
+			if (current) {
+				// Ordered after the push on purpose — the invoke queue is FIFO, so
+				// the re-lint sees the declarations that were just sent.
+				lintMonster(current)
+					.then(l => {
+						setMonsterLints(l);
+						const buf = buffersRef.current.get(current.file);
+						if (buf && buf.doc === current) buf.lints = l;
+					})
+					.catch(() => {});
+			}
+			onMonstersChanged(current?.file ?? null);
+		},
+		[customFx, info.engine, onMonstersChanged]
+	);
 
 	/** Loads `file`, applies every fix it can, saves it. Returns the ones that stuck. */
 	const fixInFile = useCallback(
@@ -1526,6 +1575,12 @@ export default function Workspace({
 		{ id: 'open-prefs', label: t('Editor tabs…'), group: t('Preferences'), run: () => setPrefsOpen(true) },
 		{ id: 'open-hotkeys', label: t('Hotkeys…'), group: t('Preferences'), run: () => setHotkeysOpen(true) },
 		{
+			id: 'open-custom-effects',
+			label: t('Custom effects…'),
+			group: t('Preferences'),
+			run: () => setCustomFxOpen(true)
+		},
+		{
 			id: 'show-all-tabs',
 			label: t('Show every editor tab'),
 			group: t('Preferences'),
@@ -1618,7 +1673,12 @@ export default function Workspace({
 		},
 		{
 			label: t('Preferences'),
-			items: [item('open-prefs'), item('open-hotkeys'), item('show-all-tabs', { separated: true })]
+			items: [
+				item('open-prefs'),
+				item('open-hotkeys'),
+				item('open-custom-effects'),
+				item('show-all-tabs', { separated: true })
+			]
 		}
 	];
 
@@ -1657,6 +1717,7 @@ export default function Workspace({
 	// to assuming three outfit frames.
 	return (
 		<ThingAnimProvider value={thingAnim}>
+			<CustomEffectsProvider value={engineFx}>
 			<Menubar menus={menus} />
 
 			<div className="ss-body">
@@ -2454,6 +2515,15 @@ export default function Workspace({
 				<PreferencesDialog prefs={prefs} onChange={updatePrefs} onClose={() => setPrefsOpen(false)} />
 			)}
 
+			{customFxOpen && (
+				<CustomEffectsDialog
+					engine={info.engine}
+					effects={engineFx}
+					onChange={updateCustomFx}
+					onClose={() => setCustomFxOpen(false)}
+				/>
+			)}
+
 			<LintPanel
 				open={lintsOpen}
 				onClose={() => setLintsOpen(false)}
@@ -2471,6 +2541,7 @@ export default function Workspace({
 				onToggleSeverity={toggleLintSeverity}
 				onIgnoreCode={ignoreLintCode}
 			/>
+			</CustomEffectsProvider>
 		</ThingAnimProvider>
 	);
 }

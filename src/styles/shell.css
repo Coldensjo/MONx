@@ -1245,3 +1245,52 @@
 .mx-credit-link:hover {
 	color: var(--accent);
 }
+
+/* ---------- Custom effects dialog ---------- */
+
+.mx-customfx-modal {
+	width: min(760px, 92vw);
+	max-height: 86vh;
+	overflow-y: auto;
+}
+
+.mx-customfx-tabs {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+
+.mx-customfx-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+
+/* The id column is narrow, the sprite and the delete button are fixed: the two
+   text columns take whatever is left. */
+.mx-customfx-head,
+.mx-customfx-row {
+	display: grid;
+	grid-template-columns: 1fr 90px 1fr 40px 32px;
+	gap: 6px;
+	align-items: center;
+}
+
+.mx-customfx-head {
+	font-size: 11px;
+	opacity: 0.6;
+	padding: 0 2px;
+}
+
+.mx-customfx-preview {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* A per-row warning spans the whole grid rather than squeezing into a column. */
+.mx-customfx-note {
+	grid-column: 1 / -1;
+	margin: 0;
+}

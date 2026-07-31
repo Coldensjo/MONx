@@ -16,7 +16,10 @@ interface Props {
 	noneLabel?: string;
 }
 
-function Sprite({ id, kind }: { id: number; kind: 'area' | 'shoot' }) {
+/** One effect's sprite, or its bare id when nothing can render it. Exported for
+ *  the custom-effect dialog, where seeing the sprite is how you know the id is
+ *  the one you meant. */
+export function Sprite({ id, kind }: { id: number; kind: 'area' | 'shoot' }) {
 	const previewUrl = usePreviewUrl();
 	const url = id > 0 ? previewUrl?.(kind === 'area' ? 'effect' : 'missile', id) : null;
 	if (!url) return <span className="ss-ed-effect-chip">{id}</span>;
@@ -33,6 +36,25 @@ function Sprite({ id, kind }: { id: number; kind: 'area' | 'shoot' }) {
 	);
 }
 
+/**
+ * A value the catalogue has no entry for, made visible.
+ *
+ * Without this the trigger falls through to `(none)` — a custom effect looks
+ * exactly like no effect at all, survives on disk only until somebody opens the
+ * picker, and is then silently destroyed by the first click. So an unrecognised
+ * value becomes an entry of its own instead: a bare number is used as the
+ * sprite id and really does render, because the preview route reads the client
+ * directly and never consults a name table.
+ */
+function offCatalogue(value: string): EffectEntry {
+	return {
+		name: value,
+		id: /^\d+$/.test(value) ? Number(value) : 0,
+		label: value,
+		offCatalogue: true
+	};
+}
+
 function Cell({
 	entry,
 	kind,
@@ -47,15 +69,21 @@ function Cell({
 	onPick: () => void;
 }) {
 	const title = [entry.label, entry.name, entry.unreachable ?? entry.mislabeled].filter(Boolean).join(' — ');
+	const cls = ['ss-ed-effect-cell'];
+	if (active) cls.push('ss-ed-effect-cell-active');
+	// Anything not read out of an engine's source is marked, so a declaration
+	// and a shipped entry are never mistaken for one another.
+	if (entry.custom) cls.push('ss-ed-effect-cell-custom');
+	if (entry.offCatalogue) cls.push('ss-ed-effect-cell-off');
 	return (
 		<button
 			type="button"
-			className={active ? 'ss-ed-effect-cell ss-ed-effect-cell-active' : 'ss-ed-effect-cell'}
+			className={cls.join(' ')}
 			title={title}
 			disabled={disabled}
 			onClick={onPick}
 		>
-			<Sprite id={entry.id} kind={kind} />
+			{entry.id > 0 ? <Sprite id={entry.id} kind={kind} /> : <span className="ss-ed-effect-chip">?</span>}
 		</button>
 	);
 }
@@ -102,19 +130,28 @@ export function EffectGrid({ entries, kind, value, onChange, disabled, noneLabel
 		};
 	}, [open]);
 
+	// An unrecognised value joins the list rather than vanishing from it, so the
+	// grid shows what this monster actually carries and the cell reads as active.
+	const all = useMemo(
+		() => (value && !entries.some(e => e.name === value) ? [...entries, offCatalogue(value)] : entries),
+		[entries, value]
+	);
+
 	const shown = useMemo(() => {
 		const q = query.trim().toLowerCase();
-		return entries.filter(e => {
-			if (e.id === 0) return false; // the NONE sentinel is the dedicated first cell
+		return all.filter(e => {
+			// The NONE sentinel is the dedicated first cell. An off-catalogue value
+			// can legitimately have no sprite id, and must still be shown.
+			if (e.id === 0 && !e.offCatalogue) return false;
 			// Unusable names resolve to NONE and log an error (§21) — hidden unless
 			// this monster already carries one, where it must stay visible to fix.
 			if (e.unreachable && e.name !== value) return false;
 			if (!q) return true;
 			return e.label.toLowerCase().includes(q) || e.name.toLowerCase().includes(q);
 		});
-	}, [entries, query, value]);
+	}, [all, query, value]);
 
-	const current = entries.find(e => e.name === value);
+	const current = all.find(e => e.name === value);
 
 	const pick = (name: string | null) => {
 		onChange(name);
@@ -179,6 +216,12 @@ export function EffectGrid({ entries, kind, value, onChange, disabled, noneLabel
 			)}
 			{current?.unreachable && <div className="ss-ed-field-note ss-ed-note-warn">{current.unreachable}</div>}
 			{current?.mislabeled && <div className="ss-ed-field-note ss-ed-note-warn">{current.mislabeled}</div>}
+			{current?.offCatalogue && (
+				<div className="ss-ed-field-note ss-ed-note-warn">
+					{t('Not in this engine\'s catalogue — kept exactly as written. Declare it under Preferences → Custom effects to name it and stop the warning.')}
+				</div>
+			)}
+			{current?.custom && <div className="ss-ed-field-note">{t('A custom effect you declared, not one this engine ships.')}</div>}
 			{current?.ironcore && (
 				<div className="ss-ed-field-note">{t('Ironcore-only effect — a stock client renders nothing.')}</div>
 			)}

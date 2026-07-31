@@ -239,7 +239,15 @@ fn main() {
         // All three scopes, so a regression in any one of them shows up here.
         let mut report = source_lints;
         for doc in &docs {
-            report.extend(lint::lint_monster(profile, doc, &spells, &items));
+            report.extend(lint::lint_monster(
+                profile,
+                doc,
+                &spells,
+                &items,
+                // The probe is the stock engine on purpose: a gate that could be
+                // quietened by a user setting would stop being a gate.
+                &engine::CustomEffects::default(),
+            ));
         }
         report.extend(lint::lint_workspace(profile, &docs, &registry, &spells, &items, &dir));
         let count = |severity: &str| {
