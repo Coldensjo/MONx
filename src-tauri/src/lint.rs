@@ -30,7 +30,7 @@ use std::path::Path;
 
 use crate::catalog;
 use crate::items::ItemIndex;
-use crate::engine::{CustomEffects, EngineProfile};
+use crate::engine::{self, CustomEffects, EngineProfile, PushableOverride};
 use crate::monster::{
     self, Child, FlagValue, Lint, MonsterDoc, MonsterSummary, Node, Parsed, SpellBlock,
 };
@@ -141,8 +141,10 @@ fn identity(doc: &MonsterDoc, r: &mut Report) {
         _ => {}
     }
 
-    // The loader clamps and warns rather than refusing (§4).
-    if doc.health.now > doc.health.max {
+    // The loader clamps and warns rather than refusing (§4) — where it checks
+    // at all. Nostalrius has no such branch, so `health now` above `max` simply
+    // stands, and saying it is clamped would be worse than saying nothing.
+    if r.profile.clamps_health && doc.health.now > doc.health.max {
         r.add(WARNING, "health.now-over-max", Some("health.now"), true,
             format!("Health now ({}) is greater than health max ({}) — the server clamps it on spawn",
                 doc.health.now, doc.health.max));
@@ -255,10 +257,16 @@ fn engine_shape(doc: &MonsterDoc, r: &mut Report) {
     let p = r.profile;
 
     // ---- <targetstrategy> (TVP, Nostalrius) ----
+    //
+    // Canary and Crystal have the node too, but their registrar's
+    // `if mask.strategiesTarget then` has no `else`: a monster without one is
+    // not something the server ever mentions. Only the two 7.x loaders warn.
     if let Some((node, _)) = p.target_strategy {
         match &doc.target_strategy {
-            None => r.add(WARNING, "targetstrategy.missing", Some("targetStrategy"), true,
-                format!("No <{node}> — the server warns about missing target change strategies")),
+            None if p.warns_missing_target_strategy => {
+                r.add(WARNING, "targetstrategy.missing", Some("targetStrategy"), true,
+                    format!("No <{node}> — the server warns about missing target change strategies"))
+            }
             Some(s) if p.target_strategy_sums_100 => {
                 let sum = s.nearest + s.weakest + s.mostdamage + s.random;
                 if sum != 100 {
@@ -272,11 +280,28 @@ fn engine_shape(doc: &MonsterDoc, r: &mut Report) {
 
     // ---- <bestiary> (TFS) ----
     if let Some(b) = &doc.bestiary {
-        // `isValidBestiaryInfo` throws the whole block away, silently as far as
-        // the monster is concerned — it just never enters the bestiary.
+        // `isValidBestiaryInfo` (`monsters.cpp:1631`) has six rejection paths
+        // and any one of them throws the whole block away. Reporting only the
+        // first left five ways to lose a bestiary entry with nothing said.
+        let reject = |what: &str| {
+            format!("A <bestiary> block {what} fails isValidBestiaryInfo and is discarded whole")
+        };
         if doc.raceid.unwrap_or(0) <= 0 {
-            r.add(WARNING, "bestiary.invalid", Some("bestiary"), false,
-                "A <bestiary> block without a raceId is discarded whole".to_string());
+            r.add(WARNING, "bestiary.invalid", Some("bestiary"), false, reject("without a raceId"));
+        }
+        if b.class.as_deref().map(str::trim).unwrap_or("").is_empty() {
+            r.add(WARNING, "bestiary.missing-class", Some("bestiary.class"), false,
+                reject("with an empty class"));
+        }
+        if b.prowess == 0 || b.expertise == 0 || b.mastery == 0 {
+            r.add(WARNING, "bestiary.zero-tier", Some("bestiary.prowess"), false,
+                reject("whose prowess, expertise or mastery is 0"));
+        } else if b.prowess >= b.expertise || b.expertise >= b.mastery {
+            // The one that reads as working: three plausible numbers, in the
+            // wrong order or merely equal, and the entry is gone.
+            r.add(WARNING, "bestiary.tiers-not-ascending", Some("bestiary.expertise"), false,
+                format!("prowess ({}) must be below expertise ({}), and expertise below mastery ({}) — otherwise the whole block is discarded",
+                    b.prowess, b.expertise, b.mastery));
         }
         if let Some(d) = &b.difficulty {
             const LEVELS: [&str; 6] =
@@ -287,13 +312,22 @@ fn engine_shape(doc: &MonsterDoc, r: &mut Report) {
             }
         }
         // The loader casts `occurrence` with `pugi::cast<uint32_t>`, so the
-        // shipped corpus's `occurrence="common"` silently reads as 0.
-        if let Some(o) = &b.occurrence {
-            if o.trim().parse::<u32>().is_err() {
+        // shipped corpus's `occurrence="common"` silently reads as 0. A value
+        // that *does* parse is then range-checked, and failing that check costs
+        // the whole block — `BESTIARY_MAX_OCCURRENCE` is 4 (`monsters.h:16`).
+        match b.occurrence.as_ref().map(|o| (o, o.trim().parse::<u32>())) {
+            Some((o, Err(_))) => {
                 r.add(SILENT, "bestiary.occurrence-not-numeric", Some("bestiary.occurrence"), false,
                     format!("occurrence=\"{o}\" is cast to a number and silently becomes 0"));
             }
+            Some((_, Ok(n))) if n > 4 => {
+                r.add(WARNING, "bestiary.occurrence-over-max", Some("bestiary.occurrence"), false,
+                    reject(&format!("with occurrence {n} (the maximum is 4)")));
+            }
+            _ => {}
         }
+        // `difficulty` needs no ceiling check: it is set from a word list that
+        // only reaches 5, and an unrecognised word leaves it at 0.
     }
 
     // ---- melee on <attacks> (Nostalrius) ----
@@ -358,13 +392,31 @@ fn engine_spell(s: &SpellBlock, path: &str, r: &mut Report) {
     }
 }
 
+/// Flags are keyed by the *profile's* spelling, so a rule written against the
+/// XML name `canpushcreatures` would never match Canary's `canPushCreatures`.
+/// Every engine matches flag names case-insensitively; so does this.
+fn flag_entry<'a>(doc: &'a MonsterDoc, name: &str) -> Option<&'a FlagValue> {
+    doc.flags
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v)
+}
+
 fn flag_true(doc: &MonsterDoc, name: &str) -> bool {
-    matches!(doc.flags.get(name), Some(FlagValue::Bool(true)))
+    matches!(flag_entry(doc, name), Some(FlagValue::Bool(true)))
 }
 
 fn flags(doc: &MonsterDoc, r: &mut Report) {
     for (name, value) in &doc.flags {
         let path = format!("flags.{name}");
+        if r.profile.is_dead_flag(name) {
+            // Not "unknown" — the loader reads the table, finds this key, and
+            // does nothing with it. No warning, no setter, no effect. Only an
+            // editor can tell you the line is decoration.
+            r.add(SILENT, "flag.dead", Some(&path), false,
+                format!("\"{name}\" is not read by this engine — the loader parses it and does nothing"));
+            continue;
+        }
         if !r.profile.is_known_flag(name) {
             r.add(WARNING, "flag.unknown", Some(&path), false,
                 format!("Unknown flag attribute \"{name}\""));
@@ -403,8 +455,20 @@ fn flags(doc: &MonsterDoc, r: &mut Report) {
             "pacifist=\"1\" forces hostile=\"0\" at load — writing both is misleading".to_string());
     }
 
-    // §5: canpushcreatures overrides pushable at load time.
-    if flag_true(doc, "canpushcreatures") && flag_true(doc, "pushable") {
+    // §5: canpushcreatures overrides pushable at load time — on the engines
+    // that still do it, and on BlackTek only when the file stayed silent about
+    // `pushable`. Claiming the override where the engine honours an explicit
+    // `pushable = true` would be inventing a rule.
+    //
+    // The finding is "the file says one thing and the server does another", so
+    // it needs `pushable` to have been written at all. Under `OnlyWhenUnset`
+    // that can never happen — BlackTek's override stands down the moment the
+    // file has an opinion — which is why the three cases are not a bool.
+    let contradicted = match r.profile.pushable_override {
+        PushableOverride::Always => flag_true(doc, "canpushcreatures") && flag_true(doc, "pushable"),
+        PushableOverride::OnlyWhenUnset | PushableOverride::Never => false,
+    };
+    if contradicted {
         r.add(SILENT, "flag.pushable-overridden", Some("flags.pushable"), true,
             "canpushcreatures forces pushable=\"0\" at load".to_string());
     }
@@ -497,9 +561,21 @@ fn spell(s: &SpellBlock, path: &str, spells: &SpellIndex, r: &mut Report) {
         r.add(WARNING, "spell.interval-under-1", Some(&p("interval")), true,
             format!("interval {} is forced to 1", s.interval));
     }
-    if s.range > r.profile.spell_range_max {
-        r.add(WARNING, "spell.range-over-max", Some(&p("range")), true,
-            format!("range {} is clamped to {}", s.range, r.profile.spell_range_max));
+    // Both consequences are silent — no engine prints anything about `range` —
+    // but they are different consequences. The XML loaders clamp to the
+    // viewport; the Lua engines never clamp and store the value in a `uint8_t`,
+    // so 300 arrives as 44 rather than as 22.
+    match r.profile.range_limit {
+        engine::RangeLimit::ClampTo(max) if s.range > max => {
+            r.add(SILENT, "spell.range-over-max", Some(&p("range")), true,
+                format!("range {} is silently clamped to {max}", s.range));
+        }
+        engine::RangeLimit::TruncateU8 if s.range > 255 => {
+            r.add(SILENT, "spell.range-truncated", Some(&p("range")), true,
+                format!("range {} is stored in a byte — it silently becomes {}",
+                    s.range, s.range.rem_euclid(256)));
+        }
+        _ => {}
     }
 
     // §8.2: the loader silently swaps them, so the file no longer says what
@@ -691,9 +767,18 @@ fn loot(entries: &[monster::LootEntry], path: &str, items: &ItemIndex, r: &mut R
         // Resolution against the items database, when one is loaded.
         if !items.is_empty() {
             match (e.id, e.name.as_deref()) {
+                // Nostalrius casts `id=` straight into the block and only
+                // rejects 0 — it never consults the item table
+                // (`monsters.cpp:991`). The entry survives and simply drops
+                // nothing, which is a different bug and a quieter one.
                 (Some(id), _) if items.get(id as u32).is_none() => {
-                    r.add(ERROR, "loot.unknown-id", Some(&format!("{p}.id")), false,
-                        format!("Unknown loot item id {id} — the entry is dropped"));
+                    if r.profile.loot_validates_ids {
+                        r.add(ERROR, "loot.unknown-id", Some(&format!("{p}.id")), false,
+                            format!("Unknown loot item id {id} — the entry is dropped"));
+                    } else {
+                        r.add(SILENT, "loot.unknown-id", Some(&format!("{p}.id")), false,
+                            format!("No item has id {id} — this engine does not check, so the entry loads and drops nothing"));
+                    }
                 }
                 (None, Some(name)) => {
                     let ids = items.ids_for_name(name);
@@ -820,6 +905,24 @@ pub fn lint_source(profile: &'static EngineProfile, parsed: &Parsed) -> Vec<Lint
                 {
                     r.add(WARNING, "summons.maxsummons-missing", Some("summons.maxSummons"), true,
                         "Missing maxSummons — the monster can never summon".to_string());
+                }
+            }
+            // Each of the four weights gets its own warning when it is absent
+            // (TVP `monsters.cpp:962`–`:984`, Nostalrius `:704`–`:726`). The
+            // model cannot tell a missing weight from a zero one, so this has
+            // to happen here.
+            name if profile
+                .target_strategy
+                .is_some_and(|(node, _)| node.eq_ignore_ascii_case(name))
+                && profile.warns_missing_target_strategy =>
+            {
+                let (_, keys) = profile.target_strategy.unwrap();
+                for key in keys {
+                    if child.attr(key).is_none() {
+                        r.add(WARNING, "targetstrategy.missing-weight",
+                            Some(&format!("targetStrategy.{key}")), true,
+                            format!("Missing {key} chance — the server warns and leaves it at 0"));
+                    }
                 }
             }
             "immunities" => unrecognised_nodes(child, "immunities", &mut r),

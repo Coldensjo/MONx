@@ -89,6 +89,38 @@ pub enum Format {
     Lua,
 }
 
+/// What `canpushcreatures` does to `pushable`.
+///
+/// A bool was not enough: BlackTek added a condition the C++ engines do not
+/// have, and a profile that flattens the three cases makes MONx claim an
+/// override in exactly the case the engine honours the file.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PushableOverride {
+    /// `canPushCreatures` forces `pushable` off whatever the file says
+    /// (Ironcore `monsters.cpp:982`, TFS `:982`, Nostalrius `:684`).
+    Always,
+    /// The override applies **only when `pushable` was not written at all**
+    /// (BlackTek `register_monster_type.lua`). An explicit `pushable = true`
+    /// survives, so reporting an override there is inventing one.
+    OnlyWhenUnset,
+    /// No override: TVP dropped the branch, and neither Canary nor Crystal ever
+    /// had it.
+    Never,
+}
+
+/// What the loader does with a spell `range` it considers too large.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RangeLimit {
+    /// Clamped to `Map::maxViewportX * 2`, and **silently** — none of the four
+    /// XML loaders prints anything when they do it.
+    ClampTo(i64),
+    /// Not clamped at all. The Lua engines store the range in a `uint8_t`
+    /// (`monster_spell_functions.cpp:101`, BlackTek `luascript.cpp:21244`), so
+    /// 300 becomes 44 rather than 22. A different consequence needing a
+    /// different message.
+    TruncateU8,
+}
+
 /// How effect values are spelled and matched.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EffectNaming {
@@ -111,6 +143,14 @@ pub struct EngineProfile {
     // ---- Identity ----
     /// Exact spelling of the bestiary race id, or None where there is no bestiary.
     pub raceid_attr: Option<&'static str>,
+    /// Ironcore's `species=`, which is **author metadata and nothing else**:
+    /// `monsters.cpp` calls `monsterNode.attribute` for exactly ten names and
+    /// this is not one of them, and `MonsterType` has no such field. It is on
+    /// 380 of the 381 fixture files and 532 of the live ones all the same, so
+    /// MONx models it, preserves it and groups by it — the Identity section
+    /// says outright that the server never reads it. True only for Ironcore;
+    /// no other engine's corpus has the attribute at all, which is what makes
+    /// it the strongest signal in `SIGNALS`.
     pub has_species: bool,
     pub has_bestiary: bool,
     pub races: &'static [(&'static str, u8)],
@@ -135,11 +175,18 @@ pub struct EngineProfile {
     // ---- Flags ----
     pub bool_flags: &'static [&'static str],
     pub num_flags: &'static [&'static str],
+    /// Flags a corpus really uses that the loader **parses and then ignores** —
+    /// no setter, no side effect, no message. They are not `bool_flags`, because
+    /// offering them in the editor would be offering a lie; and they are not
+    /// unknown either, because `flag.unknown` says "the server warns about this"
+    /// and the server does not. `flag.dead` is their finding.
+    pub dead_flags: &'static [&'static str],
     /// The pacifist system: `pacifist`, its sub-flags, and the voice strings.
     pub has_pacifist: bool,
-    /// `canpushcreatures="1"` forces `pushable` off.
-    pub canpush_overrides_pushable: bool,
-    /// The loader clamps `health now` to `max` and says so.
+    /// What `canpushcreatures="1"` does to `pushable`.
+    pub pushable_override: PushableOverride,
+    /// The loader clamps `health now` to `max` and says so. False on Nostalrius,
+    /// which has no such check (`monsters.cpp:635`).
     pub clamps_health: bool,
 
     // ---- Resistances ----
@@ -151,6 +198,11 @@ pub struct EngineProfile {
     pub target_strategy: Option<(&'static str, &'static [&'static str])>,
     /// The four weights must add up to 100 or the loader complains.
     pub target_strategy_sums_100: bool,
+    /// The loader complains when the node is absent altogether, and again for
+    /// each of the four weights it cannot find. True on the two 7.x engines;
+    /// false on Canary and Crystal, whose `registerMonsterType.strategiesTarget`
+    /// has no `else` and is perfectly happy without the table.
+    pub warns_missing_target_strategy: bool,
 
     // ---- Spells ----
     pub cadence: Cadence,
@@ -162,7 +214,8 @@ pub struct EngineProfile {
     pub geometry_ring: bool,
     pub speed_spell: SpeedSpell,
     pub condition_spell: ConditionSpell,
-    pub spell_range_max: i64,
+    /// What happens to a `range` the loader will not honour as written.
+    pub range_limit: RangeLimit,
     /// Range when the attribute is absent — Nostalrius defaults to the client
     /// viewport, everyone else to 0.
     pub spell_range_default: i64,
@@ -193,6 +246,16 @@ pub struct EngineProfile {
     // ---- Summons ----
     pub summon_interval: bool,
     pub summon_delay: bool,
+    /// The key a summon entry uses for its per-monster cap. `max` everywhere
+    /// except Canary and Crystal, whose registrar passes `v.count` to
+    /// `addSummon` (`register_monster_type.lua:327`).
+    pub summon_max_key: &'static str,
+    /// Canary and Crystal nest the whole thing —
+    /// `monster.summon = { maxSummons = N, summons = { … } }` — where BlackTek
+    /// and the XML engines keep the cap and the list side by side. Only the
+    /// Lua writer reads this; it decides the shape of a block written from
+    /// scratch, and an existing file is always mirrored rather than reshaped.
+    pub summon_nested: bool,
 
     // ---- Voices ----
     pub voices_interval: bool,
@@ -205,10 +268,6 @@ pub struct EngineProfile {
 }
 
 impl EngineProfile {
-    pub fn is_ironcore(&self) -> bool {
-        self.key == "ironcore"
-    }
-
     pub fn is_bool_flag(&self, name: &str) -> bool {
         self.bool_flags.iter().any(|f| f.eq_ignore_ascii_case(name))
     }
@@ -217,8 +276,16 @@ impl EngineProfile {
         self.num_flags.iter().any(|f| f.eq_ignore_ascii_case(name))
     }
 
+    /// Parsed by the loader and then ignored. Known enough not to warn about,
+    /// not real enough to offer.
+    pub fn is_dead_flag(&self, name: &str) -> bool {
+        self.dead_flags.iter().any(|f| f.eq_ignore_ascii_case(name))
+    }
+
+    /// Whether the loader recognises the name at all — dead flags included, so
+    /// `flag.unknown` and `flag.dead` never both fire on one attribute.
     pub fn is_known_flag(&self, name: &str) -> bool {
-        self.is_bool_flag(name) || self.is_num_flag(name)
+        self.is_bool_flag(name) || self.is_num_flag(name) || self.is_dead_flag(name)
     }
 
     /// The lowercase spelling to write for a flag a file may have spelled
@@ -227,6 +294,7 @@ impl EngineProfile {
         self.bool_flags
             .iter()
             .chain(self.num_flags.iter())
+            .chain(self.dead_flags.iter())
             .find(|f| f.eq_ignore_ascii_case(name))
             .map(|f| (*f).to_string())
             .unwrap_or_else(|| name.to_ascii_lowercase())
@@ -346,11 +414,13 @@ impl EngineProfile {
             .copied()
     }
 
-    pub fn canonical_summon_key(&self, key: &str) -> Option<&'static str> {
-        self.summon_effect_keys
-            .iter()
-            .find(|k| k.eq_ignore_ascii_case(key))
-            .copied()
+    /// The ceiling a `range` is clamped to, or None where the loader has no
+    /// ceiling at all and simply truncates.
+    pub fn spell_range_clamp(&self) -> Option<i64> {
+        match self.range_limit {
+            RangeLimit::ClampTo(max) => Some(max),
+            RangeLimit::TruncateU8 => None,
+        }
     }
 
     pub fn has_spell_interval(&self) -> bool {
@@ -421,8 +491,11 @@ const RACES_TFS: &[(&str, u8)] = &[
 /// Nostalrius stops at `fire` — `energy` is an unknown race (`monsters.cpp:598`).
 const RACES_NOS: &[(&str, u8)] = &[("venom", 1), ("blood", 2), ("undead", 3), ("fire", 4)];
 
-/// Canary's blood types, measured across its corpus: the classic five plus
-/// `ink`, and the two novelty ones its event monsters use.
+/// Canary's blood types: the classic five plus `ink`, and the two novelty ones
+/// its event monsters use. The names come from `luaMonsterTypeRace`
+/// (`monster_type_functions.cpp:1414`) and the ids from `RaceType_t`
+/// (`creatures_definitions.hpp:504`), which orders them CHOCOLATE **then**
+/// CANDY — the reverse of what reading the corpus suggests.
 const RACES_CANARY: &[(&str, u8)] = &[
     ("venom", 1),
     ("blood", 2),
@@ -430,8 +503,8 @@ const RACES_CANARY: &[(&str, u8)] = &[
     ("fire", 4),
     ("energy", 5),
     ("ink", 6),
-    ("candy", 7),
-    ("chocolate", 8),
+    ("chocolate", 7),
+    ("candy", 8),
 ];
 
 const SKULLS_7: &[(&str, u8)] = &[
@@ -811,13 +884,15 @@ pub static IRONCORE: EngineProfile = EngineProfile {
     look_corpseactionid: true,
     bool_flags: catalog::BOOL_FLAGS,
     num_flags: catalog::NUM_FLAGS,
+    dead_flags: &[],
     has_pacifist: true,
-    canpush_overrides_pushable: true,
+    pushable_override: PushableOverride::Always,
     clamps_health: true,
     immunities: IMMUNITIES_10,
     elements: ELEMENTS_10,
     target_strategy: None,
     target_strategy_sums_100: false,
+    warns_missing_target_strategy: false,
     cadence: Cadence::Interval,
     builtin_spells: catalog::BUILTIN_SPELLS,
     melee: MeleeKind::SpellBlock,
@@ -826,7 +901,7 @@ pub static IRONCORE: EngineProfile = EngineProfile {
     geometry_ring: true,
     speed_spell: SpeedSpell::SpeedChange,
     condition_spell: ConditionSpell::TickStart,
-    spell_range_max: catalog::MAX_SPELL_RANGE,
+    range_limit: RangeLimit::ClampTo(catalog::MAX_SPELL_RANGE),
     spell_range_default: 0,
     effect_naming: EffectNaming::ConstMe,
     magic_effects: catalog::MAGIC_EFFECTS,
@@ -839,6 +914,8 @@ pub static IRONCORE: EngineProfile = EngineProfile {
     warns_missing_targetchange_interval: true,
     summon_interval: true,
     summon_delay: false,
+    summon_max_key: "max",
+    summon_nested: false,
     voices_interval: true,
     voices_chance: true,
     suppressed_lints: &[],
@@ -886,13 +963,15 @@ pub static TFS: EngineProfile = EngineProfile {
         "lightlevel",
         "lightcolor",
     ],
+    dead_flags: &[],
     has_pacifist: false,
-    canpush_overrides_pushable: true,
+    pushable_override: PushableOverride::Always,
     clamps_health: true,
     immunities: IMMUNITIES_10,
     elements: ELEMENTS_10,
     target_strategy: None,
     target_strategy_sums_100: false,
+    warns_missing_target_strategy: false,
     cadence: Cadence::Interval,
     builtin_spells: SPELLS_TFS,
     melee: MeleeKind::SpellBlock,
@@ -901,7 +980,7 @@ pub static TFS: EngineProfile = EngineProfile {
     geometry_ring: true,
     speed_spell: SpeedSpell::SpeedChange,
     condition_spell: ConditionSpell::TickStart,
-    spell_range_max: 22,
+    range_limit: RangeLimit::ClampTo(22),
     spell_range_default: 0,
     effect_naming: EffectNaming::ShortName,
     magic_effects: ME_TFS,
@@ -916,6 +995,8 @@ pub static TFS: EngineProfile = EngineProfile {
     warns_missing_targetchange_interval: true,
     summon_interval: true,
     summon_delay: false,
+    summon_max_key: "max",
+    summon_nested: false,
     voices_interval: true,
     voices_chance: true,
     suppressed_lints: &[
@@ -961,14 +1042,16 @@ pub static TVP: EngineProfile = EngineProfile {
         "canwalkonpoison",
     ],
     num_flags: &["targetdistance", "runonhealth", "lightlevel", "lightcolor"],
+    dead_flags: &[],
     has_pacifist: false,
     // TVP dropped the override TFS and Ironcore both apply.
-    canpush_overrides_pushable: false,
+    pushable_override: PushableOverride::Never,
     clamps_health: true,
     immunities: IMMUNITIES_TVP,
     elements: ELEMENTS_6,
     target_strategy: Some(("targetstrategy", STRATEGY_KEYS)),
     target_strategy_sums_100: true,
+    warns_missing_target_strategy: true,
     cadence: Cadence::IntervalOrDelay,
     builtin_spells: SPELLS_TVP,
     melee: MeleeKind::SpellBlock,
@@ -977,7 +1060,7 @@ pub static TVP: EngineProfile = EngineProfile {
     geometry_ring: false,
     speed_spell: SpeedSpell::SpeedVariation,
     condition_spell: ConditionSpell::TickStartCycle,
-    spell_range_max: 22,
+    range_limit: RangeLimit::ClampTo(22),
     spell_range_default: 0,
     effect_naming: EffectNaming::ShortName,
     magic_effects: ME_7X,
@@ -991,6 +1074,8 @@ pub static TVP: EngineProfile = EngineProfile {
     warns_missing_targetchange_interval: false,
     summon_interval: true,
     summon_delay: true,
+    summon_max_key: "max",
+    summon_nested: false,
     // Both are commented out in the loader (`monsters.cpp:1142`).
     voices_interval: false,
     voices_chance: false,
@@ -998,14 +1083,12 @@ pub static TVP: EngineProfile = EngineProfile {
         "flag.pacifist-forces-hostile-off",
         "flag.pacifist-subflag-without-pacifist",
         "flag.staticattack-over-100",
-        "flag.pushable-overridden",
         "flags.hostile",
         "raceid.",
         "effect.knife-renders-pitchfork",
         "effect.unreachable",
         "voices.chance",
         "voices.chance-over-100",
-        "manacost.zero-with-summonable",
     ],
 };
 
@@ -1036,14 +1119,16 @@ pub static NOSTALRIUS: EngineProfile = EngineProfile {
         "canpushcreatures",
     ],
     num_flags: &["targetdistance", "runonhealth", "lightlevel", "lightcolor"],
+    dead_flags: &[],
     has_pacifist: false,
-    canpush_overrides_pushable: true,
+    pushable_override: PushableOverride::Always,
     // Nostalrius has no `health now > max` warning at all (`monsters.cpp:635`).
     clamps_health: false,
     immunities: IMMUNITIES_NOS,
     elements: ELEMENTS_6,
     target_strategy: Some(("targetstrategy", STRATEGY_KEYS)),
     target_strategy_sums_100: false,
+    warns_missing_target_strategy: true,
     cadence: Cadence::ChanceOnly,
     builtin_spells: SPELLS_NOS,
     melee: MeleeKind::AttacksNode,
@@ -1052,7 +1137,7 @@ pub static NOSTALRIUS: EngineProfile = EngineProfile {
     geometry_ring: false,
     speed_spell: SpeedSpell::ChangeVariation,
     condition_spell: ConditionSpell::Count,
-    spell_range_max: 22,
+    range_limit: RangeLimit::ClampTo(22),
     // `sb.range = Map::maxClientViewportX` when absent (`monsters.cpp:289`).
     spell_range_default: 8,
     effect_naming: EffectNaming::ShortName,
@@ -1068,6 +1153,8 @@ pub static NOSTALRIUS: EngineProfile = EngineProfile {
     warns_missing_targetchange_interval: true,
     summon_interval: false,
     summon_delay: false,
+    summon_max_key: "max",
+    summon_nested: false,
     voices_interval: false,
     voices_chance: false,
     suppressed_lints: &[
@@ -1077,13 +1164,11 @@ pub static NOSTALRIUS: EngineProfile = EngineProfile {
         "raceid.",
         "effect.knife-renders-pitchfork",
         "effect.unreachable",
-        "health.now-over-max",
         "voices.chance",
         "voices.chance-over-100",
         "spell.interval-under-1",
         "spell.missing-chance",
         "manacost.zero-with-summonable",
-        "summons.maxsummons-over-100",
     ],
 };
 
@@ -1357,45 +1442,91 @@ const ANI_BLACKTEK: &[(&str, u16)] = &[
 // `monster_lua.rs` reads.
 
 /// Canary's `monster.flags` table, which unlike the XML engines also holds the
-/// numeric settings. Measured across its 1,656-file corpus.
+/// numeric settings.
+///
+/// Read out of `registerMonsterType.flags`
+/// (`data/scripts/lib/register_monster_type.lua:167`) rather than off the
+/// corpus. Those two disagree, and the registrar is the one that decides: the
+/// corpus also carries `challengeable`, `isBoss`/`boss`, `ignoreSpawnBlock`,
+/// `canWalkOnIce`, `isPet`/`pet` and `canTeleport`, none of which the registrar
+/// reads and several of which have no C++ setter at all. Those are
+/// `DEAD_FLAGS_CANARY`.
 const FLAGS_CANARY_BOOL: &[&str] = &[
     "summonable",
     "attackable",
     "hostile",
     "convinceable",
     "illusionable",
-    "challengeable",
     "pushable",
     "canPushItems",
     "canPushCreatures",
     "isBlockable",
     "healthHidden",
-    "ignoreSpawnBlock",
-    "isBoss",
     "rewardBoss",
     "canWalkOnEnergy",
     "canWalkOnFire",
     "canWalkOnPoison",
-    "canWalkOnIce",
     "isPreyExclusive",
     "isPreyable",
-    "isPet",
     "familiar",
-    "respawntype",
-    "canTeleport",
+    "isForgeCreature",
 ];
 
 const FLAGS_CANARY_NUM: &[&str] = &[
     "staticAttackChance",
     "targetDistance",
     "runHealth",
+    // `mtype:critChance(...)` at `register_monster_type.lua:214`. Six monsters
+    // in each shipped corpus use it.
+    "critChance",
+];
+
+/// Crystal is Canary plus two of its own (`register_monster_type.lua:237`,
+/// `:240`). It cannot share Canary's table, or those two read as unknown.
+const FLAGS_CRYSTAL_BOOL: &[&str] = &[
+    "summonable",
+    "attackable",
+    "hostile",
+    "convinceable",
+    "illusionable",
+    "pushable",
+    "canPushItems",
+    "canPushCreatures",
+    "isBlockable",
+    "healthHidden",
+    "rewardBoss",
+    "canWalkOnEnergy",
+    "canWalkOnFire",
+    "canWalkOnPoison",
+    "isPreyExclusive",
+    "isPreyable",
+    "familiar",
+    "isForgeCreature",
+    "canTarget",
+    "canWalk",
+];
+
+/// Parsed and dropped. `respawntype` is here rather than in `bool_flags`
+/// because the registrar's only response to it is to log that it is deprecated
+/// and to point at the `respawnType` *table* instead — the flag itself sets
+/// nothing.
+const DEAD_FLAGS_CANARY: &[&str] = &[
+    "challengeable",
+    "isBoss",
+    "boss",
+    "ignoreSpawnBlock",
+    "canWalkOnIce",
+    "isPet",
     "pet",
-    "raceId",
+    "canTeleport",
+    "respawntype",
 ];
 
 /// BlackTek keeps the TFS split: booleans in `monster.flags`, numbers at the
 /// top level (`monster.staticAttackChance`, `monster.targetDistance`,
-/// `monster.runHealth`).
+/// `monster.runHealth`). The fifteen names are exactly what its
+/// `registerMonsterType.flags` reads — note `healthHidden`, not TFS's XML
+/// spelling `hidehealth`, and no `isBlockable` or `rewardBoss`.
 const FLAGS_BLACKTEK_BOOL: &[&str] = &[
     "summonable",
     "attackable",
@@ -1408,12 +1539,10 @@ const FLAGS_BLACKTEK_BOOL: &[&str] = &[
     "canPushCreatures",
     "boss",
     "ignoreSpawnBlock",
-    "hideHealth",
-    "isBlockable",
+    "healthHidden",
     "canWalkOnEnergy",
     "canWalkOnFire",
     "canWalkOnPoison",
-    "rewardBoss",
 ];
 
 const FLAGS_BLACKTEK_NUM: &[&str] = &["staticAttackChance", "targetDistance", "runHealth"];
@@ -1460,13 +1589,15 @@ pub static CANARY: EngineProfile = EngineProfile {
     look_corpseactionid: false,
     bool_flags: FLAGS_CANARY_BOOL,
     num_flags: FLAGS_CANARY_NUM,
+    dead_flags: DEAD_FLAGS_CANARY,
     has_pacifist: false,
-    canpush_overrides_pushable: false,
+    pushable_override: PushableOverride::Never,
     clamps_health: true,
     immunities: IMMUNITIES_10,
     elements: ELEMENTS_10,
     target_strategy: Some(("strategiesTarget", STRATEGY_KEYS_CANARY)),
     target_strategy_sums_100: false,
+    warns_missing_target_strategy: false,
     cadence: Cadence::Interval,
     builtin_spells: SPELLS_LUA,
     melee: MeleeKind::SpellBlock,
@@ -1475,7 +1606,7 @@ pub static CANARY: EngineProfile = EngineProfile {
     geometry_ring: true,
     speed_spell: SpeedSpell::SpeedChange,
     condition_spell: ConditionSpell::TickStart,
-    spell_range_max: 22,
+    range_limit: RangeLimit::TruncateU8,
     spell_range_default: 0,
     // Effects are `CONST_ANI_*`/`CONST_ME_*` identifiers or bare numbers.
     effect_naming: EffectNaming::ConstMe,
@@ -1489,6 +1620,8 @@ pub static CANARY: EngineProfile = EngineProfile {
     warns_missing_targetchange_interval: false,
     summon_interval: true,
     summon_delay: false,
+    summon_max_key: "count",
+    summon_nested: true,
     voices_interval: true,
     voices_chance: true,
     suppressed_lints: &[
@@ -1504,7 +1637,6 @@ pub static CANARY: EngineProfile = EngineProfile {
         "registry.",
         "flag.pacifist-forces-hostile-off",
         "flag.pacifist-subflag-without-pacifist",
-        "flag.pushable-overridden",
         "effect.knife-renders-pitchfork",
         "effect.unreachable",
         // Attribute-casing traps are an XML concept.
@@ -1544,13 +1676,15 @@ pub static BLACKTEK: EngineProfile = EngineProfile {
     look_corpseactionid: false,
     bool_flags: FLAGS_BLACKTEK_BOOL,
     num_flags: FLAGS_BLACKTEK_NUM,
+    dead_flags: &[],
     has_pacifist: false,
-    canpush_overrides_pushable: true,
+    pushable_override: PushableOverride::OnlyWhenUnset,
     clamps_health: true,
     immunities: IMMUNITIES_10,
     elements: ELEMENTS_10,
     target_strategy: None,
     target_strategy_sums_100: false,
+    warns_missing_target_strategy: false,
     cadence: Cadence::Interval,
     builtin_spells: SPELLS_LUA,
     melee: MeleeKind::SpellBlock,
@@ -1559,7 +1693,7 @@ pub static BLACKTEK: EngineProfile = EngineProfile {
     geometry_ring: true,
     speed_spell: SpeedSpell::SpeedChange,
     condition_spell: ConditionSpell::TickStart,
-    spell_range_max: 22,
+    range_limit: RangeLimit::TruncateU8,
     spell_range_default: 0,
     effect_naming: EffectNaming::ConstMe,
     magic_effects: ME_BLACKTEK,
@@ -1572,6 +1706,8 @@ pub static BLACKTEK: EngineProfile = EngineProfile {
     warns_missing_targetchange_interval: false,
     summon_interval: true,
     summon_delay: false,
+    summon_max_key: "max",
+    summon_nested: false,
     voices_interval: true,
     voices_chance: true,
     suppressed_lints: &[
@@ -1634,15 +1770,17 @@ pub static CRYSTAL: EngineProfile = EngineProfile {
     look_addons: true,
     look_mount: true,
     look_corpseactionid: false,
-    bool_flags: FLAGS_CANARY_BOOL,
+    bool_flags: FLAGS_CRYSTAL_BOOL,
     num_flags: FLAGS_CANARY_NUM,
+    dead_flags: DEAD_FLAGS_CANARY,
     has_pacifist: false,
-    canpush_overrides_pushable: false,
+    pushable_override: PushableOverride::Never,
     clamps_health: true,
     immunities: IMMUNITIES_CRYSTAL,
     elements: ELEMENTS_CRYSTAL,
     target_strategy: Some(("strategiesTarget", STRATEGY_KEYS_CANARY)),
     target_strategy_sums_100: false,
+    warns_missing_target_strategy: false,
     cadence: Cadence::Interval,
     builtin_spells: SPELLS_LUA,
     melee: MeleeKind::SpellBlock,
@@ -1651,7 +1789,7 @@ pub static CRYSTAL: EngineProfile = EngineProfile {
     geometry_ring: true,
     speed_spell: SpeedSpell::SpeedChange,
     condition_spell: ConditionSpell::TickStart,
-    spell_range_max: 22,
+    range_limit: RangeLimit::TruncateU8,
     spell_range_default: 0,
     effect_naming: EffectNaming::ConstMe,
     magic_effects: ME_CRYSTAL,
@@ -1664,6 +1802,8 @@ pub static CRYSTAL: EngineProfile = EngineProfile {
     warns_missing_targetchange_interval: false,
     summon_interval: true,
     summon_delay: false,
+    summon_max_key: "count",
+    summon_nested: true,
     voices_interval: true,
     voices_chance: true,
     // Canary's list verbatim. `lua.skull-unsupported` is not here because it is
@@ -1674,7 +1814,6 @@ pub static CRYSTAL: EngineProfile = EngineProfile {
         "registry.",
         "flag.pacifist-forces-hostile-off",
         "flag.pacifist-subflag-without-pacifist",
-        "flag.pushable-overridden",
         "effect.knife-renders-pitchfork",
         "effect.unreachable",
         "loot.actionid-wrong-case",
@@ -1703,12 +1842,6 @@ pub static ALL: &[&EngineProfile] = &[
     &CRYSTAL,
     &BLACKTEK,
 ];
-
-impl EngineProfile {
-    pub fn is_lua(&self) -> bool {
-        self.format == Format::Lua
-    }
-}
 
 pub fn by_key(key: &str) -> Option<&'static EngineProfile> {
     ALL.iter().copied().find(|p| p.key == key)

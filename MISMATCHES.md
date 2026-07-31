@@ -1,5 +1,14 @@
 # MONx — Engine mismatches
 
+**Status: all fixed in 0.1.39**, bar two entries that turned out not to need a change (§1.8,
+§3.6) and one that was already right in the UI and only had to be recorded in the profile
+(§5.1). The resolution log is at the bottom; each section below is the original finding, kept
+because the citation is the reason the fix looks the way it does.
+
+Fixing §1.5 turned up something the audit had missed and no gate could see: Canary and Crystal
+nest their summon block, and MONx was reading **zero** summons on all 1,655 files. That is
+recorded with the rest.
+
 Findings from reading each server's own loader against `engine.rs`, `lint.rs` and
 `monster_lua.rs`. Companion to [ENGINES.md](ENGINES.md), which records *why* the engines
 differ; this file records where MONx currently gets that difference wrong.
@@ -330,25 +339,57 @@ MONx sets `has_species: true` (`engine.rs:802`), reads it (`monster.rs:1117`), w
 corpus depends on it, and round-trip must preserve it. As a *detection* signal it is excellent
 precisely because no other engine has it.
 
-What is missing is that nothing tells the user the server ignores it. A field the loader never
-reads is the purest case of the `silent` severity — "the server would say nothing" — and it is
-currently the one Ironcore field presented with no indication that it is documentation rather
-than behaviour.
+**Half of this was wrong when written.** `Identity.tsx:65` already labels the field *"Editor
+metadata only — the server never reads it. Used here for grouping."* The user was being told;
+`engine.rs` was the only place that said nothing, and a lint would have fired on 380 of 381
+files to repeat what the field already says. `has_species` now carries the citation, and
+nothing else changed.
 
 ---
 
-## Suggested order of work
+## Resolution — 0.1.39
 
-1. §3.1 and §3.2 — two wrong `suppressed_lints` entries, one line each, and both currently
-   silence a real server behaviour.
-2. §2.1 — `hideHealth` → `healthHidden`. A flag nobody can edit correctly today.
-3. §1.5 — summon `count` on Canary/Crystal. Data the editor shows as zero and writes wrong.
-4. §1.1–§1.3 and §2.2 — the flag tables, best done as one pass with a `flag.dead` lint so the
-   over-declared names have somewhere to go.
-5. §1.7 / §2.4 / §3.5 — split `spell.range-over-max` into a clamp (XML, silent) and a
-   truncation (Lua, silent), and drop the misleading message.
-6. §1.6, §3.3, §3.4 — lint coverage gaps.
-7. §4 — either wire the three dead fields up or delete them; leaving them is what let §3.1 and
-   §3.2 drift in the first place.
-8. §5.1 — `species` needs a `silent` finding saying the loader ignores it. Cheapest item here
-   and the only Ironcore one.
+| § | What changed |
+|---|---|
+| 1.1 | `critChance` added to `FLAGS_CANARY_NUM` and `engine.ts`. |
+| 1.2 | `isForgeCreature` added to both Lua profiles; `FLAGS_CRYSTAL_BOOL` split off Canary's table for `canTarget` and `canWalk`. |
+| 1.3 | New `dead_flags` on the profile + `flag.dead` (silent). `DEAD_FLAGS_CANARY` holds the nine names the registrar parses and drops. `is_known_flag` covers them so `flag.unknown` no longer double-reports. Fires 13× on Canary, 2× on Crystal. |
+| 1.4 | `RACES_CANARY` now chocolate=7, candy=8, per `creatures_definitions.hpp:504`. |
+| 1.5 | New `summon_max_key` / `summon_nested`. **See the note below.** |
+| 1.6 | New `warns_missing_target_strategy`; `targetstrategy.missing` no longer fires on Canary/Crystal. |
+| 1.7, 2.4, 3.5 | `spell_range_max: i64` → `range_limit: RangeLimit`. `spell.range-over-max` is now silent and XML-only; `spell.range-truncated` is the Lua case and reports the real number (300 → 44). |
+| 1.8 | **No change, deliberately.** The eleven keys ride along as raw bytes and already surface in `unknownAttributes`. Modelling them is a feature, not a mismatch; adding them to `MODELLED_KEYS` without modelling them would only hide them. |
+| 2.1 | `hideHealth` → `healthHidden`, backend and frontend. |
+| 2.2 | `isBlockable` and `rewardBoss` dropped from BlackTek. |
+| 2.3 | `canpush_overrides_pushable: bool` → `pushable_override: PushableOverride` with three cases. `flag.pushable-overridden` needs the file to have *written* `pushable`, which under `OnlyWhenUnset` can never happen — so BlackTek stops claiming an override it does not perform. |
+| 3.1 | TVP's `manacost.zero-with-summonable` suppression removed. Nostalrius keeps its (correct) one. |
+| 3.2 | Nostalrius's `summons.maxsummons-over-100` suppression removed. |
+| 3.3 | Four new codes — `bestiary.missing-class`, `bestiary.zero-tier`, `bestiary.tiers-not-ascending`, `bestiary.occurrence-over-max`. The fifth condition (`difficulty > 5`) is unreachable from XML: difficulty is set from a six-word list and an unknown word leaves it at 0, which the code now says. |
+| 3.4 | New `targetstrategy.missing-weight`, in `lint_source` because the model cannot tell an absent weight from a zero one. |
+| 3.6 | Withdrawn — no change needed. |
+| 4 | `clamps_health` and `loot_validates_ids` are now read; `canpush_overrides_pushable` became `pushable_override` (2.3). The redundant `suppressed_lints` entries that had been standing in for them are gone, so there is one authority per rule. `is_ironcore`, `is_lua` and `canonical_summon_key` deleted. |
+| 4.1 | `loot.unknown-id` is an error where the loader checks and silent where it does not, with a message that says what actually happens on Nostalrius. |
+| 5.1 | `has_species` now carries the citation. No lint — the field already says it. |
+
+A fifth root cause turned up under 1.5. `registerMonsterType.summon` reads
+`mask.summon.maxSummons` and `mask.summon.summons`, so Canary and Crystal nest the whole block:
+
+```lua
+monster.summon = { maxSummons = 2, summons = { { name = "Hyaena", chance = 30, interval = 5000, count = 2 } } }
+```
+
+`to_doc` looked for a flat array and found an empty one, so **every Canary and Crystal monster
+came back with no summons at all** — 0 of 1,655 files. Round-trip never caught it because the
+writer only emits a summon block when the model has entries, so dropping them was
+byte-invisible. The reader now handles both shapes and the writer mirrors whichever the file
+had, falling back to `summon_nested` only for a block written from scratch. After the fix:
+Canary 184 files / 237 entries, Crystal 185 / 238, BlackTek unchanged at 120 / 142.
+
+### Gates
+
+Round-trip, `--canonical --mutate` and `--lint` pass on all seven corpora — 5,924 files.
+`bun run build` clean. The four new rules were confirmed reachable against hand-written
+fixtures rather than inferred from their absence in clean corpora: a TFS monster with an empty
+bestiary class, equal tiers and `occurrence="9"` raises three of the four new bestiary codes; a
+TVP monster with one weight raises three `missing-weight`; a Canary monster with
+`range = 300` and `canWalkOnIce = true` raises `spell.range-truncated` (→ 44) and `flag.dead`.

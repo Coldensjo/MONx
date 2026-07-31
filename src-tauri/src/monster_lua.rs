@@ -195,12 +195,24 @@ pub fn to_doc(
         };
     }
 
-    // Canary writes `summon` (189 files) and `summons` (2); BlackTek only
-    // `summons`. Read whichever is present.
-    let summon_table = lua.table("summons").or_else(|| lua.table("summon"));
-    if let Some(t) = summon_table {
+    // Two shapes, not one. Canary and Crystal nest —
+    //
+    //     monster.summon = { maxSummons = 2, summons = { { … } } }
+    //
+    // (`registerMonsterType.summon` reads `mask.summon.maxSummons` and
+    // `mask.summon.summons`), while BlackTek keeps TFS's flat pair,
+    // `monster.maxSummons` and `monster.summons`. Reading only the flat one
+    // found an empty array on every nested file, so Canary monsters came back
+    // with no summons at all.
+    let outer = lua.table("summon").or_else(|| lua.table("summons"));
+    let (list, nested_max) = match outer {
+        Some(t) if t.array.is_empty() => (t.table("summons"), t.num("maxSummons")),
+        other => (other, None),
+    };
+    let max_summons = nested_max.or_else(|| lua.num("maxSummons"));
+    if let Some(t) = list {
         doc.summons = Summons {
-            max_summons: lua.num("maxSummons").unwrap_or(0),
+            max_summons: max_summons.unwrap_or(0),
             entries: t
                 .array
                 .iter()
@@ -211,7 +223,15 @@ pub fn to_doc(
                         interval: e.num("interval").unwrap_or(1000),
                         chance: e.num("chance").unwrap_or(100),
                         delay: None,
-                        max: e.num("max").unwrap_or(0),
+                        // `addSummon(name, interval, chance, count)` on Canary
+                        // and Crystal; `v.max` on BlackTek. Accept either so a
+                        // hand-written file is never silently zeroed, but let
+                        // the profile decide which one gets written back.
+                        max: e
+                            .num(profile.summon_max_key)
+                            .or_else(|| e.num("max"))
+                            .or_else(|| e.num("count"))
+                            .unwrap_or(0),
                         force: e.boolean("force").unwrap_or(false),
                         effect: e.get("effect").and_then(LuaValue::as_name).map(str::to_string),
                         master_effect: e
@@ -222,7 +242,7 @@ pub fn to_doc(
                 })
                 .collect(),
         };
-    } else if let Some(max) = lua.num("maxSummons") {
+    } else if let Some(max) = max_summons {
         doc.summons.max_summons = max;
     }
 
@@ -769,21 +789,34 @@ fn to_values(
     }
 
     // ---- summons ----
-    let summon_key = if base.is_some_and(|b| b.has("summon")) && !base.is_some_and(|b| b.has("summons"))
+    //
+    // Which outer key the file used, and whether it nested. A document that
+    // already has a shape keeps it — reshaping a file that round-trips is the
+    // one thing the writer must never do — and only a block written from
+    // scratch falls back to what the engine itself expects.
+    let outer_key = if base.is_some_and(|b| b.has("summon")) && !base.is_some_and(|b| b.has("summons"))
     {
         "summon"
     } else {
         "summons"
     };
+    let nested = match base.and_then(|b| b.table(outer_key)) {
+        Some(t) => t.array.is_empty() && t.has("summons"),
+        None => profile.summon_nested,
+    };
     if !doc.summons.entries.is_empty() {
-        if base.is_none_or(|b| b.has("maxSummons")) || doc.summons.max_summons != 0 {
-            put!("maxSummons", num(doc.summons.max_summons));
-        }
-        let seeded = seed(summon_key);
-        let mut t = LuaTable::default();
-        t.map = seeded.map.clone();
+        let outer_seed = seed(outer_key);
+        // The array of entries lives one level down when nested.
+        let list_seed = if nested {
+            outer_seed.table("summons").cloned().unwrap_or_default()
+        } else {
+            outer_seed.clone()
+        };
+
+        let mut list = LuaTable::default();
+        list.map = list_seed.map.clone();
         for (i, e) in doc.summons.entries.iter().enumerate() {
-            let mut s = seeded
+            let mut s = list_seed
                 .array
                 .get(i)
                 .and_then(LuaValue::as_table)
@@ -792,15 +825,34 @@ fn to_values(
             set(&mut s, "name", LuaValue::Str(e.name.clone()));
             set(&mut s, "interval", num(e.interval));
             set(&mut s, "chance", num(e.chance));
-            if s.has("max") || e.max != 0 {
-                set(&mut s, "max", num(e.max));
+            // `count` on Canary and Crystal, `max` on BlackTek. Whichever the
+            // entry already used wins, so a file mixing the two is not
+            // rewritten wholesale.
+            let cap_key = ["count", "max"]
+                .into_iter()
+                .find(|k| s.has(k))
+                .unwrap_or(profile.summon_max_key);
+            if s.has(cap_key) || e.max != 0 {
+                set(&mut s, cap_key, num(e.max));
             }
             if s.has("force") || e.force {
                 set(&mut s, "force", LuaValue::Bool(e.force));
             }
-            t.array.push(LuaValue::Table(s));
+            list.array.push(LuaValue::Table(s));
         }
-        put!(summon_key, LuaValue::Table(t));
+
+        if nested {
+            let mut outer = LuaTable::default();
+            outer.map = outer_seed.map.clone();
+            set(&mut outer, "maxSummons", num(doc.summons.max_summons));
+            set(&mut outer, "summons", LuaValue::Table(list));
+            put!(outer_key, LuaValue::Table(outer));
+        } else {
+            if base.is_none_or(|b| b.has("maxSummons")) || doc.summons.max_summons != 0 {
+                put!("maxSummons", num(doc.summons.max_summons));
+            }
+            put!(outer_key, LuaValue::Table(list));
+        }
     }
 
     // ---- loot ----

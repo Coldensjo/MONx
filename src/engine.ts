@@ -300,19 +300,23 @@ const CANARY: EngineInfo = {
 	targetStrategy: true,
 	meleeOnAttacks: false,
 	meleeSkillProgression: false,
+	// Exactly what `registerMonsterType.flags` reads. Several names the corpus
+	// also carries — `challengeable`, `isBoss`, `ignoreSpawnBlock`,
+	// `canWalkOnIce`, `isPet`, `canTeleport` — are parsed and dropped, and
+	// offering them here would be offering a control that does nothing. They are
+	// `DEAD_FLAGS_CANARY` in `engine.rs`, and the linter names them.
 	boolFlags: [
-		'summonable', 'attackable', 'hostile', 'convinceable', 'illusionable', 'challengeable',
+		'summonable', 'attackable', 'hostile', 'convinceable', 'illusionable',
 		'pushable', 'canPushItems', 'canPushCreatures', 'isBlockable', 'healthHidden',
-		'ignoreSpawnBlock', 'isBoss', 'rewardBoss', 'canWalkOnEnergy', 'canWalkOnFire',
-		'canWalkOnPoison', 'canWalkOnIce', 'isPreyExclusive', 'isPreyable', 'isPet', 'familiar',
-		'respawntype', 'canTeleport'
+		'rewardBoss', 'canWalkOnEnergy', 'canWalkOnFire', 'canWalkOnPoison',
+		'isPreyExclusive', 'isPreyable', 'familiar', 'isForgeCreature'
 	],
-	numFlags: ['staticAttackChance', 'targetDistance', 'runHealth', 'pet', 'raceId'],
+	numFlags: ['staticAttackChance', 'targetDistance', 'runHealth', 'critChance'],
 	species: false,
 	// `monster.raceId` is a Lua field rather than an attribute; the Identity
 	// section still shows it, so name the spelling the file uses.
 	raceidAttr: 'raceId',
-	races: ['venom', 'blood', 'undead', 'fire', 'energy'],
+	races: ['venom', 'blood', 'undead', 'fire', 'energy', 'ink', 'chocolate', 'candy'],
 	// Canary registers no `skull` setter at all — a monster that sets it fails
 	// to load outright, so the picker must not offer one.
 	skulls: [],
@@ -334,16 +338,18 @@ const CANARY: EngineInfo = {
 };
 
 // CrystalServer is a fork of Canary, and a monster file is the same file on
-// both. Everything the *editor* cares about is Canary's, bar one thing: Crystal
-// registers a `skull` setter where Canary registers none, so the picker that
-// must stay empty there can be filled here. The renamed effect constants and
-// the agony damage type are real differences too, but they are backend-side —
-// see `engine.rs` `CRYSTAL` and `catalog.ts` `damageTypes`.
+// both. Everything the *editor* cares about is Canary's, bar two things:
+// Crystal registers a `skull` setter where Canary registers none, so the picker
+// that must stay empty there can be filled here; and its registrar reads two
+// flags Canary's does not. The renamed effect constants and the agony damage
+// type are real differences too, but they are backend-side — see `engine.rs`
+// `CRYSTAL` and `catalog.ts` `damageTypes`.
 const CRYSTAL: EngineInfo = {
 	...CANARY,
 	key: 'crystal',
 	label: 'CrystalServer',
 	blurb: 'Canary fork: renamed effect constants, agony damage, skull setter',
+	boolFlags: [...CANARY.boolFlags, 'canTarget', 'canWalk'],
 	skulls: ['none', 'yellow', 'green', 'white', 'red', 'black', 'orange']
 };
 
@@ -356,10 +362,13 @@ const BLACKTEK: EngineInfo = {
 	targetStrategy: false,
 	meleeOnAttacks: false,
 	meleeSkillProgression: false,
+	// The fifteen its `registerMonsterType.flags` reads. `healthHidden`, not
+	// TFS's XML spelling `hidehealth`; and neither `isBlockable` nor
+	// `rewardBoss`, which are Canary's and appear in no BlackTek file.
 	boolFlags: [
 		'summonable', 'attackable', 'hostile', 'convinceable', 'illusionable', 'challengeable',
-		'pushable', 'canPushItems', 'canPushCreatures', 'boss', 'ignoreSpawnBlock', 'hideHealth',
-		'isBlockable', 'canWalkOnEnergy', 'canWalkOnFire', 'canWalkOnPoison', 'rewardBoss'
+		'pushable', 'canPushItems', 'canPushCreatures', 'boss', 'ignoreSpawnBlock',
+		'healthHidden', 'canWalkOnEnergy', 'canWalkOnFire', 'canWalkOnPoison'
 	],
 	numFlags: ['staticAttackChance', 'targetDistance', 'runHealth'],
 	species: false,
