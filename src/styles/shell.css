@@ -406,6 +406,53 @@
 
 /* ---------- Compare ---------- */
 
+/* ---------- files changed outside MONx (ExternalChangesDialog.tsx) ---------- */
+
+.mx-ext-modal {
+	width: 560px;
+	max-width: calc(100vw - 64px);
+}
+
+.mx-ext-note {
+	margin: 0 0 12px;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--text-muted);
+}
+
+.mx-ext-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.mx-ext-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface-2);
+}
+
+/* The path is the thing being decided about, so it takes the room and the
+   buttons keep their width. Long keys ellipsise at the front, where a nested
+   corpus repeats the same folder on every row. */
+.mx-ext-file {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	direction: rtl;
+	text-align: left;
+	font-family: 'JetBrains Mono', 'Consolas', monospace;
+	font-size: 12px;
+}
+
 .mx-cmp-modal {
 	width: 820px;
 	max-width: calc(100vw - 64px);

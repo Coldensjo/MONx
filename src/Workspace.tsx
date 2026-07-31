@@ -18,8 +18,10 @@ import {
 	listMonsterScripts,
 	listMonsters,
 	listSpellNames,
+	reloadCorpus,
 	revealMonster,
 	saveMonster,
+	scanExternalChanges,
 	searchItems,
 	thingsRowUrlFor,
 	thingUrlFor,
@@ -72,6 +74,7 @@ import ScaleLootDialog from './ScaleLootDialog';
 import BatchEditDialog from './BatchEditDialog';
 import QuickOpenDialog from './QuickOpenDialog';
 import CompareDialog from './CompareDialog';
+import ExternalChangesDialog from './ExternalChangesDialog';
 import PatchNotesDialog from './PatchNotesDialog';
 import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
 import { loadFavourites, saveFavourites } from './favourites';
@@ -80,6 +83,16 @@ import { getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
 import { n } from './i18n';
 import { workspaceLabel, type Toast } from './App';
+
+/** How often the corpus is statted for changes made outside MONx, while this is
+ *  the focused window.
+ *
+ *  Measured: about 40 ms for Canary's 1,656 monsters and 7 ms for Ironcore's
+ *  382, nearly all of it the per-file stat. That is cheap for something the user
+ *  asked for and far too expensive to run every second, so the timer is only the
+ *  backstop — regaining focus scans immediately, and that is the path an edit in
+ *  another editor actually takes. */
+const EXTERNAL_POLL_MS = 10000;
 
 /** Scoped to the corpus, like the patch-notes cut-off. */
 const lastMonsterKey = (monstersPath: string) => `monx.lastMonster.${monstersPath}`;
@@ -972,6 +985,49 @@ export default function Workspace({
 		}
 	}, [doc, showToast, refreshDropped, t]);
 
+	/**
+	 * Every dirty buffer, one after another.
+	 *
+	 * Sequential rather than concurrent: each `save_monster` re-reads the whole
+	 * corpus behind the write lock, so firing twenty at once would queue on that
+	 * lock anyway and the failures would come back interleaved. A file that will
+	 * not write stops nothing — the rest still save, and the toast names what
+	 * did not.
+	 */
+	const saveAll = useCallback(async () => {
+		const files = [...dirtyFilesRef.current];
+		if (files.length === 0) return;
+		setSaving(true);
+		const failed: string[] = [];
+		let saved = 0;
+		try {
+			for (const file of files) {
+				const buffered = buffersRef.current.get(file);
+				if (!buffered) continue;
+				try {
+					const lints = await saveMonster(buffered.doc);
+					buffersRef.current.set(file, { doc: buffered.doc, lints });
+					if (file === docRef.current?.file) setMonsterLints(lints);
+					setDirtyFiles(prev => {
+						const next = new Set(prev);
+						next.delete(file);
+						return next;
+					});
+					saved++;
+				} catch (e) {
+					failed.push(`${file}: ${e}`);
+				}
+			}
+		} finally {
+			setSaving(false);
+		}
+		if (failed.length > 0) showToast('error', failed.join('\n'));
+		else showToast('ok', t('Saved {{count}} file', { count: saved }));
+		setWorkspaceLints(await lintWorkspace().catch(() => []));
+		refreshDropped();
+		onMonstersChanged(null);
+	}, [onMonstersChanged, refreshDropped, showToast, t]);
+
 	const refreshMonsters = useCallback(
 		(focusFile: string | null) => {
 			onMonstersChanged(focusFile);
@@ -980,6 +1036,121 @@ export default function Workspace({
 			lintWorkspace().then(setWorkspaceLints).catch(() => {});
 		},
 		[onMonstersChanged]
+	);
+
+	// ---- Files changed outside MONx ----
+
+	/** Contested files, until the user says which version wins. */
+	const [conflicts, setConflicts] = useState<string[]>([]);
+	const scanningRef = useRef(false);
+
+	/**
+	 * Takes what is on disk.
+	 *
+	 * The backend reload is unconditional — its copy of the corpus should mirror
+	 * the folder whatever the user decides about their own buffers, or every
+	 * cross-file lint is computed against a file that no longer exists in that
+	 * form. `files` are only the buffers to drop.
+	 *
+	 * Deletions need nothing beyond the list refresh: it drives the effect that
+	 * prunes tabs, buffers and the selection, which is the same path a delete
+	 * made inside MONx already takes.
+	 */
+	const adopt = useCallback(
+		async (files: string[]) => {
+			await reloadCorpus();
+			for (const file of files) buffersRef.current.delete(file);
+			setDirtyFiles(prev => {
+				if (!files.some(f => prev.has(f))) return prev;
+				const next = new Set(prev);
+				for (const file of files) next.delete(file);
+				return next;
+			});
+			refreshMonsters(null);
+			refreshDropped();
+			const active = docRef.current?.file ?? null;
+			if (!active || !files.includes(active)) return;
+			// Nothing re-runs the load effect — `selected` has not moved and
+			// `reloadKey` would throw away every other buffer with it — so the
+			// active file is re-read here. A document replaced wholesale from disk
+			// starts a fresh history, for the same reason opening one does.
+			const fresh = await getMonster(active);
+			undoRef.current = [];
+			redoRef.current = [];
+			buffersRef.current.set(active, { doc: fresh, lints: [] });
+			setDoc(fresh);
+			const lints = await lintMonster(fresh).catch(() => []);
+			setMonsterLints(lints);
+			const buffered = buffersRef.current.get(active);
+			if (buffered && buffered.doc === fresh) buffered.lints = lints;
+		},
+		[refreshDropped, refreshMonsters]
+	);
+
+	const syncExternal = useCallback(async () => {
+		// Scans are serialised: one that overran the interval would otherwise
+		// have a second reload racing it, and both would refresh the list.
+		if (scanningRef.current) return;
+		scanningRef.current = true;
+		try {
+			const changes = await scanExternalChanges();
+			if (changes.length === 0) return;
+			// The only thing worth asking about is a file that moved on disk while
+			// this session holds unsaved edits to it, because one of the two
+			// versions is going to be lost. Everything else costs nothing to take.
+			const contested = new Set(
+				changes.filter(c => c.kind === 'modified' && dirtyFilesRef.current.has(c.file)).map(c => c.file)
+			);
+			// A deletion cannot be contested. Holding a buffer for a file that is
+			// not there means a tab that cannot be closed and a save that recreates
+			// it behind the user's back, so the edits go and the toast says so —
+			// which is more than a silent loss, and less than a lie.
+			const deleted = changes.filter(c => c.kind === 'removed' && dirtyFilesRef.current.has(c.file));
+			await adopt(changes.filter(c => !contested.has(c.file)).map(c => c.file));
+			for (const c of deleted) {
+				showToast('error', t('{{file}} was deleted outside MONx — unsaved changes to it are gone', { file: c.file }));
+			}
+			if (contested.size > 0) setConflicts(prev => [...new Set([...prev, ...contested])]);
+		} catch {
+			// A workspace closing mid-scan, or a folder that has gone away under
+			// it. Either the next tick succeeds or there is no workspace to warn
+			// about, and a toast every three seconds would be the worse failure.
+		} finally {
+			scanningRef.current = false;
+		}
+	}, [adopt, showToast, t]);
+
+	// Polled rather than watched. A filesystem watcher is a dependency and a
+	// per-platform surface of its own; this is one stat per monster and needs
+	// neither. Regaining focus is the moment that matters, because the edit was
+	// made in the window you just came back from — the timer only covers what
+	// happens while MONx *is* the focused window, like a `git pull` in a terminal
+	// beside it, and is slow accordingly.
+	//
+	// Nothing is scanned while the window is unfocused: the focus handler catches
+	// up in one sweep, so ticking in the background would be work nobody is
+	// waiting on.
+	useEffect(() => {
+		const tick = () => {
+			if (document.hasFocus()) void syncExternal();
+		};
+		const timer = window.setInterval(tick, EXTERNAL_POLL_MS);
+		window.addEventListener('focus', tick);
+		return () => {
+			window.clearInterval(timer);
+			window.removeEventListener('focus', tick);
+		};
+	}, [syncExternal]);
+
+	const resolveConflict = useCallback(
+		(file: string, action: 'keep' | 'load') => {
+			setConflicts(prev => prev.filter(f => f !== file));
+			// "Keep mine" has nothing to do: the buffer stays dirty and the stamp
+			// has already moved, so the same edit is never asked about twice. The
+			// next save writes over what is on disk, which is what was chosen.
+			if (action === 'load') void adopt([file]).catch(e => showToast('error', String(e)));
+		},
+		[adopt, showToast]
 	);
 
 	// The corpus tools rewrite files straight from the on-disk corpus, so an
@@ -1416,6 +1587,13 @@ export default function Workspace({
 	// construction.
 	const commands: Command[] = [
 		{ id: 'save-monster', label: t('Save monster'), group: t('Monsters'), enabled: !!doc && !saving, run: () => void save() },
+		{
+			id: 'save-all',
+			label: t('Save all'),
+			group: t('Monsters'),
+			enabled: dirtyFiles.size > 0 && !saving,
+			run: () => void saveAll()
+		},
 		{ id: 'quick-open', label: t('Go to monster…'), group: t('Monsters'), run: () => setQuickOpen(true) },
 		{ id: 'new-monster', label: t('New monster…'), group: t('Monsters'), run: () => listActions.current?.newMonster() },
 		{
@@ -1608,6 +1786,7 @@ export default function Workspace({
 			label: t('File'),
 			items: [
 				item('save-monster'),
+				item('save-all'),
 				item('quick-open', { separated: true }),
 				item('new-monster'),
 				item('duplicate-monster'),
@@ -2414,6 +2593,14 @@ export default function Workspace({
 						</div>
 					</div>
 				</div>
+			)}
+
+			{conflicts.length > 0 && (
+				<ExternalChangesDialog
+					files={conflicts}
+					onResolve={resolveConflict}
+					onClose={() => setConflicts([])}
+				/>
 			)}
 
 			{compareOpen && (

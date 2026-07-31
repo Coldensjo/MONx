@@ -371,6 +371,8 @@ fn open_workspace(
     let spells = spells::SpellIndex::load(
         paths.spells.as_ref().map(std::path::PathBuf::from).as_deref(),
     );
+    // Before the read — see `refresh` for why the order matters.
+    let stamps = workspace::stamp_corpus(profile, &monsters_dir);
     let (docs, read_errors) = monster::read_corpus(profile, &monsters_dir, &registry, &spells);
 
     let registered_count = docs.iter().filter(|d| d.registered).count() as u32;
@@ -420,6 +422,7 @@ fn open_workspace(
     ws.docs = docs;
     ws.source_lints = read_errors;
     ws.registry = registry;
+    ws.stamps = stamps;
     ws.spells = spells;
     ws.spr_path = info.spr_path.clone();
     ws.dat_path = info.dat_path.clone();
@@ -537,6 +540,11 @@ fn save_all(ws: &mut workspace::Workspace, docs: &[monster::MonsterDoc]) -> (u32
 fn refresh(ws: &mut workspace::Workspace) {
     let dir = ws.monsters_dir();
     ws.registry = registry::Registry::load(&dir.join("monsters.xml"));
+    // Stamped *before* the read, not after. Taken afterwards, a write landing
+    // between the two would be recorded as already-seen and never reported
+    // again; taken before, the same write reads as one more external change,
+    // which is a redundant prompt rather than a lost edit.
+    ws.stamps = workspace::stamp_corpus(ws.profile, &dir);
     let (docs, source_lints) = monster::read_corpus(ws.profile, &dir, &ws.registry, &ws.spells);
     ws.monsters = lint::summaries(
         ws.profile,
@@ -548,6 +556,52 @@ fn refresh(ws: &mut workspace::Workspace) {
     );
     ws.docs = docs;
     ws.source_lints = source_lints;
+}
+
+/// One monster file that has moved on disk since MONx last read it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExternalChange {
+    file: String,
+    /// `modified`, `added` or `removed`. The frontend treats them differently:
+    /// only a modification can conflict with an unsaved buffer.
+    kind: &'static str,
+}
+
+/// What has changed under us — another editor, a `git pull`, the server itself.
+///
+/// MONx's own writes cannot show up here, because every command that writes goes
+/// through `refresh` (directly, or via `save_all`) and re-stamps under the same
+/// write lock. That is the whole reason the stamps live beside `docs` rather
+/// than being recorded per write site: there is one place that reloads the
+/// corpus, so there is one place to keep honest.
+#[tauri::command]
+fn scan_external_changes(state: State<WorkspaceState>) -> Result<Vec<ExternalChange>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    if !ws.is_open() {
+        return Ok(Vec::new());
+    }
+    Ok(
+        workspace::diff_stamps(ws.profile, &ws.monsters_dir(), &ws.stamps)
+            .into_iter()
+            .map(|(file, change)| ExternalChange {
+                file,
+                kind: change.key(),
+            })
+            .collect(),
+    )
+}
+
+/// Re-reads the corpus from disk. The backend's copy always mirrors what is
+/// there; whether an *unsaved buffer* is kept or thrown away is the frontend's
+/// question to ask, and it asks it before calling this.
+#[tauri::command]
+fn reload_corpus(state: State<WorkspaceState>) -> Result<(), String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    if ws.is_open() {
+        refresh(&mut ws);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1393,6 +1447,8 @@ pub fn run() {
             delete_monster,
             rename_monster,
             reveal_monster,
+            scan_external_changes,
+            reload_corpus,
             lint_workspace,
             lint_monster,
             next_free_raceid,

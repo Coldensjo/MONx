@@ -542,6 +542,24 @@ export function renameMonster(file: string, newName: string, newFile: string): P
 	return invoke<MonsterDoc>('rename_monster', { file, newName, newFile });
 }
 
+/** A monster file that has moved on disk since MONx last read it. */
+export interface ExternalChange {
+	file: string;
+	kind: 'modified' | 'added' | 'removed';
+}
+
+/** Stat-only sweep of the corpus. Cheap enough to poll; MONx's own writes never
+ *  appear, because every write path re-stamps in the same lock. */
+export function scanExternalChanges(): Promise<ExternalChange[]> {
+	return invoke<ExternalChange[]>('scan_external_changes', {});
+}
+
+/** Re-reads the corpus from disk into the backend. Unsaved buffers are the
+ *  frontend's to keep or drop — this says nothing about them. */
+export function reloadCorpus(): Promise<void> {
+	return invoke<void>('reload_corpus', {});
+}
+
 /** Opens the OS file manager with the monster's `.xml` selected. */
 export function revealMonster(file: string): Promise<void> {
 	return invoke<void>('reveal_monster', { file });

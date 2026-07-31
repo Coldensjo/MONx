@@ -3711,7 +3711,20 @@ fn collect_monster_files(
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
+        // `entry.file_type()` rather than `path.is_dir()`: the directory
+        // enumeration already carried the answer, where the latter is a fresh
+        // stat per entry. On a 1,600-file Canary corpus that difference is most
+        // of the walk, and the walk runs on every save and every change sweep.
+        //
+        // A symlink is the one case it cannot answer — `file_type` describes the
+        // link, not what it points at — so those fall back to the stat that
+        // follows it. A corpus that keeps a shared folder as a junction has to
+        // keep working.
+        let is_dir = match entry.file_type() {
+            Ok(t) if !t.is_symlink() => t.is_dir(),
+            _ => path.is_dir(),
+        };
+        if is_dir {
             // Not into `.monx-backup`, and not into any other dot-directory —
             // `.git`, `.svn`, an editor's own. On the three recursive XML
             // engines the backup folder sits inside the monsters folder, so the

@@ -9,6 +9,7 @@
 //! M0 scope: path probing, the items index, and a shallow monster scrape.
 //! Agent 2's registry/reader replaces the monster half; `otb.rs` lands at M1.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
@@ -86,6 +87,107 @@ pub struct WorkspaceInfo {
     pub lints: Vec<Lint>,
 }
 
+/// What a monster file looked like when MONx last read it.
+///
+/// Modified time *and* length, because a rewrite inside the same filesystem
+/// timestamp tick is the one case a time alone misses — rare, but "your editor
+/// silently kept the old version" is the wrong thing to be rare-but-possible.
+/// Not a hash: this is statted for the whole corpus on a timer, and reading a
+/// thousand files to answer "did anything change" is the cost this exists to
+/// avoid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileStamp {
+    pub mtime_ms: u64,
+    pub len: u64,
+}
+
+/// One file's stamp, or None if it cannot be statted — which the caller reads
+/// as "gone", the same thing the user means by it.
+pub fn stamp(path: &Path) -> Option<FileStamp> {
+    let meta = std::fs::metadata(path).ok()?;
+    let mtime_ms = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    Some(FileStamp {
+        mtime_ms,
+        len: meta.len(),
+    })
+}
+
+/// Stamps every monster file in the corpus, keyed exactly as `docs` are.
+///
+/// Files that failed to parse are stamped too — they are in the corpus as a
+/// `file.unreadable` lint, and someone fixing one in another editor is the most
+/// likely external edit there is.
+pub fn stamp_corpus(
+    profile: &'static crate::engine::EngineProfile,
+    dir: &Path,
+) -> HashMap<String, FileStamp> {
+    crate::monster::monster_files(profile, dir)
+        .into_iter()
+        .filter_map(|path| {
+            let key = crate::monster::file_key(dir, &path);
+            stamp(&path).map(|s| (key, s))
+        })
+        .collect()
+}
+
+/// How a file differs from the stamp held for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change {
+    Modified,
+    Added,
+    Removed,
+}
+
+impl Change {
+    pub fn key(self) -> &'static str {
+        match self {
+            Change::Modified => "modified",
+            Change::Added => "added",
+            Change::Removed => "removed",
+        }
+    }
+}
+
+/// Everything in `dir` that no longer matches `before`.
+///
+/// Stat only, never a read: this is polled, and re-parsing a thousand monsters
+/// to answer "did anything change" would cost more than the answer is worth. A
+/// stamp mismatch is the signal to go and look, not the looking.
+pub fn diff_stamps(
+    profile: &'static crate::engine::EngineProfile,
+    dir: &Path,
+    before: &HashMap<String, FileStamp>,
+) -> Vec<(String, Change)> {
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for path in crate::monster::monster_files(profile, dir) {
+        let key = crate::monster::file_key(dir, &path);
+        let Some(now) = stamp(&path) else {
+            // Walked a moment ago and unstattable now: it is being written this
+            // instant. Left alone, so the next sweep sees it settled rather than
+            // reporting a half-written file as news.
+            continue;
+        };
+        seen.insert(key.clone());
+        match before.get(&key) {
+            Some(then) if *then == now => {}
+            Some(_) => out.push((key, Change::Modified)),
+            None => out.push((key, Change::Added)),
+        }
+    }
+    for file in before.keys() {
+        if !seen.contains(file) {
+            out.push((file.clone(), Change::Removed));
+        }
+    }
+    out
+}
+
 pub struct Workspace {
     pub profile: &'static crate::engine::EngineProfile,
     pub paths: WorkspacePaths,
@@ -102,6 +204,10 @@ pub struct Workspace {
     /// `health now` showed a clean dot.
     pub source_lints: Vec<crate::monster::Lint>,
     pub registry: Registry,
+    /// Every monster file as it was when the corpus was last read, so an edit
+    /// made in another program can be told from one MONx made itself. Rewritten
+    /// wherever `docs` is, which is the only way the two stay in step.
+    pub stamps: HashMap<String, FileStamp>,
     pub spells: SpellIndex,
     pub spr_path: String,
     pub dat_path: String,
@@ -129,6 +235,7 @@ impl Default for Workspace {
             docs: Vec::new(),
             source_lints: Vec::new(),
             registry: Registry::default(),
+            stamps: HashMap::new(),
             spells: SpellIndex::default(),
             spr_path: String::new(),
             dat_path: String::new(),
