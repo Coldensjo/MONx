@@ -1,6 +1,6 @@
 # MONx — Agent Guide
 
-A monster editor for the Ironcore Tibia server, and for six others. **Open workspace → pick a monster → edit → save.**
+A monster editor for OpenTibia. **Open workspace → pick a monster → edit → save.**
 
 Opens a workspace of up to four folders: the server's `monster/` folder, its `items/` folder, a client folder and optionally `spells/`. Every outfit, corpse and loot item renders as a real sprite because the client assets are loaded alongside the monsters.
 
@@ -51,7 +51,7 @@ cargo run --release --example probe_monster -- ../assets/Nostalrius/monster    -
 cargo run --release --example probe_monster -- ../assets/Canary/monster        --engine canary     --mutate
 cargo run --release --example probe_monster -- ../assets/CrystalServer/monster --engine crystal    --mutate
 cargo run --release --example probe_monster -- ../assets/BlackTek/monster      --engine blacktek   --mutate
-cargo run --release --example probe_monster -- ../sources/forgottenserver-master/data/monster --engine tfs --mutate
+cargo run --release --example probe_monster -- ../assets/TFS/monster           --engine tfs        --mutate
 ```
 
 Crystal's `assets/` fixture is a subset of what its repo ships; the monsters that exercise its

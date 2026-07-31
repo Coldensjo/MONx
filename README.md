@@ -23,8 +23,6 @@ Built with Tauri 2 (Rust) and React 18 + TypeScript + Vite.
 - **Rust** (stable) — via [rustup](https://rustup.rs)
 - **Bun** 1.3+ — via [bun.sh](https://bun.sh) (the repo pins `bun@1.3.14`)
 
-**Windows** also needs Visual Studio Build Tools with the "Desktop development with C++" workload. WebView2 ships with Windows 10/11; on older systems install the [Evergreen runtime](https://developer.microsoft.com/microsoft-edge/webview2/). NSIS is downloaded by Tauri when building the installer.
-
 **Arch Linux**
 
 ```sh
@@ -43,7 +41,7 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
 
 ```sh
 bun install
-bun run tauri:dev        # Vite dev server on :8090 + Tauri window
+bun run tauri:dev
 ```
 
 On Linux use `./monx.sh` instead — same thing, but through XWayland with WebKitGTK's dmabuf renderer disabled, which otherwise crashes the webview under Wayland ("Error 71 Protocol error").
@@ -83,7 +81,6 @@ GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
 ## Further reading
 
 - [AGENTS.md](AGENTS.md) — architecture, conventions, directory map
-- [ENGINES.md](ENGINES.md) — what each of the seven servers does differently
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to get set up and send a change
 
 ## Sponsor
