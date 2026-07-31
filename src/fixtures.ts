@@ -310,7 +310,7 @@ export const FIXTURE_LINTS: Lint[] = [
 	},
 	{
 		severity: 'warning',
-		code: 'spell.speed-clamped',
+		code: 'spell.speedchange-under-min',
 		message: 'speedchange -1400 is clamped to -1000 (−100% speed) by the engine',
 		file: 'demon.xml',
 		path: 'defenses[0].status.speedchange',
@@ -318,7 +318,7 @@ export const FIXTURE_LINTS: Lint[] = [
 	},
 	{
 		severity: 'silent',
-		code: 'loot.actionid-casing',
+		code: 'loot.actionid-wrong-case',
 		message: 'actionid is silently ignored — the server only reads actionId',
 		file: 'demon.xml',
 		path: 'loot[8].actionId',
@@ -326,11 +326,11 @@ export const FIXTURE_LINTS: Lint[] = [
 	},
 	{
 		severity: 'silent',
-		code: 'look.typeex-shadows-colours',
+		code: 'look.typeex-ignores-colours',
 		message: 'head/body/legs/feet are ignored under typeex',
 		file: 'rotmaw.xml',
 		path: 'look.head',
-		fixable: false
+		fixable: true
 	}
 ];
 

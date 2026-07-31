@@ -10,7 +10,6 @@ import {
 	type MonsterSummary
 } from './monster';
 import type { Toast } from './App';
-import { saveSetting } from './settings';
 import { useDragSource } from './dnd';
 
 // The sidebar monster list. Virtualized over `/monsters.png` row atlases so every
@@ -23,8 +22,6 @@ const SPRITE = 32;
 // the URLs stay stable (and cached) while scrolling instead of changing per frame.
 const CHUNK = 32;
 const OVERSCAN = 6;
-
-const LAST_MONSTER_KEY = 'monx.lastMonster';
 
 /**
  * What the shell's hotkeys can ask of the list. The list owns the new / rename /
@@ -212,15 +209,8 @@ export default function MonsterList({
 	// time the effect first ran), so the guard only came into play later — the
 	// moment the selection went empty, which is what closing the last tab does.
 	// Reopening the file that was just closed was the visible result. First-open
-	// restoration belongs to the shell, which owns `monx.lastMonster`.
-
-	const select = useCallback(
-		(file: string) => {
-			saveSetting(LAST_MONSTER_KEY, file);
-			onSelect(file);
-		},
-		[onSelect]
-	);
+	// restoration belongs to the shell, which owns `monx.lastMonster.<path>` —
+	// including the write, so the list only reports the selection upwards.
 
 	// Race and species values are whatever the corpus actually contains, so the
 	// popover is built from the data rather than from a hardcoded enum.
@@ -335,10 +325,10 @@ export default function MonsterList({
 	const handleContextMenu = useCallback(
 		(e: React.MouseEvent, file: string) => {
 			e.preventDefault();
-			select(file);
+			onSelect(file);
 			setMenu({ x: e.clientX, y: e.clientY, file });
 		},
-		[select]
+		[onSelect]
 	);
 
 	useEffect(() => {
@@ -472,7 +462,7 @@ export default function MonsterList({
 				const at = shown.findIndex(m => m.file === selectedFile);
 				const next = shown[Math.min(shown.length - 1, Math.max(0, (at === -1 ? 0 : at) + delta))];
 				if (next && next.file !== selectedFile) {
-					select(next.file);
+					onSelect(next.file);
 					// The list is virtualized, so the row has to be scrolled to before
 					// it can exist to be scrolled into view.
 					const idx = shown.indexOf(next);
@@ -490,7 +480,7 @@ export default function MonsterList({
 		return () => {
 			actionsRef.current = null;
 		};
-	}, [actionsRef, openNew, openRename, runDuplicate, selected, shown, selectedFile, select]);
+	}, [actionsRef, openNew, openRename, runDuplicate, selected, shown, selectedFile, onSelect]);
 
 	const cycleFilter = useCallback((key: string) => {
 		setActiveFilters(prev => {
@@ -519,7 +509,7 @@ export default function MonsterList({
 				atlasUrl={chunk.url}
 				atlasIndex={i - chunk.start}
 				atlasLength={chunk.files.length}
-				onSelect={select}
+				onSelect={onSelect}
 				onContextMenu={handleContextMenu}
 				onOpen={onOpen}
 			/>

@@ -100,10 +100,10 @@ export const DEFAULT_BINDINGS: Bindings = {
 	'delete-monster': bind(null),
 	'reveal-monster': bind(null),
 
-	undo: bind('Ctrl+Z'),
+	'undo': bind('Ctrl+Z'),
 	// The two spellings every editor accepts, which is exactly what a secondary
 	// binding is for.
-	redo: bind('Ctrl+Shift+Z', 'Ctrl+Y'),
+	'redo': bind('Ctrl+Shift+Z', 'Ctrl+Y'),
 	'fix-all-lints': bind('Ctrl+.'),
 	'add-tray-loot': bind(null),
 
@@ -123,12 +123,15 @@ export const DEFAULT_BINDINGS: Bindings = {
 	'pin-ambiguous': bind(null),
 	'pin-all': bind(null),
 	'scale-loot': bind(null),
+	'batch-edit': bind(null),
+	'compare-monsters': bind(null),
 	'export-lints': bind(null),
 	'export-patch-notes': bind(null),
 	'set-patch-cutoff': bind(null),
 
 	'open-prefs': bind('Ctrl+,'),
 	'open-hotkeys': bind('Ctrl+Shift+K'),
+	'open-custom-effects': bind(null),
 	'show-all-tabs': bind(null)
 };
 

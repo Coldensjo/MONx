@@ -107,25 +107,6 @@ export function newWorkspaceId(): string {
 	return `ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Loads the persisted zoom-level index for a view, falling back when missing or out of range. */
-export function loadZoomIdx(view: string, fallback: number, max: number): number {
-	try {
-		const raw = localStorage.getItem(`monx.zoom.${view}`);
-		const n = raw === null ? NaN : Number(raw);
-		return Number.isInteger(n) && n >= 0 && n <= max ? n : fallback;
-	} catch {
-		return fallback;
-	}
-}
-
-export function saveZoomIdx(view: string, idx: number): void {
-	try {
-		localStorage.setItem(`monx.zoom.${view}`, String(idx));
-	} catch {
-		// Ignore storage failures (private mode, quota); zoom is non-critical.
-	}
-}
-
 /** Reads one `monx.*` key. Returns `fallback` when missing or unreadable. */
 export function loadSetting(key: string, fallback: string | null): string | null {
 	try {
@@ -136,10 +117,27 @@ export function loadSetting(key: string, fallback: string | null): string | null
 	}
 }
 
-export function saveSetting(key: string, value: string): void {
+/** Writes one `monx.*` key. False when storage refused it (private mode, quota) —
+ *  almost every caller ignores that, but the ones whose value the user would
+ *  otherwise believe was kept say so out loud. */
+export function saveSetting(key: string, value: string): boolean {
 	try {
 		localStorage.setItem(key, value);
+		return true;
 	} catch {
-		// Ignore storage failures (private mode, quota); none of this is critical.
+		return false;
 	}
+}
+
+const zoomKey = (view: string) => `monx.zoom.${view}`;
+
+/** Loads the persisted zoom-level index for a view, falling back when missing or out of range. */
+export function loadZoomIdx(view: string, fallback: number, max: number): number {
+	const raw = loadSetting(zoomKey(view), null);
+	const n = raw === null ? NaN : Number(raw);
+	return Number.isInteger(n) && n >= 0 && n <= max ? n : fallback;
+}
+
+export function saveZoomIdx(view: string, idx: number): void {
+	saveSetting(zoomKey(view), String(idx));
 }

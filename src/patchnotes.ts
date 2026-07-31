@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { t } from 'i18next';
-import { loadSetting } from './settings';
+import { loadSetting, saveSetting } from './settings';
 import { percentText } from './sections/Loot';
 
 /** One loot row as a mark records it. */
@@ -64,12 +64,7 @@ export function loadCutoff(monstersPath: string): PatchCutoff | null {
  */
 export function saveCutoff(monstersPath: string, marks: PatchMark[]): PatchCutoff | null {
 	const cutoff: PatchCutoff = { at: new Date().toISOString(), marks };
-	try {
-		localStorage.setItem(key(monstersPath), JSON.stringify(cutoff));
-		return cutoff;
-	} catch {
-		return null;
-	}
+	return saveSetting(key(monstersPath), JSON.stringify(cutoff)) ? cutoff : null;
 }
 
 // ---------- Diff ----------

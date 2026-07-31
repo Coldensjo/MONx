@@ -124,7 +124,9 @@ export default function LootSimDialog({ loot, monsterName, items, onClose }: Pro
 	const [ranSeed, setRanSeed] = useState<number | null>(null);
 	const [view, setView] = useState<'totals' | 'log'>('totals');
 
-	useEffect(() => saveSetting(SETTINGS_KEY, JSON.stringify(inputs)), [inputs]);
+	useEffect(() => {
+		saveSetting(SETTINGS_KEY, JSON.stringify(inputs));
+	}, [inputs]);
 
 	// Re-resolve when the loot buffer changes; a stale result would lie about it.
 	useEffect(() => {

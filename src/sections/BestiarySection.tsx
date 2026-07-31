@@ -22,9 +22,9 @@ const BLANK: Bestiary = {
 	locations: null
 };
 
-/** The loader's own list; anything else is a warning and no difficulty at all. */
-/** Wire values from the loader, rendered as their own labels. Never translated:
- *  the string chosen here is written straight into the file. */
+/** The loader's own list; anything else is a warning and no difficulty at all.
+ *  Wire values, rendered as their own labels and never translated: the string
+ *  chosen here is written straight into the file. */
 const DIFFICULTIES = ['harmless', 'trivial', 'easy', 'medium', 'hard', 'challenging'];
 
 /**
@@ -46,9 +46,9 @@ export function BestiarySection({ doc, patch, lintAt, readOnly, collapsed, onTog
 			summary={present ? (b.class ?? t('no class')) : t('not tracked')}
 		>
 			{!present ? (
-				<div className="ss-ed-note">
+				<div className="ss-ed-empty">
 					{t('This monster has no bestiary entry.')}{' '}
-					<button className="ss-btn ss-btn-small" disabled={readOnly} onClick={() => set({})}>
+					<button className="ss-btn" disabled={readOnly} onClick={() => set({})}>
 						{t('Add one')}
 					</button>
 				</div>
