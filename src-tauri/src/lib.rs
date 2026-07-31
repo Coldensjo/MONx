@@ -353,11 +353,16 @@ fn open_workspace(
         .unwrap_or_default()
         .unwrap_or_default();
 
-    // `ItemIndex::load` reads the appearance flags from a copy beside the item
-    // database, which is where Canary and Crystal keep one. A workspace whose
-    // only appearances file is inside the client bundle gets them here instead —
-    // same flags, same method, just the other place they can live.
-    if !index.pickupable_known() {
+    // `ItemIndex::load` takes `pickupable`, `container` and `stackable` off
+    // whichever client table sits beside the item database, which is where all
+    // three no-OTB engines keep one. A workspace whose only appearance table is
+    // inside the client bundle gets them here instead — same flags, same
+    // method, just the other place they can live.
+    //
+    // Gated on the OTB rather than merely on nothing having answered yet: an
+    // OTB engine has a client too, and letting this run there would overwrite
+    // what `apply_otb` correctly established.
+    if !index.has_otb() && !index.pickupable_known() {
         if let Some(bundle) = &bundle {
             index.apply_appearance_flags(&bundle.appearances);
         }

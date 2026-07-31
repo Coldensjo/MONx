@@ -200,16 +200,7 @@ impl ItemIndex {
             // every loot name and icon, for an indirection that does not exist.
             Err(_) => {
                 index.assume_direct_ids();
-                // What the OTB would have answered lives in the client's
-                // appearance table on these engines, and Canary and Crystal both
-                // keep a copy beside the item database. About 20 ms for Canary's
-                // 42,000 objects, once, at open.
-                let sibling = dir.join("appearances.dat");
-                if sibling.is_file() {
-                    if let Ok(app) = crate::appearances::Appearances::load(&sibling) {
-                        index.apply_appearance_flags(&app);
-                    }
-                }
+                index.borrow_client_flags(dir);
             }
         }
         Ok(index)
@@ -219,6 +210,75 @@ impl ItemIndex {
     /// opposed to the fallback that assumes they all can.
     pub fn pickupable_known(&self) -> bool {
         self.pickupable_known
+    }
+
+    /// Whether an `items.otb` was found. Where there is one it is the authority
+    /// on all of this, and nothing else may overwrite what it said.
+    pub fn has_otb(&self) -> bool {
+        !self.otb.is_empty()
+    }
+
+    /// `pickupable`, `container` and `stackable` from whichever client table the
+    /// engine keeps beside its item database.
+    ///
+    /// Only reached with no OTB, which is the structural version of the gate:
+    /// where there is an OTB it has already answered, and it addresses items by
+    /// server id where these tables address them by client id.
+    ///
+    /// Matched by *name*, never by extension, for the reason `open_workspace`
+    /// gives about the client slot: Canary's items folder holds a `.dat` too,
+    /// and `appearances.dat` is a protobuf rather than a thing table. Between
+    /// them the two names cover every engine that has no OTB — Canary and
+    /// Crystal ship the first, BlackTek the second — and cost 20 ms and 9 ms
+    /// respectively, once, at open.
+    fn borrow_client_flags(&mut self, dir: &Path) {
+        let appearances = dir.join("appearances.dat");
+        if appearances.is_file() {
+            if let Ok(app) = crate::appearances::Appearances::load(&appearances) {
+                self.apply_appearance_flags(&app);
+                return;
+            }
+        }
+        let assets = dir.join("assets.dat");
+        if assets.is_file() {
+            if let Ok(dat) = crate::dat::open_dat_auto(&assets.to_string_lossy(), None) {
+                self.apply_dat_flags(&dat);
+            }
+        }
+    }
+
+    /// The same three flags, from a `.dat` thing table.
+    ///
+    /// BlackTek's `assets.dat` is a stock 10.98 `.dat` under another name, and
+    /// it is the only place that database states any of this: `items.toml`
+    /// carries a pickupable key for 164 of its 21,881 items, which is an
+    /// override list rather than an answer, exactly as Canary's `items.xml` is.
+    ///
+    /// Matched on the flag *name*, not its byte code: the code for pickupable
+    /// moves between `.dat` versions (0x10 on one table, 0x11 on the next) and
+    /// `dat.rs` has already done that normalisation.
+    pub fn apply_dat_flags(&mut self, dat: &crate::dat::DatFile) {
+        let has = |thing: &crate::dat::Thing, name: &str| thing.props.iter().any(|p| p.name == name);
+        let flags: std::collections::HashMap<u32, (bool, bool, bool)> = dat
+            .items
+            .iter()
+            .map(|t| {
+                (
+                    t.id,
+                    (has(t, "pickupable"), has(t, "container"), has(t, "stackable")),
+                )
+            })
+            .collect();
+        for (id, item) in self.by_id.iter_mut() {
+            // No OTB, so the server id addresses the thing table directly.
+            let Some((take, container, stackable)) = flags.get(id) else {
+                continue;
+            };
+            item.pickupable = *take;
+            item.container |= *container;
+            item.stackable |= *stackable;
+        }
+        self.pickupable_known = true;
     }
 
     /// Fills in what only the client's own appearance table knows.
