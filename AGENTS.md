@@ -250,6 +250,10 @@ Four rules that come up constantly:
 
 ## Conventions
 
+### Commit messages
+
+- Subject is `<Area>: <what changed>` — the area being the module, engine or feature the change lives in (`Landing`, `Engines`, `Backend`, `Docs`, `Custom effects`, …), lower case after the colon, no full stop. `git log --oneline` is read to find which subsystem a change touched, and a bare sentence does not say. The body stays as long as the change needs.
+
 ### Rust
 
 - Everything is parsed into memory at open time for fast random access.
