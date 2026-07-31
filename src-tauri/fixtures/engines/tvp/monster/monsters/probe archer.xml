@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!-- TVP's own shape: the four targetstrategy weights must add to 100, spells
+     take delay= as an alternative to chance=, and melee carries the skill
+     progression attributes no other engine has. -->
+<monster name="Probe Archer" nameDescription="a probe archer" race="blood" experience="60" speed="46" manacost="390">
+	<health now="110" max="110" />
+	<look type="137" head="113" body="120" legs="95" feet="115" corpse="3065" />
+	<targetchange chance="50" />
+	<targetstrategy nearest="70" weakest="10" mostdamage="10" random="10" />
+	<flags>
+		<flag attackable="1" />
+		<flag summonable="1" />
+		<flag illusionable="1" />
+		<flag pushable="0" />
+		<flag convinceable="1" />
+		<flag canpushitems="1" />
+		<flag canpushcreatures="0" />
+		<flag targetdistance="4" />
+		<flag runonhealth="10" />
+	</flags>
+	<attacks>
+		<attack name="melee" skillfactor="1200" skillnextlevel="100" skilladdcount="1" skill="24" attack="16" />
+		<attack name="physical" delay="10" min="-20" max="-30" range="7">
+			<attribute key="shooteffect" value="throwingknife" />
+		</attack>
+		<!-- The cycle branch: TVP ignores min/max/start/tick when it takes this. -->
+		<attack name="poison" delay="20" cycle="8" mincycle="4" />
+	</attacks>
+	<defenses armor="11" defense="11">
+		<defense name="speed" delay="30" speed="240" speedvariation="60" duration="5000" />
+	</defenses>
+	<immunities>
+		<immunity fire="0" />
+		<immunity energy="0" />
+		<immunity poison="1" />
+		<immunity physical="0" />
+		<immunity outfit="0" />
+		<immunity lifedrain="0" />
+		<immunity paralyze="1" />
+		<immunity invisible="0" />
+	</immunities>
+	<voices>
+		<voice sentence="Stand and deliver!" />
+		<voice sentence="You will not pass." />
+	</voices>
+	<loot>
+		<item id="2148" countmax="10" chance="40000" /><!-- gold coin -->
+		<item id="2379" countmax="1" chance="80000" /><!-- dagger -->
+	</loot>
+</monster>

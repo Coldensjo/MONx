@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<monster name="Probe Hound" nameDescription="a probe hound" race="blood" experience="120" speed="200" manacost="290" raceId="9102">
+	<health now="180" max="180" />
+	<look type="43" head="20" body="30" legs="40" feet="50" addons="1" mount="0" corpse="6011" />
+	<targetchange interval="3000" chance="20" />
+	<flags>
+		<flag attackable="1" />
+		<flag hostile="1" />
+		<flag summonable="1" />
+		<flag convinceable="1" />
+		<flag pushable="1" />
+		<flag canpushitems="0" />
+		<flag canpushcreatures="0" />
+		<flag staticattack="70" />
+		<flag targetdistance="1" />
+	</flags>
+	<attacks>
+		<attack name="melee" interval="2000" chance="100" skill="25" attack="22" />
+		<attack name="speed" interval="4000" chance="10" range="5" speedchange="-350" duration="15000">
+			<attribute key="areaEffect" value="redshimmer" />
+		</attack>
+	</attacks>
+	<defenses armor="10" defense="14">
+		<defense name="speed" interval="5000" chance="20" speedchange="300" duration="6000" />
+	</defenses>
+	<summons maxSummons="1">
+		<summon name="probe calamary" interval="5000" chance="10" max="1" />
+	</summons>
+	<voices interval="5000" chance="10">
+		<voice sentence="Grrrr!" />
+	</voices>
+	<loot>
+		<item name="gold coin" countmax="20" chance="60000" />
+	</loot>
+</monster>

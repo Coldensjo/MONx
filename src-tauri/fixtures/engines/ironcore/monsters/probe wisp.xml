@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<monster name="Probe Wisp" nameDescription="a probe wisp" race="energy" species="elemental" experience="440" speed="220" manacost="380" raceid="9001">
+	<health now="300" max="300" />
+	<look type="12" head="0" body="0" legs="0" feet="0" addons="0" mount="0" corpse="6080" corpseactionid="1300" />
+	<targetchange interval="3000" chance="10" />
+	<flags>
+		<flag attackable="1" />
+		<flag hostile="1" />
+		<flag summonable="0" />
+		<flag convinceable="0" />
+		<flag illusionable="1" />
+		<flag isboss="0" />
+		<flag pushable="0" />
+		<flag canpushitems="1" />
+		<flag canpushcreatures="0" />
+		<flag staticattack="80" />
+		<flag targetdistance="4" />
+		<flag runonhealth="30" />
+		<flag hidehealth="0" />
+		<flag canwalkonenergy="1" />
+		<flag canwalkonfire="0" />
+		<flag canwalkonpoison="0" />
+	</flags>
+	<immunities>
+		<immunity energy="1" />
+		<immunity paralyze="1" />
+		<immunity invisible="1" />
+	</immunities>
+	<elements>
+		<element physicalPercent="10" />
+		<element icePercent="15" />
+	</elements>
+	<attacks>
+		<attack name="melee" interval="2000" chance="100" skill="30" attack="28" />
+		<attack name="energy" interval="2000" chance="20" min="-60" max="-110" radius="3" target="0">
+			<attribute key="areaEffect" value="CONST_ME_ENERGYHIT" />
+		</attack>
+		<attack name="outfit" interval="5000" chance="8" range="7" duration="4000" monster="probe golem">
+			<attribute key="shootEffect" value="CONST_ANI_ENERGY" />
+		</attack>
+	</attacks>
+	<defenses armor="18" defense="20">
+		<defense name="healing" interval="4000" chance="15" min="40" max="70">
+			<attribute key="areaEffect" value="CONST_ME_MAGIC_BLUE" />
+		</defense>
+	</defenses>
+	<summons maxSummons="2">
+		<summon name="probe golem" interval="4000" chance="20" max="1" force="1">
+			<attribute key="effect" value="CONST_ME_TELEPORT" />
+		</summon>
+	</summons>
+	<voices interval="5000" chance="10">
+		<voice sentence="Hummmmm." />
+		<voice sentence="Zzzzap!" yell="1" />
+	</voices>
+	<loot>
+		<item name="gold coin" countmax="40" chance="90000" />
+		<item name="small enchanted amethyst" countmax="2" chance="4000" />
+		<item id="1994" chance="12000"> <!-- bag -->
+			<inside>
+				<item name="energy ring" chance="8000" />
+				<item name="gold coin" countmax="10" chance="60000" />
+			</inside>
+		</item>
+	</loot>
+</monster>

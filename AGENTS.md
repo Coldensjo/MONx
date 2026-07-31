@@ -32,7 +32,17 @@ No test suite, no linter config beyond TypeScript strict mode.
 - Backend compile: `cargo check` in `src-tauri/`.
 - Backend behavior: `probe_monster` is the fastest end-to-end check — it reads and rewrites the whole monster corpus and diffs the bytes, so a round-trip regression fails across every file at once instead of arriving as a bug report. `probe_dat` does the same for sprite composition.
 
-`probe_monster` takes flags for each gate, and exits non-zero if any of them fails:
+`probe_monster` takes flags for each gate, and exits non-zero if any of them fails. With no
+path it runs against the committed fixtures, so a fresh clone can check itself before
+`assets/` is populated:
+
+```sh
+cargo run --release --example probe_monster                                              # fixtures/engines/ironcore/monsters
+cargo run --release --example probe_monster -- fixtures/engines/tvp/monster --engine tvp --mutate
+```
+
+Those are a smoke test, not coverage — see `src-tauri/fixtures/README.md`. The real gates
+point at a server's own tree:
 
 ```sh
 cargo run --release --example probe_monster -- ../assets/Ironcore/monsters              # round-trip

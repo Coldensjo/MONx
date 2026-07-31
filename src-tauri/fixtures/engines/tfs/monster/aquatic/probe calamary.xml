@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- In a subfolder on purpose: TFS's corpus is a tree, and a monster's key is
+     its path relative to the monsters folder, matching its file= below. -->
+<monster name="Probe Calamary" nameDescription="a probe calamary" race="blood" experience="210" speed="280" raceId="9101">
+	<health now="300" max="300" />
+	<look type="451" corpse="15280" />
+	<targetchange interval="2000" chance="5" />
+	<flags>
+		<flag attackable="1" />
+		<flag hostile="1" />
+		<flag illusionable="1" />
+		<flag pushable="0" />
+		<flag canpushitems="0" />
+		<flag canpushcreatures="0" />
+		<flag staticattack="90" />
+		<flag targetdistance="1" />
+		<flag runonhealth="40" />
+		<flag canwalkonenergy="0" />
+		<flag canwalkonfire="1" />
+		<flag canwalkonpoison="1" />
+	</flags>
+	<bestiary class="Aquatic" prowess="25" expertise="250" mastery="500" charmPoints="30" difficulty="easy" occurrence="0" locations="Nowhere in particular." />
+	<attacks>
+		<attack name="melee" interval="2000" chance="100" skill="35" attack="30" />
+		<!-- Short-name effects, lower-cased before lookup: TFS is not Ironcore. -->
+		<attack name="drown" interval="2500" chance="15" min="-40" max="-80" range="4">
+			<attribute key="areaEffect" value="watersplash" />
+			<attribute key="shootEffect" value="smallice" />
+		</attack>
+		<attack name="drunk" interval="2000" chance="10" range="2" duration="5000" />
+	</attacks>
+	<defenses armor="12" defense="12" />
+	<elements>
+		<element physicalPercent="-5" />
+		<element energyPercent="-5" />
+		<element icePercent="20" />
+	</elements>
+	<immunities>
+		<immunity earth="1" />
+		<immunity drown="1" />
+		<immunity paralyze="1" />
+	</immunities>
+	<loot>
+		<item name="gold coin" countmax="30" chance="80000" />
+		<item name="small amethyst" countmax="3" chance="633" />
+	</loot>
+</monster>

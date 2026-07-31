@@ -81,6 +81,7 @@ GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
 ## Further reading
 
 - [AGENTS.md](AGENTS.md) — architecture, conventions, directory map
+- [ENGINES.md](ENGINES.md) — how the seven servers differ, and the profile system that models it
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to get set up and send a change
 
 ## Credits

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Nostalrius alone puts melee on the <attacks> container rather than in a
+     spell block, has no cadence attribute at all (chance gates a cast), states
+     conditions as count=, and does not clamp health now to max. -->
+<monster name="probe raider" nameDescription="a probe raider" race="blood" experience="60" speed="46" manacost="390">
+	<health now="140" max="110" />
+	<look type="137" head="113" body="120" legs="95" feet="115" corpse="4247" />
+	<targetchange interval="1000" chance="50" />
+	<targetstrategy nearest="100" weakest="0" mostdamage="0" random="0" />
+	<flags>
+		<flag summonable="1" />
+		<flag attackable="1" />
+		<flag hostile="1" />
+		<flag illusionable="1" />
+		<flag convinceable="1" />
+		<flag pushable="0" />
+		<flag canpushitems="1" />
+		<flag canpushcreatures="0" />
+		<flag targetdistance="4" />
+		<flag runonhealth="10" />
+	</flags>
+	<attacks attack="16" skill="24" poison="30">
+		<attack name="physical" min="-20" max="-30" range="7" chance="10">
+			<attribute key="shootEffect" value="throwingknife" />
+		</attack>
+		<attack name="fire" min="-30" max="-50" chance="8" count="6" />
+	</attacks>
+	<defenses armor="11" defense="11">
+	</defenses>
+	<voices>
+		<voice sentence="Get off our land!" />
+	</voices>
+	<loot>
+		<item id="3031" countmax="10" chance="400" /> <!-- gold coin -->
+		<item id="3267" countmax="1" chance="800" /> <!-- dagger -->
+	</loot>
+</monster>

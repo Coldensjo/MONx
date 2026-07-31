@@ -14,14 +14,21 @@ bun run tauri:dev
 MONx needs a monster corpus to do anything useful. The `assets/` and `sources/`
 folders are gitignored — populate them locally with your own server data.
 
+You do not need them to get started, though: `src-tauri/fixtures/engines/`
+holds a tiny invented corpus per engine, and that is what the probes run
+against by default.
+
 ## Before you open a pull request
 
 - **Frontend**: `bun run build` (runs `tsc`, then Vite).
 - **Backend**: `cargo check` in `src-tauri/`.
-- **Behaviour**: `cargo run --release --example probe_monster -- <monsters-dir>`
-  reads and rewrites a whole corpus and diffs the bytes. If you touched the
-  reader, the writer or an engine profile, run it against every engine you can
-  — see [AGENTS.md](AGENTS.md) for the full list of gates.
+- **Behaviour**: `cargo run --release --example probe_monster` reads and
+  rewrites a whole corpus and diffs the bytes. With no arguments it uses the
+  committed fixtures; pass `-- <monsters-dir>` to point it at a real one. If
+  you touched the reader, the writer or an engine profile, run it against every
+  engine you can — see [AGENTS.md](AGENTS.md) for the full list of gates, and
+  [ENGINES.md](ENGINES.md) for why an over-declared profile is the failure the
+  `--mutate` gate exists to catch.
 
 There is no test suite and no linter beyond TypeScript strict mode.
 

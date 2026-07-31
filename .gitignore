@@ -21,9 +21,8 @@ sources/
 # needed on disk to read a format, never ours to commit.
 clients/
 
-# Docs
+# Working notes, kept local. ENGINES.md is *not* here — README, AGENTS.md and
+# CONTRIBUTING.md all link it, so it has to be in the repo the links are in.
 /BUGS.md
-/ENGINES.md
 /MISMATCHES.md
 /SHORTCUTS.md
-/ENGINES.md

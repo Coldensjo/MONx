@@ -44,7 +44,10 @@ fn main() {
         .enumerate()
         .find(|(i, a)| !a.starts_with("--") && !valued(*i))
         .map(|(_, a)| PathBuf::from(a))
-        .unwrap_or_else(|| PathBuf::from("../assets/monsters"));
+        // The committed fixtures, so a fresh clone can run the gates without
+        // first populating the (gitignored) `assets/` workspaces. They are a
+        // smoke test, not coverage — see fixtures/README.md.
+        .unwrap_or_else(|| PathBuf::from("fixtures/engines/ironcore/monsters"));
     let want_lint = args.iter().any(|a| a == "--lint");
     let want_mutate = args.iter().any(|a| a == "--mutate");
     let want_canonical = args.iter().any(|a| a == "--canonical");
