@@ -112,24 +112,55 @@ export function meleeDamageRange(skill: number, attack: number): { min: number; 
 }
 
 /**
- * Max melee across every `melee` block in `<attacks>`, or null when the monster
- * has none.
+ * The most damage one melee block can do, or null when it says nothing either
+ * way.
  *
- * A block that omits `skill` or `attack` contributes nothing: the loader only
- * derives damage when both are written, and states it as min/max otherwise.
- * Nostalrius keeps the pair on the `<attacks>` container instead, which is read
- * here too — its melee is a monster property, not a spell.
+ * There are two ways a block can state it and the loader prefers the first:
+ * `skill` and `attack` together, which go through `getMaxMeleeDamage`, or a
+ * plain min/max, which it takes as written (§23).
+ *
+ * The second spelling used to be treated as no answer, which was fine for as
+ * long as MONx only opened XML corpora — Ironcore, TVP and Nostalrius state a
+ * skill and an attack on every one of their melee blocks, without exception. It
+ * is the *usual* spelling on the Lua engines: 1,273 of Canary's 1,499 melee
+ * monsters, 1,284 of Crystal's 1,511 and 649 of BlackTek's 682 write
+ * `maxDamage` and never mention a skill, so the panel read "—" for six monsters
+ * in seven.
+ *
+ * Damage is negative on the wire; the magnitude is the number a reader wants.
+ */
+export function meleeBlockMax(block: SpellBlock): number | null {
+	const melee = block.melee;
+	if (!melee) return null;
+	if (melee.skill !== null && melee.attack !== null) {
+		return maxMeleeDamage(melee.skill, melee.attack);
+	}
+	// Both zero means neither was written — a melee block that states no damage
+	// at all, which is a real thing on a handful of monsters and genuinely has
+	// no answer.
+	if (block.min !== 0 || block.max !== 0) return Math.abs(block.max);
+	return null;
+}
+
+/**
+ * Max melee across every `melee` block in `<attacks>`, or null when the monster
+ * has none that states its damage.
+ *
+ * Nostalrius keeps `skill` and `attack` on the `<attacks>` container instead of
+ * in a block, which is read here too — its melee is a monster property rather
+ * than one of its spells.
  */
 export function monsterMaxMelee(doc: MonsterDoc): number | null {
 	let best: number | null = null;
-	const consider = (skill: number | null, attack: number | null) => {
-		if (skill === null || attack === null) return;
-		const dmg = maxMeleeDamage(skill, attack);
+	const bump = (dmg: number) => {
 		if (best === null || dmg > best) best = dmg;
 	};
-	if (doc.attacksStats) consider(doc.attacksStats.skill, doc.attacksStats.attack);
+	// The container states both or is absent — unlike a melee block, where either
+	// attribute can be missing on its own.
+	if (doc.attacksStats) bump(maxMeleeDamage(doc.attacksStats.skill, doc.attacksStats.attack));
 	for (const spell of doc.attacks) {
-		if (spell.melee) consider(spell.melee.skill, spell.melee.attack);
+		const dmg = meleeBlockMax(spell);
+		if (dmg !== null) bump(dmg);
 	}
 	return best;
 }

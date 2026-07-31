@@ -10,7 +10,7 @@ import {
 } from '../catalog';
 import type { AreaShape, Lint, Look, SpellBlock, SpellName } from '../monster';
 import { SpellStage } from './SpellStage';
-import { maxMeleeDamage } from '../derive';
+import { meleeBlockMax } from '../derive';
 import { Field } from '../fields/Field';
 import { EnumSelect, type EnumOption } from '../fields/EnumSelect';
 import { EffectSelect } from '../fields/EffectSelect';
@@ -281,14 +281,14 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 								disabled={readOnly}
 							/>
 						</Field>
-						<Field label={t('Max damage')} hint={t('derived')}>
+						<Field
+							label={t('Max damage')}
+							hint={block.melee.skill === null || block.melee.attack === null ? t('as written') : t('derived')}
+						>
 							{/* The loader only derives damage when both are written; with
-							    either missing it reads the block's own min/max instead. */}
-							<span className="ss-ed-derived">
-								{block.melee.skill === null || block.melee.attack === null
-									? '—'
-									: maxMeleeDamage(block.melee.skill, block.melee.attack)}
-							</span>
+							    either missing it reads the block's own min/max instead — so
+							    the hint says which of the two this number came from. */}
+							<span className="ss-ed-derived">{meleeBlockMax(block) ?? '—'}</span>
 						</Field>
 					</div>
 
