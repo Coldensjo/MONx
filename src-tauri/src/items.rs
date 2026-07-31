@@ -198,9 +198,57 @@ impl ItemIndex {
             // no server↔client id split to resolve, the two are the same number.
             // Requiring the file would cost the whole item database, and with it
             // every loot name and icon, for an indirection that does not exist.
-            Err(_) => index.assume_direct_ids(),
+            Err(_) => {
+                index.assume_direct_ids();
+                // What the OTB would have answered lives in the client's
+                // appearance table on these engines, and Canary and Crystal both
+                // keep a copy beside the item database. About 20 ms for Canary's
+                // 42,000 objects, once, at open.
+                let sibling = dir.join("appearances.dat");
+                if sibling.is_file() {
+                    if let Ok(app) = crate::appearances::Appearances::load(&sibling) {
+                        index.apply_appearance_flags(&app);
+                    }
+                }
+            }
         }
         Ok(index)
+    }
+
+    /// True once something has actually said which items can be picked up, as
+    /// opposed to the fallback that assumes they all can.
+    pub fn pickupable_known(&self) -> bool {
+        self.pickupable_known
+    }
+
+    /// Fills in what only the client's own appearance table knows.
+    ///
+    /// The modern engines ship no `items.otb`, and their `items.xml` states
+    /// almost none of this: Canary's names `type="container"` for not one item
+    /// and a stackable for none at all, because the server reads all three off
+    /// `appearances.dat` exactly as the client does. Without this every item in
+    /// the database came back pickupable, which made the Items browser's
+    /// Pickupable filter the same thing as no filter.
+    ///
+    /// `pickupable` is *replaced*, because the value being corrected is the
+    /// blanket-true guess. `container` and `stackable` are only ever turned on:
+    /// an `items.xml` that does state one — a `capacity` implying a container —
+    /// is not worth contradicting.
+    pub fn apply_appearance_flags(&mut self, appearances: &crate::appearances::Appearances) {
+        for (id, item) in self.by_id.iter_mut() {
+            // Only reached with no OTB, so the server id addresses the
+            // appearance directly.
+            let Some(thing) = appearances.get(crate::appearances::Kind::Object, *id) else {
+                // Not in the client at all — the fluid table, or an item the
+                // database has and the client does not. Left as it was rather
+                // than declared unpickupable on the strength of an absence.
+                continue;
+            };
+            item.pickupable = thing.flags.take;
+            item.container |= thing.flags.container;
+            item.stackable |= thing.flags.cumulative;
+        }
+        self.pickupable_known = true;
     }
 
     /// `items.toml` — BlackTek's item database.

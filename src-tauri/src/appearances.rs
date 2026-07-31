@@ -112,11 +112,32 @@ impl FrameGroup {
     }
 }
 
+/// The `AppearanceFlags` booleans an item database cares about.
+///
+/// The field numbers were read out of Canary's own `appearances.dat` rather
+/// than taken from a schema, because getting one wrong would mislabel the whole
+/// catalogue silently. Of 42,107 objects, 7,100 carry field 18 — among them
+/// gold coin, crystal coin, sword, boots of haste, backpack and light shovel,
+/// and not one wall or floor tile, which is `take`. Field 5 is set on the
+/// backpack and 3,287 others (`container`); field 6 on the gold and crystal
+/// coins and 2,528 others (`cumulative`, which is what the old format called
+/// stackable).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Flags {
+    /// A player can pick it up. `pickupable` everywhere above this module.
+    pub take: bool,
+    pub container: bool,
+    /// Stackable, in the vocabulary every other format uses.
+    pub cumulative: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Thing {
     pub id: u32,
     pub name: Option<String>,
     pub groups: Vec<FrameGroup>,
+    /// Empty for outfits, effects and missiles, which carry no item flags.
+    pub flags: Flags,
 }
 
 impl Thing {
@@ -263,11 +284,26 @@ fn parse_appearance(body: &[u8]) -> Option<Thing> {
                     thing.groups.push(group);
                 }
             }
+            (3, 2) => thing.flags = parse_flags(r.bytes()?).unwrap_or_default(),
             (4, 2) => thing.name = String::from_utf8(r.bytes()?.to_vec()).ok(),
             _ => r.skip(wire)?,
         }
     }
     Some(thing)
+}
+
+fn parse_flags(body: &[u8]) -> Option<Flags> {
+    let mut f = Flags::default();
+    let mut r = Reader::new(body);
+    while let Some((field, wire)) = r.tag() {
+        match (field, wire) {
+            (5, 0) => f.container = r.varint()? != 0,
+            (6, 0) => f.cumulative = r.varint()? != 0,
+            (18, 0) => f.take = r.varint()? != 0,
+            _ => r.skip(wire)?,
+        }
+    }
+    Some(f)
 }
 
 fn parse_frame_group(body: &[u8]) -> Option<FrameGroup> {

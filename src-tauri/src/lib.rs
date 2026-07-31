@@ -346,12 +346,22 @@ fn open_workspace(
     // An unreadable or absent items folder is a degraded workspace, not a
     // failed one: loot ids stay numbers and the lints that need the database
     // stand down.
-    let index = items_dir
+    let mut index = items_dir
         .as_deref()
         .map(items::ItemIndex::load)
         .transpose()
         .unwrap_or_default()
         .unwrap_or_default();
+
+    // `ItemIndex::load` reads the appearance flags from a copy beside the item
+    // database, which is where Canary and Crystal keep one. A workspace whose
+    // only appearances file is inside the client bundle gets them here instead —
+    // same flags, same method, just the other place they can live.
+    if !index.pickupable_known() {
+        if let Some(bundle) = &bundle {
+            index.apply_appearance_flags(&bundle.appearances);
+        }
+    }
 
     // The engine is settled once, here, and everything downstream reads it off
     // the workspace. An explicit key from the Landing picker wins; otherwise the
