@@ -238,7 +238,7 @@ impl Bundle {
         let thing = self
             .appearances
             .get(kind, id)
-            .ok_or_else(|| format!("no appearance {id:?} {id}"))?;
+            .ok_or_else(|| format!("no {kind:?} appearance {id}"))?;
         let group = thing
             .groups
             .get(group)
@@ -369,9 +369,18 @@ fn decompress(raw: &[u8]) -> Result<Vec<u8>, String> {
     while raw.get(i) == Some(&0) {
         i += 1;
     }
-    // `i` is on the marker's first byte (0x70); step over all five of
-    // `70 0A FA 80 24`.
-    i += 5;
+    // `i` is on the marker's first byte; check all five of `70 0A FA 80 24`
+    // rather than assuming them. Stepping over unverified bytes turned "this is
+    // not a sheet" into garbage pixels or a confusing `LZMA:` error further
+    // down — the same argument `otb.rs` makes for cross-checking the item map.
+    const MARKER: [u8; 5] = [0x70, 0x0A, 0xFA, 0x80, 0x24];
+    if raw.get(i..i + MARKER.len()) != Some(&MARKER[..]) {
+        return Err(format!(
+            "not a CIP sheet: expected the marker {MARKER:02X?} at byte {i}, found {:02X?}",
+            raw.get(i..(i + MARKER.len()).min(raw.len())).unwrap_or(&[])
+        ));
+    }
+    i += MARKER.len();
     while raw.get(i).is_some_and(|b| b & 0x80 == 0x80) {
         i += 1;
     }

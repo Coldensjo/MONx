@@ -140,6 +140,13 @@ pub fn immunity_combat_type(name: &str) -> Option<&'static str> {
 
 // ---------- §11 Elements ----------
 
+/// Ironcore's eleven. This is the *default* table, not the authority — ask
+/// `EngineProfile::is_element_attr`, which is what every caller now does. It
+/// deliberately has no `agonyPercent`: that is CrystalServer's twelfth type and
+/// lives on `ELEMENTS_CRYSTAL`, so listing it here would tell an Ironcore
+/// workspace about a damage type its loader has never heard of. `DAMAGE_TYPES`
+/// carries agony because `element_combat_type` has to resolve the string it
+/// finds in a Crystal file.
 pub const ELEMENT_ATTRS: &[&str] = &[
     "physicalPercent",
     "icePercent",

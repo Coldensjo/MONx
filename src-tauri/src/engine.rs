@@ -121,6 +121,14 @@ pub enum RangeLimit {
     TruncateU8,
 }
 
+/// The three numeric flag settings, independent of what an engine calls them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NumericFlag {
+    StaticAttack,
+    TargetDistance,
+    RunHealth,
+}
+
 /// How effect values are spelled and matched.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EffectNaming {
@@ -280,6 +288,30 @@ impl EngineProfile {
     /// not real enough to offer.
     pub fn is_dead_flag(&self, name: &str) -> bool {
         self.dead_flags.iter().any(|f| f.eq_ignore_ascii_case(name))
+    }
+
+    /// Which of the three numeric settings a flag name is, whatever the engine
+    /// calls it.
+    ///
+    /// The XML engines say `staticattack`, `targetdistance` and `runonhealth`;
+    /// the Lua ones say `staticAttackChance`, `targetDistance` and `runHealth`.
+    /// Those differ by more than case, so a rule written against either
+    /// spelling silently never fires on the other half of the engine list —
+    /// which is how `flag.targetdistance-under-1` came to be declared
+    /// applicable on Canary and be unable to produce a finding there.
+    pub fn numeric_flag(&self, name: &str) -> Option<NumericFlag> {
+        match name.to_ascii_lowercase().as_str() {
+            "staticattack" | "staticattackchance" => Some(NumericFlag::StaticAttack),
+            "targetdistance" => Some(NumericFlag::TargetDistance),
+            "runonhealth" | "runhealth" => Some(NumericFlag::RunHealth),
+            _ => None,
+        }
+    }
+
+    /// Whether a flag name is this engine's "is a boss" marker. Ironcore and
+    /// TFS spell it `isboss`, Canary `isBoss`, BlackTek `boss`.
+    pub fn is_boss_flag(&self, name: &str) -> bool {
+        name.eq_ignore_ascii_case("isboss") || name.eq_ignore_ascii_case("boss")
     }
 
     /// Whether the loader recognises the name at all — dead flags included, so

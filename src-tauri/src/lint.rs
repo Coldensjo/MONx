@@ -30,7 +30,7 @@ use std::path::Path;
 
 use crate::catalog;
 use crate::items::ItemIndex;
-use crate::engine::{self, CustomEffects, EngineProfile, PushableOverride};
+use crate::engine::{self, CustomEffects, EngineProfile, NumericFlag, PushableOverride};
 use crate::monster::{
     self, Child, FlagValue, Lint, MonsterDoc, MonsterSummary, Node, Parsed, SpellBlock,
 };
@@ -423,13 +423,16 @@ fn flags(doc: &MonsterDoc, r: &mut Report) {
             continue;
         }
         if let FlagValue::Num(n) = value {
-            match name.as_str() {
-                "staticattack" if *n > 100 => r.add(WARNING, "flag.staticattack-over-100", Some(&path), true,
-                    format!("staticattack {n} is clamped to 100")),
-                "targetdistance" if *n < 1 => r.add(WARNING, "flag.targetdistance-under-1", Some(&path), true,
-                    format!("targetdistance {n} is clamped to 1")),
-                "runonhealth" if *n > doc.health.max => r.add(WARNING, "flag.runonhealth-over-max", Some(&path), false,
-                    format!("runonhealth {n} is above max health {} — the monster flees immediately", doc.health.max)),
+            // By concept, not by spelling: `staticattack` on the XML engines is
+            // `staticAttackChance` on the Lua ones, and matching the literal
+            // meant these three could never fire on half the engine list.
+            match r.profile.numeric_flag(name) {
+                Some(NumericFlag::StaticAttack) if *n > 100 => r.add(WARNING, "flag.staticattack-over-100", Some(&path), true,
+                    format!("{name} {n} is clamped to 100")),
+                Some(NumericFlag::TargetDistance) if *n < 1 => r.add(WARNING, "flag.targetdistance-under-1", Some(&path), true,
+                    format!("{name} {n} is clamped to 1")),
+                Some(NumericFlag::RunHealth) if *n > doc.health.max => r.add(WARNING, "flag.runonhealth-over-max", Some(&path), false,
+                    format!("{name} {n} is above max health {} — the monster flees immediately", doc.health.max)),
                 _ => {}
             }
         }
@@ -571,7 +574,7 @@ fn spell(s: &SpellBlock, path: &str, spells: &SpellIndex, r: &mut Report) {
                 format!("range {} is silently clamped to {max}", s.range));
         }
         engine::RangeLimit::TruncateU8 if s.range > 255 => {
-            r.add(SILENT, "spell.range-truncated", Some(&p("range")), true,
+            r.add(SILENT, "spell.range-truncated", Some(&p("range")), false,
                 format!("range {} is stored in a byte — it silently becomes {}",
                     s.range, s.range.rem_euclid(256)));
         }
@@ -972,11 +975,15 @@ fn unrecognised_nodes(container: &Node, kind: &str, r: &mut Report) {
         if node.attrs.is_empty() {
             continue;
         }
+        // The profile, not the catalog. `catalog` is Ironcore's table, so this
+        // pass and `resistances()` — which does ask the profile — could reach
+        // opposite verdicts about the same attribute on any engine whose lists
+        // differ, which is all of them bar Ironcore.
         let recognised = node.attrs.iter().any(|a| {
             if is_element {
-                catalog::is_element_attr(&a.key)
+                r.profile.is_element_attr(&a.key)
             } else {
-                a.key.eq_ignore_ascii_case("name") || catalog::is_immunity_name(&a.key)
+                a.key.eq_ignore_ascii_case("name") || r.profile.is_immunity_name(&a.key)
             }
         });
         if recognised {
@@ -1062,7 +1069,6 @@ pub fn lint_workspace(
     docs: &[MonsterDoc],
     registry: &Registry,
     spells: &SpellIndex,
-    _items: &ItemIndex,
     dir: &Path,
 ) -> Vec<Lint> {
     let mut r = Report::new(profile, None);
@@ -1106,9 +1112,19 @@ pub fn lint_workspace(
 
     // A name that isn't in the registry can't be summoned or worn as an outfit,
     // and neither failure says anything at runtime.
-    let known_name = |name: &str| {
-        registry.has_name(name) || docs.iter().any(|d| d.name.eq_ignore_ascii_case(name))
-    };
+    //
+    // Built once. The closure this replaces did a linear registry scan *and* a
+    // linear pass over every document for each summon entry and each outfit
+    // spell — quadratic in the corpus, and re-run on every save through
+    // `refresh`. Lower-cased into a set instead, since every engine compares
+    // monster names case-insensitively.
+    let names: std::collections::HashSet<String> = registry
+        .entries
+        .iter()
+        .map(|e| e.name.to_lowercase())
+        .chain(docs.iter().map(|d| d.name.to_lowercase()))
+        .collect();
+    let known_name = |name: &str| names.contains(&name.to_lowercase());
     for doc in docs {
         r.file = Some(doc.file.clone());
         for (i, e) in doc.summons.entries.iter().enumerate() {
@@ -1185,14 +1201,29 @@ pub fn lint_workspace(
 // =====================================================================
 
 /// List-view rows with their lint counts. The counts drive the severity dots in
-/// Agent 4's monster list, so they include the source-level findings too.
+/// Agent 4's monster list, so they include the source-level findings too —
+/// `source_lints` is what `read_corpus` returned alongside the documents, and
+/// passing it is the only way to include them, since `lint_source` needs the
+/// parsed text and a `MonsterDoc` no longer has it.
 pub fn summaries(
     profile: &'static EngineProfile,
     docs: &[MonsterDoc],
+    source_lints: &[Lint],
     spells: &SpellIndex,
     items: &ItemIndex,
     custom: &CustomEffects,
 ) -> Vec<MonsterSummary> {
+    let mut by_file: BTreeMap<&str, (u32, u32, u32)> = BTreeMap::new();
+    for l in source_lints {
+        let Some(file) = l.file.as_deref() else { continue };
+        let slot = by_file.entry(file).or_default();
+        match l.severity.as_str() {
+            ERROR => slot.0 += 1,
+            WARNING => slot.1 += 1,
+            _ => slot.2 += 1,
+        }
+    }
+
     docs.iter()
         .map(|doc| {
             let mut summary = monster::summarise(doc);
@@ -1202,6 +1233,11 @@ pub fn summaries(
                     WARNING => summary.lint_counts.warning += 1,
                     _ => summary.lint_counts.silent += 1,
                 }
+            }
+            if let Some((e, w, s)) = by_file.get(doc.file.as_str()) {
+                summary.lint_counts.error += e;
+                summary.lint_counts.warning += w;
+                summary.lint_counts.silent += s;
             }
             summary
         })

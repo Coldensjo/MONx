@@ -13,6 +13,16 @@ interface FixContext {
 	nextRaceid: number | null;
 }
 
+/**
+ * Sets the flag a `flags.<key>` lint path names, keeping whatever spelling the
+ * engine and the file already use. Returns null if the path is not a flag path.
+ */
+function setFlag(doc: MonsterDoc, path: string, value: number | boolean): MonsterDoc | null {
+	const key = path.startsWith('flags.') ? path.slice('flags.'.length) : '';
+	if (!key) return null;
+	return { ...doc, flags: { ...doc.flags, [key]: value } };
+}
+
 /** All `[n]` indices in a path, e.g. "loot[3].children[0].chance" → [3, 0]. */
 function indices(path: string): number[] {
 	return [...path.matchAll(/\[(\d+)\]/g)].map(m => parseInt(m[1], 10));
@@ -113,14 +123,19 @@ export function applyLintFix(doc: MonsterDoc, lint: Lint, ctx: FixContext): Mons
 		case 'voices.chance-over-100':
 			return { ...doc, voices: { ...doc.voices, chance: 100 } };
 
+		// The flag key comes from the lint's own path rather than a literal.
+		// Hardcoding `staticattack` and `targetdistance` was the Ironcore
+		// spelling: on Canary and BlackTek those flags are `staticAttackChance`
+		// and `targetDistance`, so the fix would have added a second, lowercase
+		// key beside the real one — writing a flag the server does not read.
 		case 'flag.staticattack-over-100':
-			return { ...doc, flags: { ...doc.flags, staticattack: 100 } };
+			return setFlag(doc, path, 100);
 		case 'flag.targetdistance-under-1':
-			return { ...doc, flags: { ...doc.flags, targetdistance: 1 } };
+			return setFlag(doc, path, 1);
 		case 'flag.pacifist-forces-hostile-off':
-			return { ...doc, flags: { ...doc.flags, hostile: false } };
+			return setFlag(doc, path, false);
 		case 'flag.pushable-overridden':
-			return { ...doc, flags: { ...doc.flags, pushable: false } };
+			return setFlag(doc, path, false);
 
 		case 'spell.chance-over-100':
 			return fixSpell(doc, path, b => ({ ...b, chance: 100 }));

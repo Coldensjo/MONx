@@ -1,12 +1,22 @@
 # Bug audit — 2026-07-31
 
+**Status: all fixed in 0.1.42.** Two entries turned out not to be bugs and say
+so in place (7, and the `agonyPercent` note); everything else is resolved. The
+resolution log is at the bottom, and each finding below is kept as written
+because the diagnosis is the reason the fix looks the way it does.
+
+Fixing 20 turned up two things the audit had missed, both recorded there: the
+XML writer had the same one-sided-guard defect, and `--mutate` could not have
+caught either because it only ever *increments*. There is a clearing pass in the
+gate now.
+
 A read-through of the pure-logic layers (`derive.ts`, `lootsim.ts`, `compare.ts`,
 `lintfix.ts`, `hotkeys.ts`, `patchnotes.ts`, `blocks.ts`, `settings.ts`) and the
 Rust modules that sit under the commands (`lib.rs`, `protocol.rs`, `items.rs`,
 `otb.rs`, `registry.rs`, `spells.rs`, `workspace.rs`).
 
-Nothing here has been fixed. Each entry says what is wrong, what a user sees, and
-where. The remaining Rust modules are covered in **Part 2** below.
+Each entry says what was wrong, what a user saw, and where. The remaining Rust
+modules are covered in **Part 2** below.
 
 > **Line numbers in Part 1 are stale for `lib.rs`.** They were taken before the
 > `CustomEffects` work (commit `3b6e583`) landed, which shifted everything below
@@ -691,3 +701,54 @@ Worth recording so the next pass does not re-walk them:
 - **`spell.min-max-swapped`** fires zero times across the Ironcore corpus, so the
   `.abs()` comparison at `lint.rs:507` is not producing false positives on real
   data whatever the loader does internally.
+
+---
+
+# Resolution — 0.1.42
+
+| # | What changed |
+|---|---|
+| 1 | `walkLoot` gates recursion on `info.container`, skips `countmax > 100` entries, and clamps chance through `lootsim.effectiveChance` — the two models agree now. |
+| 2 | A `corpusKey`, bumped in `refreshMonsters` (where every save and batch write already lands) and folded into `monstersRowUrl`'s `v`. |
+| 3 | `compose_things_row` takes `&[Option<&Thing>]`; an unresolvable cell renders empty and keeps its place. |
+| 4 | Registry entries carry the byte span of their own tag, from `quick_xml` at parse time. `with_renamed` rewrites only inside that span, `with_removed` cuts only that line, `with_added` anchors on it. No `String::replace`, no first-match `find`. |
+| 5 | `escape_attr` on both name and file. |
+| 6 | `save_all` collects per-file errors, always refreshes, and reports files written; `ScaleReport`, `BatchReport` and `PinReport` gained `failed`, and the toasts say "wrote N, then failed on…". |
+| 7 | **Not a bug.** `by_id` is a `BTreeMap`, so the scan is in id order, and when the break fires `take(limit)` yields prefix matches only — whatever `substring` held is discarded. Results were deterministic and correctly ranked. `substring` is now capped at `limit` so a broad query stops growing a vector it will throw away, which is a bound and not a fix. |
+| 8 | `mark_ambiguous_names` rebuilds `by_name` from `by_id` first, so the index cannot disagree with the records that survived. Covers all three database formats at once. |
+| 9 | `has_client_files` accepts a `catalog-content.json` bundle; `expand_data_root` needs only `monster/`. |
+| 10 | `workspace::resolve_engine` split out of `probe`. Opening a workspace no longer parses the item database, registry and bundle a second time. |
+| 11 | Usage counting searches from the back, so a `spells.xml` name that shadows a built-in gets its own count — the case the module exists to surface. |
+| 12 | `get_thing` takes the workspace and says a bundle has no `.dat` things, rather than failing with a path error. |
+| 13 | Letters come from `e.key`. Digits still come from `e.code`, which is what the original comment justified. |
+| 14 | A cell is `string \| {text, value}`; the delta reads `value` instead of re-parsing a localised string. `unit()` covers the `%`/`ms` rows. |
+| 15 | `lootIndex` keys on the container path plus an occurrence suffix. |
+| 16 | The protocol dispatch runs inside `catch_unwind` and responds 500. |
+| 17 | An allowlist, plus a well-formed-percent-escape check so `%` cannot double as cmd variable expansion. |
+| 18 | `raw_arg` with the path quoted explicitly. |
+| 19 | Any bracketed header ends the current record, not only `[[`. |
+| 20 | Two-sided guards in both Lua entry builders: `unset` where absence is meaningful, `set_num` where 0 is a real value. **Geometry could use neither** — see the finding. The XML writer had the same defect for `range` on Nostalrius, where an absent range means 8. New `clearing_survives` pass in `probe_monster`. |
+| 21 | `collect_monster_files` skips dot-directories. |
+| 22 | The stamp goes before the extension, and the extension is the file's own. |
+| 23a | `EngineProfile::numeric_flag` classifies by concept, so the three numeric lints fire on every engine. Canary now reports the 10 `targetDistance = 0` files and the `runHealth` one the audit predicted. |
+| 23b | `flag_is_true` matches case-insensitively across `isboss`/`boss`. BlackTek's 159 bosses are badged. |
+| 23c | `matches_filter` and `apply_target` take the profile. |
+| 23d | `unrecognised_nodes` asks the profile, so the two passes cannot disagree. |
+| 23e | The fix reads the flag key out of the lint's own `path`, so it writes whatever the engine and file already use. |
+| — | **`catalog::ELEMENT_ATTRS` has no `agonyPercent` on purpose**, and now says so: it is Ironcore's table and agony is Crystal's twelfth type, carried by `ELEMENTS_CRYSTAL`. Every caller asks the profile. |
+| 24 | The `remove_file` is gone. `std::fs::rename` is `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` and always replaced. |
+| 25 | `duplicate` and `rename` check `registry.has_name`, with rename allowing a monster to keep its own. |
+| 26 | `summaries` takes the corpus's source lints and folds them in by file; the workspace stores them because they cannot be recomputed from `docs`. |
+| 27 | `Appearances::load` rejects an empty parse, the way `Otb::parse` rejects an empty item map. |
+| 28 | The five marker bytes are compared before being stepped over. |
+| 29 | Decimal escapes round-trip; `parse_type_name` skips comments and strings; the unused `_items` parameter is gone; `known_name` is a prebuilt set instead of a quadratic scan; the assets error names the kind rather than printing the id twice; `clear_cache` is called from `close_workspace`, which matters because a protocol thread may still hold an `Arc` clone; `pin_loot_ids` collects failures like the other bulk tools. |
+
+`probe_monster.rs:230`'s misleading "pacifist/leash voices: 0/1655" line is left
+as it is — it names a pass that only Ironcore has, and the count is honest.
+
+### Gates
+
+Round-trip, `--canonical`, `--mutate`, the new clearing pass, `--lint` and
+`--crud` all pass on all seven corpora — 5,924 files. `bun run build` clean,
+`cargo check` clean. `probe_assets` still decodes the Canary bundle with the
+CIP marker check in place.

@@ -255,7 +255,7 @@ fn main() {
                 &engine::CustomEffects::default(),
             ));
         }
-        report.extend(lint::lint_workspace(profile, &docs, &registry, &spells, &items, &dir));
+        report.extend(lint::lint_workspace(profile, &docs, &registry, &spells, &dir));
         let count = |severity: &str| {
             report
                 .iter()

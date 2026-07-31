@@ -437,6 +437,13 @@ fn parse_type_name(scan: &Scan) -> (Option<String>, Option<Range<usize>>) {
     let needle = b"createMonsterType(";
     let mut i = 0;
     while i + needle.len() < scan.b.len() {
+        // Every other scan in this module steps over comments and strings
+        // first; this one did not, so a commented-out `createMonsterType("Old
+        // Name")` above the real call won.
+        if let Some(next) = scan.skip_noncode(i) {
+            i = next.max(i + 1);
+            continue;
+        }
         if scan.starts(i, needle) {
             let mut j = i + needle.len();
             while j < scan.b.len() && scan.b[j].is_ascii_whitespace() {
@@ -667,6 +674,29 @@ fn unescape(s: &str) -> String {
             Some('n') => out.push('\n'),
             Some('t') => out.push('\t'),
             Some('r') => out.push('\r'),
+            // Lua's decimal escape: up to three digits, `\065` is "A". Dropping
+            // the backslash turned it into the literal text `065`, which
+            // `escape` then wrote back as `065` — so editing any string
+            // containing one changed what the server reads. Unchanged values
+            // are copied byte-for-byte, so this was only reachable on a value
+            // the user actually touched, and no shipped corpus has one.
+            Some(d) if d.is_ascii_digit() => {
+                let mut n = d.to_digit(10).unwrap_or(0);
+                for _ in 0..2 {
+                    match chars.clone().next().filter(char::is_ascii_digit) {
+                        Some(next) => {
+                            let candidate = n * 10 + next.to_digit(10).unwrap_or(0);
+                            if candidate > 255 {
+                                break;
+                            }
+                            n = candidate;
+                            chars.next();
+                        }
+                        None => break,
+                    }
+                }
+                out.push(char::from_u32(n).unwrap_or('\u{fffd}'));
+            }
             Some(other) => out.push(other),
             None => out.push('\\'),
         }

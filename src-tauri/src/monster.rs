@@ -3744,6 +3744,14 @@ fn collect_monster_files(
     }
 }
 
+/// True when any of `names` is set as a true boolean flag, matched the way every
+/// engine matches a flag name: without regard to case.
+fn flag_is_true(doc: &MonsterDoc, names: &[&str]) -> bool {
+    doc.flags.iter().any(|(k, v)| {
+        matches!(v, FlagValue::Bool(true)) && names.iter().any(|n| k.eq_ignore_ascii_case(n))
+    })
+}
+
 /// The list-view projection of a document (README §5). Lint counts are filled
 /// in by the caller, which owns the workspace-wide context.
 pub fn summarise(doc: &MonsterDoc) -> MonsterSummary {
@@ -3761,8 +3769,13 @@ pub fn summarise(doc: &MonsterDoc) -> MonsterSummary {
         // Read from the parsed flags rather than by matching text, so `isBoss`
         // and `isboss` both count — the loader compares flag names with
         // `strcasecmp` and the corpus mixes the two (§5).
-        boss: matches!(doc.flags.get("isboss"), Some(FlagValue::Bool(true))),
-        summonable: matches!(doc.flags.get("summonable"), Some(FlagValue::Bool(true))),
+        //
+        // `BTreeMap::get` is exact, and flags are keyed by the *profile's*
+        // spelling, so an exact `"isboss"` found neither Canary's `isBoss` nor
+        // BlackTek's `boss`: 159 BlackTek bosses carried the flag and none of
+        // them got a badge or answered the list's boss filter.
+        boss: flag_is_true(doc, &["isboss", "boss"]),
+        summonable: flag_is_true(doc, &["summonable"]),
         has_loot: !doc.loot.is_empty(),
         lint_counts: LintCounts::default(),
     }
@@ -3888,11 +3901,14 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
             .map_err(|e| format!("Could not flush {}: {e}", temp.display()))?;
     }
 
-    // Windows won't rename onto an existing file, so clear the way first. The
-    // original is already safe in `.monx-backup`.
-    if path.exists() {
-        let _ = std::fs::remove_file(path);
-    }
+    // No `remove_file` first. The premise for it — "Windows won't rename onto
+    // an existing file" — is not true: `std::fs::rename` is `MoveFileExW` with
+    // `MOVEFILE_REPLACE_EXISTING` and has always replaced. Deleting first
+    // bought nothing and cost the atomicity this function is named for: a
+    // crash, a lock or an antivirus scanner between the two calls left the
+    // monster **absent** rather than stale. The backup is no answer either —
+    // `backup_once` returns early once the session's stamped copy exists, so
+    // every save after the first had no net at all.
     std::fs::rename(&temp, path).map_err(|e| {
         let _ = std::fs::remove_file(&temp);
         format!("Could not replace {}: {e}", path.display())
@@ -4036,6 +4052,14 @@ pub fn duplicate(
     if target.exists() {
         return Err(format!("{new_file} already exists"));
     }
+    // `create` has always guarded this; these two checked only the file name.
+    // The server lower-cases a monster's name as its map key, so two entries
+    // sharing one leave a silent winner and a monster that can never be
+    // summoned — and there is no `registry.duplicate-name` lint to catch it
+    // afterwards.
+    if registry.has_name(new_name) {
+        return Err(format!("A monster named \"{new_name}\" is already registered"));
+    }
 
     // Duplicating splices the source file, so the copy keeps its comments,
     // formatting and unknown attributes — only identity changes.
@@ -4085,6 +4109,16 @@ pub fn rename(
     let new_file = sibling_file_name(file, &normalise_file_name_ext(new_file, new_name, profile.extension));
     if new_file != file && dir.join(&new_file).exists() {
         return Err(format!("{new_file} already exists"));
+    }
+    // Renaming *to* a name another monster already holds, unless that monster
+    // is this one. Same reason as `duplicate`: the server keys on the
+    // lower-cased name and one of the two would silently win.
+    if registry
+        .entry_for_file(file)
+        .is_none_or(|e| !e.name.eq_ignore_ascii_case(new_name))
+        && registry.has_name(new_name)
+    {
+        return Err(format!("A monster named \"{new_name}\" is already registered"));
     }
 
     let original = std::fs::read(dir.join(file)).map_err(|e| format!("{file}: {e}"))?;
@@ -4426,7 +4460,7 @@ pub fn flag_text(v: &FlagValue) -> String {
 
 const ABSENT: &str = "(absent)";
 
-pub fn matches_filter(d: &MonsterDoc, f: &BatchFilter) -> bool {
+pub fn matches_filter(profile: &'static EngineProfile, d: &MonsterDoc, f: &BatchFilter) -> bool {
     if let Some(n) = f.name.as_deref().filter(|s| !s.trim().is_empty()) {
         if !d.name.to_lowercase().contains(&n.trim().to_lowercase()) {
             return false;
@@ -4455,7 +4489,7 @@ pub fn matches_filter(d: &MonsterDoc, f: &BatchFilter) -> bool {
         return false;
     }
     if let Some(flag) = f.flag.as_deref().filter(|s| !s.is_empty()) {
-        match d.flags.get(&catalog::canonical_flag(flag)) {
+        match d.flags.get(&profile.canonical_flag(flag)) {
             None => return false,
             Some(have) => {
                 if let Some(want) = f.flag_value.as_deref().filter(|s| !s.is_empty()) {
@@ -4517,7 +4551,11 @@ pub struct BatchEdit {
 /// Applies the target to one document, or returns `None` when the value it
 /// already holds is the value asked for — an unchanged file is never rewritten,
 /// so the diff stays the size of the edit.
-pub fn apply_target(d: &mut MonsterDoc, t: &BatchTarget) -> Result<Option<BatchEdit>, String> {
+pub fn apply_target(
+    profile: &'static EngineProfile,
+    d: &mut MonsterDoc,
+    t: &BatchTarget,
+) -> Result<Option<BatchEdit>, String> {
     let clear = t.op == "clear";
     let edit = |from: String, to: String, structural: bool| {
         Ok(if from == to { None } else { Some(BatchEdit { from, to, structural }) })
@@ -4589,8 +4627,12 @@ pub fn apply_target(d: &mut MonsterDoc, t: &BatchTarget) -> Result<Option<BatchE
             }
         }
         "flag" => {
-            let key = catalog::canonical_flag(&t.key);
-            if !catalog::is_known_flag(&key) {
+            // The profile, not the catalog: `catalog` is Ironcore's table, so on
+            // a Lua workspace every camel-cased flag was rejected as unknown and
+            // a `set` inserted a lowercase key beside the real one — writing a
+            // flag the server does not read.
+            let key = profile.canonical_flag(&t.key);
+            if !profile.is_known_flag(&key) {
                 return Err(format!("unknown flag “{}”", t.key));
             }
             let from = d.flags.get(&key).map(flag_text);
@@ -4599,7 +4641,7 @@ pub fn apply_target(d: &mut MonsterDoc, t: &BatchTarget) -> Result<Option<BatchE
                 d.flags.remove(&key);
                 return edit(from.unwrap_or_else(|| ABSENT.to_string()), ABSENT.to_string(), had);
             }
-            let value = if catalog::is_num_flag(&key) {
+            let value = if profile.is_num_flag(&key) {
                 FlagValue::Num(num_value(
                     match d.flags.get(&key) {
                         Some(FlagValue::Num(n)) => *n,
@@ -4617,7 +4659,7 @@ pub fn apply_target(d: &mut MonsterDoc, t: &BatchTarget) -> Result<Option<BatchE
         }
         "element" => {
             let key = catalog::canonical_element_attr(&t.key);
-            if !catalog::is_element_attr(&key) {
+            if !profile.is_element_attr(&key) {
                 return Err(format!("unknown element “{}”", t.key));
             }
             let from = d.elements.get(&key).copied();
@@ -4639,7 +4681,7 @@ pub fn apply_target(d: &mut MonsterDoc, t: &BatchTarget) -> Result<Option<BatchE
             )
         }
         "immunity" => {
-            if !catalog::is_immunity_name(&t.key) {
+            if !profile.is_immunity_name(&t.key) {
                 return Err(format!("unknown immunity “{}”", t.key));
             }
             let from = d.immunities.get(&t.key).copied();

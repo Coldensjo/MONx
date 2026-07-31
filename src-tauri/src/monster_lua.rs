@@ -1036,7 +1036,13 @@ fn spell_to_lua(s: &SpellBlock, base: Option<&LuaTable>) -> LuaValue {
         set_num(&mut t, "ring", a.ring);
         set_num(&mut t, "radius", a.radius);
         set_num(&mut t, "length", a.length);
-        set_num(&mut t, "spread", a.spread);
+        // `spread` cannot use `set_num`: an absent one reads back as 3, not 0,
+        // so omitting `spread = 0` beside a length says the opposite of what the
+        // model holds — and the from-scratch renderer would not even be
+        // idempotent, since re-reading its own output would turn 0 into 3.
+        if a.length != 0 || t.has("spread") || a.spread != 0 {
+            set(&mut t, "spread", num(a.spread));
+        }
     }
 
     let status = s.status.as_ref();

@@ -94,6 +94,13 @@ pub struct Workspace {
     /// The whole corpus, parsed. Cross-file lints (duplicate raceids, orphans,
     /// unresolved summon targets) are only possible with all of it in memory.
     pub docs: Vec<MonsterDoc>,
+    /// `lint_source`'s findings for the whole corpus, kept because they cannot
+    /// be recomputed from `docs`: they are about the shape of the text — an
+    /// attribute written twice, or not written at all — which the model has no
+    /// way to express. Without them the list's severity dots described only
+    /// half the linter, so a monster whose only problem was a missing
+    /// `health now` showed a clean dot.
+    pub source_lints: Vec<crate::monster::Lint>,
     pub registry: Registry,
     pub spells: SpellIndex,
     pub spr_path: String,
@@ -120,6 +127,7 @@ impl Default for Workspace {
             items: ItemIndex::default(),
             monsters: Vec::new(),
             docs: Vec::new(),
+            source_lints: Vec::new(),
             registry: Registry::default(),
             spells: SpellIndex::default(),
             spr_path: String::new(),

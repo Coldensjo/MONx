@@ -383,10 +383,10 @@ fn open_workspace(
         .get(profile.key)
         .cloned()
         .unwrap_or_default();
-    let mut lints = lint::lint_workspace(profile, &docs, &registry, &spells, &index, &monsters_dir);
-    lints.extend(read_errors);
+    let mut lints = lint::lint_workspace(profile, &docs, &registry, &spells, &monsters_dir);
+    let monsters = lint::summaries(profile, &docs, &read_errors, &spells, &index, &custom);
+    lints.extend(read_errors.iter().cloned());
     lints.extend(item_lints(&index));
-    let monsters = lint::summaries(profile, &docs, &spells, &index, &custom);
 
     let info = WorkspaceInfo {
         paths: WorkspacePaths {
@@ -418,6 +418,7 @@ fn open_workspace(
     ws.items = index;
     ws.monsters = monsters;
     ws.docs = docs;
+    ws.source_lints = read_errors;
     ws.registry = registry;
     ws.spells = spells;
     ws.spr_path = info.spr_path.clone();
@@ -449,6 +450,7 @@ fn set_custom_effects(
         ws.monsters = lint::summaries(
             ws.profile,
             &ws.docs,
+            &ws.source_lints,
             &ws.spells,
             &ws.items,
             &ws.custom_effects,
@@ -460,6 +462,13 @@ fn set_custom_effects(
 #[tauri::command]
 fn close_workspace(state: State<WorkspaceState>) -> Result<(), String> {
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    // Explicitly, rather than relying on the `Arc` drop: a protocol request may
+    // still be holding a clone of the bundle on a pool thread, and the sheet
+    // cache is hundreds of megabytes. This is what `clear_cache` was written
+    // for, and until now nothing called it.
+    if let Some(bundle) = &ws.bundle {
+        bundle.assets.clear_cache();
+    }
     *ws = workspace::Workspace::default();
     Ok(())
 }
@@ -528,9 +537,17 @@ fn save_all(ws: &mut workspace::Workspace, docs: &[monster::MonsterDoc]) -> (u32
 fn refresh(ws: &mut workspace::Workspace) {
     let dir = ws.monsters_dir();
     ws.registry = registry::Registry::load(&dir.join("monsters.xml"));
-    let (docs, _) = monster::read_corpus(ws.profile, &dir, &ws.registry, &ws.spells);
-    ws.monsters = lint::summaries(ws.profile, &docs, &ws.spells, &ws.items, &ws.custom_effects);
+    let (docs, source_lints) = monster::read_corpus(ws.profile, &dir, &ws.registry, &ws.spells);
+    ws.monsters = lint::summaries(
+        ws.profile,
+        &docs,
+        &source_lints,
+        &ws.spells,
+        &ws.items,
+        &ws.custom_effects,
+    );
     ws.docs = docs;
+    ws.source_lints = source_lints;
 }
 
 #[tauri::command]
@@ -655,7 +672,6 @@ fn lint_workspace(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
         &ws.docs,
         &ws.registry,
         &ws.spells,
-        &ws.items,
         &ws.monsters_dir(),
     ))
 }
@@ -997,7 +1013,7 @@ fn batch_edit(
     let mut to_save = Vec::new();
 
     for doc in &ws.docs {
-        if !matches_filter(doc, &filter) {
+        if !matches_filter(ws.profile, doc, &filter) {
             continue;
         }
         matched += 1;
@@ -1007,7 +1023,7 @@ fn batch_edit(
             continue;
         }
         let mut d = doc.clone();
-        if let Some(e) = apply_target(&mut d, &target)? {
+        if let Some(e) = apply_target(ws.profile, &mut d, &target)? {
             changed += 1;
             if e.structural {
                 structural += 1;
@@ -1260,7 +1276,6 @@ fn all_lints(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
         &ws.docs,
         &ws.registry,
         &ws.spells,
-        &ws.items,
         &ws.monsters_dir(),
     );
     for doc in &ws.docs {

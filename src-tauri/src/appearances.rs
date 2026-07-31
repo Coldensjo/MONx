@@ -190,7 +190,21 @@ pub struct Appearances {
 impl Appearances {
     pub fn load(path: &Path) -> Result<Appearances, String> {
         let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        Self::parse(&bytes).ok_or_else(|| format!("{}: not a readable appearances file", path.display()))
+        let out = Self::parse(&bytes)
+            .ok_or_else(|| format!("{}: not a readable appearances file", path.display()))?;
+        // `parse` walks the protobuf and returns whatever it recognised, so a
+        // truncated or wrong-schema file yields an *empty* set and succeeds.
+        // `Bundle::load` then succeeded too, and every sprite route failed one
+        // cell at a time with "unknown thing id N" — a grid of blanks instead of
+        // "this bundle is unreadable". `Otb::parse` gets this right by refusing
+        // an item map with no items; so does this.
+        if out.is_empty() {
+            return Err(format!(
+                "{}: contained no appearances — the file is truncated or not an appearances.dat",
+                path.display()
+            ));
+        }
+        Ok(out)
     }
 
     pub fn get(&self, kind: Kind, id: u32) -> Option<&Thing> {
