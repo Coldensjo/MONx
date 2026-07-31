@@ -2701,7 +2701,11 @@ impl<'a> Writer<'a> {
             Some(d) if self.profile.has_spell_delay() => p.push(Pair("delay".into(), d.to_string())),
             _ => p.push(Pair("chance".into(), s.chance.to_string())),
         }
-        if s.range != 0 {
+        // Against the profile's default, not against zero. Nostalrius reads an
+        // absent `range` as the client viewport (8), so omitting `range="0"`
+        // there does not mean "no range" — it means 8, and a user clearing the
+        // field got the opposite of what they asked for.
+        if s.range != self.profile.spell_range_default {
             p.push(Pair("range".into(), s.range.to_string()));
         }
 
@@ -3708,7 +3712,19 @@ fn collect_monster_files(
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            if recursive {
+            // Not into `.monx-backup`, and not into any other dot-directory —
+            // `.git`, `.svn`, an editor's own. On the three recursive XML
+            // engines the backup folder sits inside the monsters folder, so the
+            // first save of a session used to create a file that every later
+            // refresh read back as a monster: it appeared in the sidebar, was
+            // counted, and linted as `registry.orphan`, one new phantom per file
+            // edited. Ironcore escaped only by being flat, and the Lua engines
+            // only because the backup was misnamed `.xml` (see `backup_once`).
+            let hidden = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| s.starts_with('.'));
+            if recursive && !hidden {
                 collect_monster_files(&path, recursive, extension, out);
             }
             continue;
@@ -3820,7 +3836,15 @@ fn backup_once(dir: &Path, file: &str, original: &[u8]) -> Result<(), String> {
     // backup folder stays one level deep and two `monsters/x.xml` from
     // different subtrees can't collide.
     let flat = file.replace(['/', '\\'], "__");
-    let target = backup_dir.join(format!("{flat}.{stamp}.xml"));
+    // The key already carries the engine's own extension, so appending a fixed
+    // `.xml` produced `demon.lua.<stamp>.xml` — Lua bytes under an XML name,
+    // recoverable only by renaming it back. The stamp goes before the extension
+    // instead, and the extension is whatever the file actually is.
+    let (stem, ext) = match flat.rsplit_once('.') {
+        Some((stem, ext)) => (stem.to_string(), ext.to_string()),
+        None => (flat.clone(), "bak".to_string()),
+    };
+    let target = backup_dir.join(format!("{stem}.{stamp}.{ext}"));
     if target.exists() {
         return Ok(());
     }

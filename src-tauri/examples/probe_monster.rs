@@ -107,6 +107,7 @@ fn main() {
     let mut mutate_bad: Vec<String> = Vec::new();
     let mut mutate_lines = 0usize;
     let mut voice_ok = 0usize;
+    let mut clear_ok = 0usize;
     let mut docs = Vec::new();
 
     for path in &files {
@@ -165,6 +166,10 @@ fn main() {
                             mutate_lines += changed_lines;
                         }
                         Err(why) => mutate_bad.push(format!("{name}: {why}")),
+                    }
+                    match clearing_survives(profile, &parsed) {
+                        Ok(()) => clear_ok += 1,
+                        Err(why) => mutate_bad.push(format!("{name}: clearing — {why}")),
                     }
                     // Only Ironcore has the pacifist system; elsewhere those
                     // strings are unknown attributes, and asking the model to
@@ -230,6 +235,7 @@ fn main() {
         println!(
             "pacifist/leash voices: {voice_ok}/{parsed_ok} files survive set → edit → clear"
         );
+        println!("clearing: {clear_ok}/{parsed_ok} files survive a field being emptied");
         for why in mutate_bad.iter().take(if verbose { usize::MAX } else { 20 }) {
             println!("  MUTATE {why}");
         }
@@ -616,6 +622,71 @@ fn diff_lines(a: &[u8], b: &[u8]) -> usize {
 /// none, edited in place, and taken away when the value is cleared — and checks
 /// the document re-reads equal after each. Line counts are not a gate here:
 /// adding or removing a node moves every line under it.
+/// Clearing a field has to reach the file, not just the model.
+///
+/// `mutation_survives` only ever *increments* — `experience += 7`,
+/// `chance = (chance % 100) + 1` — so it could not see a writer whose optional
+/// fields were all one-sided guards: `if v != 0 { set(…) }` with no else. On the
+/// Lua engines that meant every clear was silently discarded (0 of 993 spell
+/// ranges could be cleared) while every gate stayed green. Setting things *to*
+/// nothing is a different question from setting them to something else, and it
+/// needs its own pass.
+fn clearing_survives(profile: &'static EngineProfile, parsed: &monster::Parsed) -> Result<(), String> {
+    // Editing a node makes the writer re-render it, and the canonical renderer
+    // deliberately drops data the engine ignores — a second geometry attribute
+    // on a block that already has one (§8.3). Files where that applies are
+    // counted and named by `--canonical`; failing them here as well would
+    // report a known normalisation as a clearing bug. Asking whether the
+    // canonical round-trip already moves this document is exactly that test,
+    // and it needs no per-field guesswork.
+    let canon = monster::write_new(profile, &parsed.doc);
+    match monster::read_bytes(profile, &parsed.doc.file, &canon, parsed.doc.registered) {
+        Ok(r) if r.doc == parsed.doc => {}
+        _ => return Ok(()),
+    }
+
+    let mut edited = parsed.doc.clone();
+    let mut touched = false;
+    for s in edited.attacks.iter_mut().chain(edited.defenses.iter_mut()) {
+        if s.range != 0 {
+            s.range = 0;
+            touched = true;
+        }
+        if s.target {
+            s.target = false;
+            touched = true;
+        }
+        if s.effects.shoot_effect.is_some() {
+            s.effects.shoot_effect = None;
+            touched = true;
+        }
+    }
+    for e in edited.loot.iter_mut() {
+        if e.subtype.is_some() {
+            e.subtype = None;
+            touched = true;
+        }
+        if !e.children.is_empty() {
+            e.children.clear();
+            touched = true;
+        }
+    }
+    if !touched {
+        return Ok(());
+    }
+
+    let written = monster::write_bytes(profile, parsed, &edited);
+    let reread = monster::read_bytes(profile, &edited.file, &written, edited.registered)
+        .map_err(|e| format!("re-read failed: {e}"))?;
+    if reread.doc != edited {
+        return Err(format!(
+            "re-read differs at {}",
+            first_doc_difference(&edited, &reread.doc).unwrap_or_else(|| "?".into())
+        ));
+    }
+    Ok(())
+}
+
 fn voice_extras_survive(profile: &'static EngineProfile, parsed: &monster::Parsed) -> Result<(), String> {
     let step = |from: &monster::Parsed, doc: monster::MonsterDoc| -> Result<monster::Parsed, String> {
         let written = monster::write_bytes(profile, from, &doc);

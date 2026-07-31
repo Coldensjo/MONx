@@ -909,6 +909,40 @@ fn set(t: &mut LuaTable, key: &str, v: LuaValue) {
     }
 }
 
+/// Removes a key. The missing half of `set`.
+///
+/// `spell_to_lua` and `loot_entry_to_lua` both start from a clone of the entry
+/// the file already had, and every optional field used to be written behind a
+/// guard whose false branch did nothing at all. So clearing a field in the
+/// editor was silently discarded: unticking `target` left `target = true`, and
+/// emptying a container's contents was a no-op. Two-sided guards need this.
+fn unset(t: &mut LuaTable, key: &str) {
+    t.map.retain(|(k, _)| k != key);
+}
+
+/// `set` when the model has something to say, `unset` when it does not. For
+/// fields whose absence is meaningful — a sub-table, a string, an effect name.
+fn put(t: &mut LuaTable, key: &str, v: Option<LuaValue>) {
+    match v {
+        Some(v) => set(t, key, v),
+        None => unset(t, key),
+    }
+}
+
+/// A numeric field where **0 is a real value**, not an absence.
+///
+/// Removing the key when the model reads 0 would be wrong twice over: a file
+/// that legitimately says `range = 0` would lose the line on an untouched save
+/// — breaking round-trip — and the model cannot tell that case from a user who
+/// has just cleared the field. Writing `0` says exactly what the user means and
+/// keeps the byte-for-byte guarantee. This is the rule `to_values` already
+/// applied to outfit colours.
+fn set_num(t: &mut LuaTable, key: &str, v: i64) {
+    if t.has(key) || v != 0 {
+        set(t, key, LuaValue::Num(v.to_string()));
+    }
+}
+
 /// Rebuilds a spell list over the file's own entries, so an edit to one spell
 /// leaves the other twenty exactly as they were written.
 fn zip_spells(seeded: &[LuaValue], spells: &[SpellBlock]) -> Vec<LuaValue> {
@@ -972,60 +1006,77 @@ fn spell_to_lua(s: &SpellBlock, base: Option<&LuaTable>) -> LuaValue {
         }
     }
 
-    if let Some(m) = &s.melee {
-        if let Some(v) = m.skill {
-            set(&mut t, "skill", num(v));
-        }
-        if let Some(v) = m.attack {
-            set(&mut t, "attack", num(v));
-        }
-    }
-    if s.min != 0 || s.max != 0 {
-        set(&mut t, "minDamage", num(s.min));
-        set(&mut t, "maxDamage", num(s.max));
-    }
-    if s.range != 0 {
-        set(&mut t, "range", num(s.range));
-    }
+    let melee = s.melee.as_ref();
+    put(&mut t, "skill", melee.and_then(|m| m.skill).map(num));
+    put(&mut t, "attack", melee.and_then(|m| m.attack).map(num));
+
+    set_num(&mut t, "minDamage", s.min);
+    set_num(&mut t, "maxDamage", s.max);
+    set_num(&mut t, "range", s.range);
+
+    // Geometry is four independent numbers with one active shape, so writing
+    // only the active one left the previous shape's keys sitting in the file —
+    // two geometries at once, decided by the loader's last-one-wins precedence
+    // (§8.3). That is the `spell.multiple-geometry` hazard, and MONx was
+    // creating it on every shape change.
+    //
+    // Removal cannot be driven by the value: `spread = 0` is not the same as no
+    // spread — the reader defaults an absent one to 3 — so `manta_ray.lua`'s
+    // `length = 4, spread = 0` means what it says. Nor can it be driven by the
+    // shape alone: `katex_blood_tongue.lua` really does carry `radius`,
+    // `length` and `spread` at once, the reader keeps all four, and dropping
+    // the inactive ones would normalise a file on save. That is the one thing
+    // the writer must never do.
+    //
+    // So every geometry number the model holds is written, and a cleared one is
+    // written as 0 rather than discarded. Zeroing the previous shape's fields
+    // when the shape changes belongs to the editor, which is the only layer
+    // that knows a change of shape happened.
     if let Some(a) = &s.area {
-        match a.shape.as_str() {
-            "ring" => set(&mut t, "ring", num(a.ring)),
-            "radius" => set(&mut t, "radius", num(a.radius)),
-            _ => {
-                set(&mut t, "length", num(a.length));
-                set(&mut t, "spread", num(a.spread));
-            }
-        }
+        set_num(&mut t, "ring", a.ring);
+        set_num(&mut t, "radius", a.radius);
+        set_num(&mut t, "length", a.length);
+        set_num(&mut t, "spread", a.spread);
     }
-    if let Some(st) = &s.status {
-        set(&mut t, "duration", num(st.duration));
-        if let Some(v) = st.speedchange {
-            set(&mut t, "speedChange", num(v));
-        }
-        if let Some(v) = st.drunkenness {
-            set(&mut t, "drunkenness", num(v));
-        }
-        if let Some(v) = &st.outfit_monster {
-            set(&mut t, "monster", LuaValue::Str(v.clone()));
-        }
-        if let Some(v) = st.outfit_item {
-            set(&mut t, "item", num(v));
-        }
-    }
-    if let Some(c) = &s.condition {
-        let mut cond = LuaTable::default();
-        cond.map.push(("interval".into(), num(c.tick)));
-        cond.map.push(("startDamage".into(), num(c.start)));
-        set(&mut t, "condition", LuaValue::Table(cond));
-    }
-    if let Some(v) = &s.effects.shoot_effect {
-        set(&mut t, "shootEffect", effect_value(v));
-    }
-    if let Some(v) = &s.effects.area_effect {
-        set(&mut t, "effect", effect_value(v));
-    }
-    if s.target {
-        set(&mut t, "target", LuaValue::Bool(true));
+
+    let status = s.status.as_ref();
+    put(&mut t, "duration", status.map(|st| num(st.duration)));
+    put(&mut t, "speedChange", status.and_then(|st| st.speedchange).map(num));
+    put(&mut t, "drunkenness", status.and_then(|st| st.drunkenness).map(num));
+    put(
+        &mut t,
+        "monster",
+        status
+            .and_then(|st| st.outfit_monster.clone())
+            .map(LuaValue::Str),
+    );
+    put(&mut t, "item", status.and_then(|st| st.outfit_item).map(num));
+
+    put(
+        &mut t,
+        "condition",
+        s.condition.as_ref().map(|c| {
+            let mut cond = LuaTable::default();
+            cond.map.push(("interval".into(), num(c.tick)));
+            cond.map.push(("startDamage".into(), num(c.start)));
+            LuaValue::Table(cond)
+        }),
+    );
+    put(
+        &mut t,
+        "shootEffect",
+        s.effects.shoot_effect.as_deref().map(effect_value),
+    );
+    put(
+        &mut t,
+        "effect",
+        s.effects.area_effect.as_deref().map(effect_value),
+    );
+    // `false` rather than removal: the file said something about targeting and
+    // the user has said the opposite, which is not the same as never mentioning
+    // it. Removing it would also make an untouched `target = false` vanish.
+    if t.has("target") || s.target {
+        set(&mut t, "target", LuaValue::Bool(s.target));
     }
     LuaValue::Table(t)
 }
@@ -1058,19 +1109,16 @@ fn loot_entry_to_lua(e: &LootEntry, base: Option<&LuaTable>) -> LuaValue {
     if item.has("maxCount") || e.countmax != 1 {
         set(&mut item, "maxCount", num(e.countmax));
     }
-    if let Some(v) = e.subtype {
-        set(&mut item, "subType", num(v));
-    }
-    if let Some(v) = e.action_id {
-        set(&mut item, "actionId", num(v));
-    }
-    if let Some(v) = &e.text {
-        set(&mut item, "text", LuaValue::Str(v.clone()));
-    }
-    if !e.children.is_empty() {
+    put(&mut item, "subType", e.subtype.map(num));
+    put(&mut item, "actionId", e.action_id.map(num));
+    put(&mut item, "text", e.text.clone().map(LuaValue::Str));
+    // Emptying a container's contents has to remove the `child` table, not
+    // leave the old one sitting there.
+    let child = (!e.children.is_empty()).then(|| {
         let seeded = item.table("child").cloned().unwrap_or_default();
-        set(&mut item, "child", LuaValue::Table(zip_loot(&seeded, &e.children)));
-    }
+        LuaValue::Table(zip_loot(&seeded, &e.children))
+    });
+    put(&mut item, "child", child);
     LuaValue::Table(item)
 }
 
