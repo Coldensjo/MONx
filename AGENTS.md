@@ -30,7 +30,7 @@ No test suite, no linter config beyond TypeScript strict mode.
 
 - Frontend: `bun run build` (runs `tsc` then Vite) or `bun run tauri:dev`.
 - Backend compile: `cargo check` in `src-tauri/`.
-- Backend behavior: `probe_monster` is the fastest end-to-end check — it reads and rewrites the whole monster corpus and diffs the bytes, so a round-trip regression fails across 382 files instead of arriving as a bug report. `probe_dat` does the same for sprite composition.
+- Backend behavior: `probe_monster` is the fastest end-to-end check — it reads and rewrites the whole monster corpus and diffs the bytes, so a round-trip regression fails across every file at once instead of arriving as a bug report. `probe_dat` does the same for sprite composition.
 
 `probe_monster` takes flags for each gate, and exits non-zero if any of them fails:
 
@@ -41,7 +41,7 @@ cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --lin
 cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --crud <scratch-dir>
 ```
 
-`--mutate` is the one that proves the writer is driven by the model rather than copying bytes: it edits several fields in every file, writes, re-reads, and checks the document that comes back is the one that went in. It also budgets the diff — a handful of field edits that rewrite more than 12 lines fail, because the writer is meant to splice. A change that *inserts or removes* a node moves every line under it and can never meet that budget, so it belongs in a pass of its own (see `voice_extras_survive`). Add `--verbose` to any of them to list every finding.
+`--mutate` is the one that proves the writer is driven by the model rather than copying bytes: it edits several fields in every file, writes, re-reads, and checks the document that comes back is the one that went in. It also budgets the diff — a handful of field edits that rewrite more than 12 lines fail, because the writer is meant to splice. A change that *inserts or removes* a node moves every line under it and can never meet that budget, so it belongs in a pass of its own (see `voice_extras_survive`). Add `--verbose` to any of them to list every finding, `--items <dir>` to point loot resolution at a database that is not the monsters folder's sibling, and `--bands` to print the corpus's balance bands.
 
 `--engine <key>` picks the profile (`ironcore`, `tfs`, `tvp`, `nostalrius`, `canary`, `crystal`, `blacktek`); without it the corpus is sniffed exactly as the Landing dialog sniffs it, and the guess is printed. **Run every gate against all seven engines' own corpora when touching the reader, writer or a profile** — an over-declared `known_attrs` drops data, and `--mutate` is the only thing that catches it:
 
@@ -112,7 +112,8 @@ cargo run --example probe_assets -- <assets-dir> [out_dir]
                      │ Tauri invoke + custom URI scheme
 ┌────────────────────▼────────────────────────────────────┐
 │  Rust backend (src-tauri/src/)                          │
-│  lib.rs      — #[tauri::command] handlers, workspace     │
+│  lib.rs      — #[tauri::command] handlers                │
+│  workspace.rs— the open folders and all they loaded      │
 │  monster.rs  — monster XML read/write (round-trip safe)  │
 │  registry.rs — monsters.xml registry (raceid ↔ file)     │
 │  spells.rs   — spell name catalogue + ### verification    │
@@ -133,9 +134,9 @@ cargo run --example probe_assets -- <assets-dir> [out_dir]
 
 ### Data flow
 
-1. User picks (or drops) the three workspace folders on the landing screen.
+1. User picks (or drops) the workspace folders on the landing screen — four slots, of which only monsters is required.
 2. `probe_workspace` validates each slot, resolving upward from a file to its folder and filling siblings from a server `data/` root.
-3. `open_workspace` loads everything up front in parallel (`rayon`): `.spr`/`.dat` into the inherited managers, `items.otb` + `items.xml` into the item index, `monsters.xml` into the registry, and every monster `.xml` into memory. Loading the whole corpus is what makes cross-file lints possible — it mirrors the server's own `forceMonsterTypesOnLoad`.
+3. `open_workspace` loads everything up front in parallel (`rayon`): the client into the inherited `.spr`/`.dat` managers or into the modern bundle readers, the item database and its optional `items.otb` into the item index, `monsters.xml` into the registry, and every monster file into memory. Loading the whole corpus is what makes cross-file lints possible — it mirrors the server's own `forceMonsterTypesOnLoad`.
 4. **Preview**: frontend builds `monx://` (or `http://monx.localhost` on Windows) URLs; `protocol.rs` renders PNGs on demand.
 5. **Save**: `save_monster` writes the monster back and returns its lints.
 
@@ -159,10 +160,12 @@ Serde structs use `camelCase` on the wire. Errors are `Result<_, String>`.
 ```
 src/
   App.tsx              Root shell: titlebar, workspace state, toasts
-  Landing.tsx          Three-folder workspace picker + recent workspaces
+  Landing.tsx          Four-folder workspace picker + engine choice, recent
+                       and saved workspaces
   Workspace.tsx        Three-column layout, sidebar nav
   Menubar.tsx          Titlebar menus (File, Edit, Tools, Linter, Preferences)
-  MonsterEditor.tsx    The editor sections (ten, some hidden by preference)
+  MonsterEditor.tsx    The editor sections (twelve, some hidden by preference
+                       or absent from the engine)
   sections/  fields/   Section components and field controls
   MonsterList.tsx      Virtualized monster list with look previews
   ThingBrowser.tsx     Items/outfits/effects/missiles browser (generalised from
@@ -176,11 +179,15 @@ src/
   QuickOpenDialog.tsx  Ctrl+P fuzzy jump to a monster
   PatchNotesDialog.tsx Patch notes since the user's cut-off point (Tools menu)
   HotkeysDialog.tsx    The hotkey manager (Preferences menu)
+  LootSimDialog.tsx    Roll a monster's loot table over N kills (Tools menu)
   PreferencesDialog.tsx  Language, editor tab visibility + default tab (Preferences menu)
   CustomEffectsDialog.tsx  Effects this server adds on top of its engine's (Preferences menu)
+  LanguagePicker.tsx   One flag per language, no dropdown
   UiInspector.tsx      Hold-F2 element inspector overlay
   monster.ts           Monster/workspace types, invoke wrappers, protocol URL builders
   spr.ts               Inherited invoke wrappers + protocol URLs
+  engine.ts            The frontend's projection of engine.rs — which sections
+                       render, which enums to offer, which fields are inert
   settings.ts          localStorage (monx.* keys)
   i18n.ts              Language layer: locale registry, i18next init (monx.locale)
   locales/             en.ts (plural forms only), pl.ts, pt.ts — keyed by the
@@ -191,16 +198,18 @@ src/
   patchnotes.ts        Cut-off storage + the mark diff (monx.patchCutoff.*)
   blocks.ts            Section-block clipboard + merge rules (monx.blockClipboard)
   compare.ts           Two docs → grouped rows with deltas
+  lintfix.ts           The one unambiguous repair behind each Fix button
   favourites.ts        Starred item ids (monx.favourites)
   lootpresets.ts       Named loot-tray sets (monx.lootPresets)
   fixtures.ts          Fixture data for component development
   customeffects.ts     Declared effects: storage, the backend push, the merge
-  catalog.ts  derive.ts  dnd.ts  spellsim.ts
+  catalog.ts  derive.ts  dnd.ts  spellsim.ts  lootsim.ts
   index.css            SPRx base stylesheet — frozen
-  styles/              shell.css, editor.css, browse.css, inspect.css
+  styles/              shell.css, editor.css, browse.css, inspect.css, theme.css
 
 src-tauri/src/         see the architecture diagram above
-src-tauri/examples/    probe.rs, probe_dat.rs, probe_monster.rs
+src-tauri/examples/    probe.rs, probe_dat.rs, probe_assets.rs,
+                       probe_monster.rs, probe_lua.rs
 
 assets/                fixture workspaces, one folder per engine: each has
                        monster(s)/, items/, client/, spells/
@@ -221,15 +230,15 @@ The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the pro
 
 - `catalog.rs` / `catalog.ts` — the enum tables (flags, damage and condition types, races, skulls, `CONST_ME_*`, `CONST_ANI_*`, built-in spells), each citing its section.
 - `customeffects.ts` / `engine.rs` `CustomEffects` — the escape hatch for the tables above. Every effect table is read out of a shipped server's source, which is what makes it trustworthy and what makes it wrong for anyone who modified their own. A user declares the extras (Preferences → Custom effects, `monx.customEffects`), the picker appends them to the engine's list, and the linter stops calling them unknown. **The probes deliberately pass `CustomEffects::default()`** — a gate a setting can quieten is not a gate. Effects that are neither shipped nor declared still show in the picker as off-catalogue rather than reading as `(none)`, because a value the editor renders as "nothing" is a value the next click deletes.
-- `lint.rs` — every engine rule with an observable consequence, as stable machine codes (87 of them). If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text.
+- `lint.rs` — every engine rule with an observable consequence, as stable machine codes. If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text. Three codes live outside it, on the cross-file path: `registry.orphan` and `file.unreadable` in `monster.rs`, `items.missing-from-otb` in `lib.rs`.
 - `monster.rs` — the reader and writer comments, which record why the model is shaped the way it is (why `pacifist`/`leash` are fields and not lines, why `<flag>` keeps only its first attribute, and so on).
-- `git log` — the two files are in history if you need the prose: `git show f050169^:MONSTER_EDITOR_REFERENCE.md`.
+- `git log` — the two files are in history if you need the prose: `git show f050169^:MONSTER_EDITOR_REFERENCE.md`. `LOOT_SIMULATOR.md`, which `lootsim.ts` and `LootSimDialog.tsx` still cite by section, went the same way: `git show de45203^:LOOT_SIMULATOR.md`.
 
 Four rules that come up constantly:
 
 - **Round-trip is sacred.** Unknown attributes and comments are preserved verbatim; nothing is reordered or normalised on save. A value the engine would clamp gets linted, not silently rewritten.
 - **Exact casing on the wire.** `raceid`, `maxSummons`, `actionId`, and upper-case `CONST_ME_*` / `CONST_ANI_*` — under Ironcore. Which spelling is the live one is a property of the engine: TFS reads `raceId` and names effects `firearea`, so both come from the profile rather than a literal.
-- **MONx never invents item ids.** A loot id with no `items.otb` entry is a lint, not something to create.
+- **MONx never invents item ids.** A loot id the items database cannot resolve is a lint (`loot.unknown-id`), not something to create. The check is against the database, not the OTB — most engines ship no OTB, and it is skipped entirely when no database was loaded.
 - **`silent` is the loudest severity, not the quietest.** It marks the findings the server never reports at all — a spell the loader drops without a word. Those are the ones a human cannot discover any other way, so the UI gives them their own icon and hue rather than burying them under errors.
 
 ### Tibia file formats (inherited)
@@ -252,7 +261,7 @@ Four rules that come up constantly:
 
 - Functional components, hooks only. `memo` on hot rows.
 - `localStorage` keys are all `monx.*`, read and written through `settings.ts` rather than directly.
-- CSS classes use the `ss-` prefix. No CSS-in-JS, no Tailwind.
+- Two class prefixes, and which one is right is a question of provenance: `ss-` is SPRx's, so anything inherited or styled by `index.css`/`editor.css`/`browse.css` keeps it; `mx-` is MONx's own, for the shell, the dialogs and the inspector. No CSS-in-JS, no Tailwind.
 - `index.css` is frozen; new styles go in `src/styles/*.css`.
 - Toast via `showToast` callback prop; auto-dismiss after 3.5s.
 

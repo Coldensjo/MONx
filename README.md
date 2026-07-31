@@ -1,35 +1,31 @@
 # MONx
 
-A monster editor for OpenTibia. Open a workspace (the server's `monster/` and `items/` folders plus a Tibia client folder), pick a monster, edit, save. Outfits, corpses and loot render as real sprites because `Tibia.dat`/`Tibia.spr` are loaded alongside the XML.
+A monster editor for OpenTibia servers — Ironcore, TheForgottenServer, TheVioletProject, Nostalrius, Canary/OTServBR, CrystalServer and BlackTek. Open a workspace, pick a monster, edit, save.
 
-Built with Tauri 2 (Rust backend) and React 18 + TypeScript + Vite (frontend).
+A workspace is up to four folders: the server's `monster/` folder, its `items/` folder, a client folder and optionally `spells/`. **Only the monsters folder is required** — the rest fill in what they can. Outfits, corpses and loot render as real sprites because the client assets are loaded alongside the monsters, from either a `.spr`/`.dat` pair or a modern 12.x+ asset bundle.
 
-## Prerequisites (all platforms)
+Built with Tauri 2 (Rust) and React 18 + TypeScript + Vite.
 
-- **Rust** (stable) — install via [rustup](https://rustup.rs)
-- **Bun** 1.3+ — install via [bun.sh](https://bun.sh) (the repo pins `bun@1.3.14`)
+## Prerequisites
 
-### Windows
+- **Rust** (stable) — via [rustup](https://rustup.rs)
+- **Bun** 1.3+ — via [bun.sh](https://bun.sh) (the repo pins `bun@1.3.14`)
 
-- **Visual Studio Build Tools** with the "Desktop development with C++" workload (required by the Rust MSVC toolchain)
-- **WebView2 runtime** — preinstalled on Windows 10/11; otherwise install the [Evergreen runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
-- NSIS is downloaded automatically by Tauri when building the installer — no manual install needed
+**Windows** also needs Visual Studio Build Tools with the "Desktop development with C++" workload. WebView2 ships with Windows 10/11; on older systems install the [Evergreen runtime](https://developer.microsoft.com/microsoft-edge/webview2/). NSIS is downloaded by Tauri when building the installer.
 
-### Arch Linux
+**Arch Linux**
 
 ```sh
 sudo pacman -S --needed base-devel webkit2gtk-4.1 curl wget file openssl \
   gtk3 libappindicator-gtk3 librsvg
 ```
 
-### Ubuntu / Debian
+**Ubuntu 22.04+ / Debian** (older releases ship only webkit2gtk 4.0, which Tauri 2 does not support)
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
   libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 ```
-
-Ubuntu 22.04 or newer is required (older releases only ship webkit2gtk 4.0, which Tauri 2 does not support).
 
 ## Development
 
@@ -38,39 +34,29 @@ bun install
 bun run tauri:dev        # Vite dev server on :8090 + Tauri window
 ```
 
-On Linux under Wayland, WebKitGTK's dmabuf renderer can crash the webview ("Error 71 Protocol error"). If the window dies on launch, run through XWayland with dmabuf disabled:
-
-```sh
-GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 bun run tauri:dev
-```
+On Linux use `./monx.sh` instead — same thing, but through XWayland with WebKitGTK's dmabuf renderer disabled, which otherwise crashes the webview under Wayland ("Error 71 Protocol error").
 
 ## Release builds
 
-### Windows
+On Windows:
 
 ```sh
-bun install
 bun run tauri:build:portable   # portable .exe only
 bun run tauri:build            # NSIS installer only
 bun run tauri:build:all        # both
 ```
 
-Outputs:
-
 - Portable: `src-tauri/target/release/monx-portable.exe`
 - Installer: `src-tauri/target/release/bundle/nsis/`
 
-### Linux (Arch / Ubuntu)
-
-The bundle target in `tauri.conf.json` is Windows NSIS, so on Linux build the plain binary:
+The bundle target in `tauri.conf.json` is Windows NSIS, so on Linux build the plain binary instead:
 
 ```sh
-bun install
-bun run build                      # build the frontend into dist/
+bun run build                      # frontend into dist/
 cd src-tauri && cargo build --release
 ```
 
-The binary lands at `src-tauri/target/release/monx`. Run `bun run build` before `cargo build --release` — the release binary embeds `dist/` at compile time, so a stale frontend build ships stale UI. If the window crashes under Wayland, launch with the same workaround as above:
+It lands at `src-tauri/target/release/monx`. Build the frontend first — the release binary embeds `dist/` at compile time, so a stale `dist/` ships stale UI. Under Wayland, launch it the same way `monx.sh` does:
 
 ```sh
 GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
@@ -78,10 +64,12 @@ GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
 
 ## Verifying changes
 
-- Frontend: `bun run build` (runs `tsc` then Vite)
+- Frontend: `bun run build` (runs `tsc`, then Vite)
 - Backend compile: `cargo check` in `src-tauri/`
-- Backend behavior: from `src-tauri/`, `cargo run --example probe_monster -- <monsters-dir>` round-trips the whole monster corpus and diffs the bytes; `cargo run --example probe_dat -- <file.dat> <file.spr> [out_dir]` does the same for sprite composition
+- Backend behaviour: from `src-tauri/`, `cargo run --example probe_monster -- <monsters-dir>` reads and rewrites the whole corpus and diffs the bytes. `probe_dat`, `probe_assets` and `probe_lua` do the same for sprite composition and the Lua document layer. AGENTS.md lists the flags.
 
 ## Further reading
 
 - [AGENTS.md](AGENTS.md) — architecture, conventions, directory map
+- [ENGINES.md](ENGINES.md) — what each of the seven servers does differently
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to get set up and send a change
