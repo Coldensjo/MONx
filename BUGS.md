@@ -9,11 +9,12 @@ Nothing here has been fixed. Each entry says what is wrong, what a user sees, an
 where. The remaining Rust modules are covered in **Part 2** below.
 
 > **Line numbers in Part 1 are stale for `lib.rs`.** They were taken before the
-> uncommitted `CustomEffects` work landed in the tree, which shifted everything
-> below line ~260 by about fifty lines. The findings themselves still hold —
-> `save_monster` is now at 519, `scale_loot_chances`'s save loop at ~886,
-> `batch_edit`'s at ~982. Part 2's line numbers are current as of that same
-> working tree.
+> `CustomEffects` work (commit `3b6e583`) landed, which shifted everything below
+> line ~260. The findings themselves all still hold; as of `3b6e583` the current
+> lines are: finding 6 — the save loops at `lib.rs:888` and `:984`; finding 12 —
+> `get_thing` at `:222`; finding 10 — the duplicate probe at `:348`; finding 17 —
+> `open_external` at `:1238`; finding 18 — `reveal_monster` at `:574`. Part 2's
+> line numbers are current as of that commit.
 
 ---
 
@@ -340,3 +341,353 @@ that item's properties.
 - `blocks.ts` `applyBlock` voices-merge uses `??`, so an empty-string pacifist
   line on the target blocks the block's line from carrying over. Debatable
   whether `''` should count as present; leaving it alone is defensible.
+
+---
+
+# Part 2 — the remaining Rust modules
+
+`monster.rs`, `monster_lua.rs`, `luadoc.rs`, `lint.rs`, `engine.rs`, `catalog.rs`,
+`dat.rs`, `spr.rs`, `assets.rs`, `appearances.rs`.
+
+Four of these were **reproduced by running code** against the fixture corpora in
+`assets/`, not just read. Those are marked **VERIFIED** with the number the
+experiment produced. The rest are read-only findings.
+
+All existing gates pass, so none of this is caught today:
+
+```
+canary    1655/1655 round-trip · 1655/1655 edit round-trip
+blacktek   740/740  round-trip ·  740/740  edit round-trip
+crystal   1664/1664 round-trip · 1664/1664 edit round-trip
+ironcore   382/382  round-trip ·  382/382  edit round-trip
+```
+
+---
+
+## 20. The Lua writer can set a field but never clear one — VERIFIED
+
+`src-tauri/src/monster_lua.rs:897` (`spell_to_lua`), `:994` (`loot_entry_to_lua`)
+
+Both start from a clone of the entry the file already had and then only ever
+call `set`. Every optional field is written behind a truthiness guard, and the
+guard's *false* branch does nothing rather than removing the key:
+
+```rust
+let mut t = base.cloned().unwrap_or_default();   // the file's own entry
+...
+if s.range != 0 { set(&mut t, "range", num(s.range)); }   // no else { remove }
+```
+
+So clearing a field in the editor is silently discarded. Measured over the whole
+Canary corpus:
+
+```
+spell range cleared:  0/993      example: amphibics/deathspawn.lua:
+                                 attacks[1].range 7 -> set 0 -> re-read 7
+```
+
+Every field written this way is affected: `range`, `minDamage`/`maxDamage`
+(guarded by `s.min != 0 || s.max != 0`), `skill`/`attack`, `target`, `duration`,
+`speedChange`, `drunkenness`, the `condition` sub-table, `shootEffect`/`effect`,
+and on the loot side `subType`, `actionId`, `text` and `child`. Emptying a
+container's contents is a no-op; unticking `target` leaves `target = true`.
+
+The area shape is worse than a no-op: changing beam to radius calls
+`set(t, "radius", …)` but leaves the base's `length`/`spread` in place, so the
+file ends up with both and the loader's last-one-wins precedence (§8.3) decides.
+That is the `spell.multiple-geometry` hazard, created by MONx.
+
+`to_values` handles this correctly for the fields it owns at document scope —
+`outfit` uses `if outfit.has(k) || v != 0`, which does re-set a cleared colour to
+0. The per-entry helpers just never got the same treatment.
+
+`probe_monster --mutate` cannot catch it: `mutation_survives`
+(`examples/probe_monster.rs:533`) only ever *increments* values — `experience +=
+7`, `chance = (chance % 100) + 1`. Nothing in the gate sets a field to zero or to
+None.
+
+Fix direction: give `set` a sibling `unset`, and make every guard two-sided.
+
+---
+
+## 21. Backups are re-read as monsters on the recursive corpora — VERIFIED
+
+`src-tauri/src/monster.rs:3816` (`backup_once`) + `:3699` (`collect_monster_files`)
+
+`backup_once` writes to `<monsters>/.monx-backup/<flattened>.<stamp>.xml`.
+`collect_monster_files` recurses into every subdirectory when
+`profile.recursive_corpus` is set, has no dot-directory exclusion, and takes
+every `*.xml` it finds. TFS, TVP and Nostalrius are all recursive **and** XML.
+
+```
+tfs         recursive=true  files=2 backups collected=1
+tvp         recursive=true  files=2 backups collected=1
+nostalrius  recursive=true  files=2 backups collected=1
+ironcore    recursive=false files=0 backups collected=0
+```
+
+So on those three engines, the first save of the session creates a file that
+every subsequent `refresh()` picks up as a monster. It appears in the sidebar, is
+counted in `monster_count`, and is linted as `registry.orphan` — one new phantom
+per file edited, accumulating across the session.
+
+Ironcore is flat so it escapes; Canary and BlackTek are recursive but look for
+`.lua`, and the backup is always named `.xml` — which is finding 22.
+
+Fix direction: skip `.`-prefixed directories in `collect_monster_files`, and/or
+put backups outside the monsters folder.
+
+## 22. Backups are named `.xml` whatever the engine writes
+
+`src-tauri/src/monster.rs:3823`
+
+```rust
+let target = backup_dir.join(format!("{flat}.{stamp}.xml"));
+```
+
+A Canary `demon.lua` is backed up as `demon.lua.<stamp>.xml`. The bytes are Lua.
+Recovering means renaming by hand, and the extension is the only thing currently
+stopping finding 21 from hitting the Lua engines too — so fixing this without
+fixing 21 makes 21 worse.
+
+---
+
+## 23. The profile is bypassed for flag, element and immunity spellings
+
+This is one root cause with several visible faces. `AGENTS.md` states the rule:
+*"Never hard-code a spelling like `raceid` or `CONST_ME_*`; ask the profile."*
+These call sites ask `catalog` — which is Ironcore's table — instead.
+
+### 23a. Two numeric-flag lints can never fire on the Lua engines — VERIFIED
+
+`src-tauri/src/lint.rs:374`
+
+```rust
+match name.as_str() {
+    "staticattack"   if *n > 100 => …,
+    "targetdistance" if *n < 1   => …,
+    "runonhealth"    if *n > doc.health.max => …,
+```
+
+`doc.flags` is keyed by `profile.canonical_flag()`, and the Lua profiles spell
+these `staticAttackChance`, `targetDistance`, `runHealth`
+(`engine.rs:1388`, `:1419`). The arms never match.
+
+Canary's corpus has 10 files with `targetDistance = 0` and a `runHealth = 10000`.
+Expected: 10+ findings. Actual:
+
+```
+canary   lints: 64 errors · 176 warnings · 16 silent
+             8  warning  flag.unknown          <- and nothing else flag-shaped
+ironcore lints: 316 errors · 32 warnings · 18 silent
+             1  warning  flag.runonhealth-over-max
+             3  silent   flag.pacifist-forces-hostile-off
+```
+
+Canary suppresses `flag.staticattack-over-100` deliberately (`engine.rs:1505`)
+but **not** `targetdistance-under-1` or `runonhealth-over-max` — it declares
+those applicable and then silently cannot produce them. That is precisely the
+inversion the `suppressed_lints` comment says the design exists to prevent.
+
+`lint.rs:407` (`flag_true(doc, "canpushcreatures")`) is the same shape — the Lua
+profiles spell it `canPushCreatures` — though that finding happens to be
+suppressed for Canary anyway.
+
+### 23b. The boss badge is always off on the Lua engines — VERIFIED
+
+`src-tauri/src/monster.rs:3748`
+
+```rust
+boss: matches!(doc.flags.get("isboss"), Some(FlagValue::Bool(true))),
+```
+
+Canary spells it `isBoss`, BlackTek spells it `boss`. `BTreeMap::get` is exact.
+
+```
+canary    docs=1655 carry a boss flag=2   summarise().boss=0
+blacktek  docs=740  carry a boss flag=159 summarise().boss=0
+ironcore  docs=382  carry a boss flag=343 summarise().boss=102
+```
+
+159 BlackTek bosses show no badge and are invisible to the list's boss filter.
+
+### 23c. Batch edit cannot address a flag on the Lua engines
+
+`src-tauri/src/monster.rs:4425`, `:4559`, `:4586`, `:4609`
+
+`matches_filter` looks up `d.flags.get(&catalog::canonical_flag(flag))` and
+`apply_target` gates on `catalog::is_known_flag` / `is_element_attr` /
+`is_immunity_name`. Consequences on a Canary or BlackTek workspace:
+
+- filtering by any camel-cased flag matches nothing;
+- `apply_target` with `kind: "flag"` inserts a *lowercase* key beside the real
+  one, so the edit writes a flag the server does not read;
+- flags that exist only on those profiles — `isPreyable`, `familiar`,
+  `canTeleport`, `rewardBoss` — are rejected as "unknown flag".
+
+### 23d. `lint_source` and `lint_monster` disagree about the same value
+
+`src-tauri/src/lint.rs:874`/`:876` use `catalog::is_element_attr` and
+`catalog::is_immunity_name`, while `resistances()` at `:415`/`:421` correctly
+uses `r.profile`. The same attribute can therefore be reported unknown by one
+pass and accepted by the other on any engine whose lists differ from Ironcore's.
+
+### 23e. `lintfix.ts` writes the Ironcore spellings
+
+`src/lintfix.ts:116-123` hardcodes `staticattack`, `targetdistance`, `hostile`,
+`pushable`. `hostile`/`pushable` happen to be lowercase on every profile, so
+those two are fine today; the first two are not, and would create a bogus key if
+23a were fixed without fixing this.
+
+### Note: `catalog::ELEMENT_ATTRS` has no `agonyPercent`
+
+`src-tauri/src/catalog.rs:143` omits it although `DAMAGE_TYPES:99` carries agony.
+Currently inert — `element_combat_type` searches `DAMAGE_TYPES` and does resolve
+it, and CrystalServer is a Lua engine so `lint_source` never runs on it — but the
+two functions disagree about the same string, which is a trap for whoever adds
+the next engine.
+
+---
+
+## 24. `write_atomic` opens a window where the file does not exist
+
+`src-tauri/src/monster.rs:3867`
+
+```rust
+// Windows won't rename onto an existing file, so clear the way first. The
+// original is already safe in `.monx-backup`.
+if path.exists() {
+    let _ = std::fs::remove_file(path);
+}
+std::fs::rename(&temp, path)
+```
+
+The premise is wrong: `std::fs::rename` on Windows is `MoveFileExW` with
+`MOVEFILE_REPLACE_EXISTING` and has always replaced an existing file. The
+`remove_file` buys nothing and costs the atomicity the function is named for — a
+crash, a lock, or an antivirus scanner holding the handle between those two calls
+leaves the monster **absent**, not stale.
+
+The backup mitigates the first save of a session and nothing after it:
+`backup_once` returns early once the stamped file exists, so the second save
+onward has no safety net at all.
+
+Fix: delete the `remove_file` block.
+
+## 25. `duplicate` and `rename` do not check for a name collision
+
+`src-tauri/src/monster.rs:4001`, `:4053`
+
+`create` guards it (`monster.rs:3988`):
+
+```rust
+if registry.has_name(name) {
+    return Err(format!("A monster named \"{name}\" is already registered"));
+}
+```
+
+Neither `duplicate` nor `rename` does. Both check only whether the *file* exists.
+So renaming Demon to "Dragon" when a Dragon already exists writes a second
+`<monster name="Dragon" …>` into `monsters.xml`; the server lower-cases names as
+its map key, so one of the two silently wins. There is no `registry.duplicate-name`
+lint either — only `raceid.duplicate` — so nothing downstream catches it.
+
+Worse, the rename then goes through `Registry::with_renamed`, whose fallback path
+is the corpus-wide `String::replace` from Part 1 finding 4.
+
+---
+
+## 26. `summaries()` does not include the source-level lints its doc claims
+
+`src-tauri/src/lint.rs:1084`
+
+> "Lint counts drive the severity dots in Agent 4's monster list, so they include
+> the source-level findings too."
+
+The body only calls `lint_monster`. `lint_source` runs once in `read_corpus`
+(`monster.rs:3642`) and its findings go into the workspace lint list, never into
+`MonsterSummary::lint_counts`. A monster whose only problems are presence-shaped
+— missing `health now`, missing spell `chance`, a `<flag>` carrying two
+attributes — shows a clean dot in the sidebar.
+
+## 27. `Appearances::parse` reports success on a file it understood none of
+
+`src-tauri/src/appearances.rs:217`
+
+`parse` returns `Some(out)` unconditionally, so a truncated or wrong-schema
+`appearances.dat` yields an empty `Appearances` and `Bundle::load` succeeds. Every
+sprite route then fails one cell at a time with "unknown thing id N" and the UI
+shows a grid of blanks rather than "this bundle is unreadable". `Otb::parse` gets
+this right — `otb.rs:258` returns `Err("OTB contained no items")`.
+
+## 28. The CIP sheet header is skipped without being checked
+
+`src-tauri/src/assets.rs:369`
+
+```rust
+while raw.get(i) == Some(&0) { i += 1; }
+// `i` is on the marker's first byte (0x70); step over all five
+i += 5;
+```
+
+The comment names the marker exactly — `70 0A FA 80 24` — and then steps over it
+without comparing a single byte. A sheet with different padding decodes to
+garbage pixels or a confusing `LZMA:` error instead of "not a sheet". Checking
+five bytes turns a silent wrong-sprite into a diagnosis, which is the same
+argument `otb.rs` makes for cross-checking the item map.
+
+## 29. Smaller things
+
+- **`luadoc.rs:655` `unescape` is not the inverse of `escape:677`.** `\065`
+  (a decimal escape, "A") unescapes to the literal text `065`, and re-escapes to
+  `065` — so editing a string containing one changes what the server reads. Only
+  reachable on a value the user actually edits, since unchanged values are copied
+  byte-for-byte, and no such escape appears in either shipped corpus.
+- **`luadoc.rs:436` `parse_type_name` does not skip comments**, so a commented-out
+  `createMonsterType("Old Name")` above the real call wins. Every other scan in
+  the module goes through `skip_noncode`.
+- **`lint.rs:962` `_items: &ItemIndex` is an unused parameter** on `lint_workspace`.
+- **`lint.rs:1006` `known_name` is O(n²) over the corpus** — a linear registry scan
+  plus a linear doc scan for every summon entry and every outfit spell, and it
+  re-runs on every save through `refresh`.
+- **`assets.rs:241` error message prints the id twice**: `format!("no appearance
+  {id:?} {id}")` — `kind` was presumably meant.
+- **`assets.rs:192` `clear_cache` has no callers.** Dropping the `Arc<Bundle>` in
+  `close_workspace` frees the cache anyway, so it is dead rather than a leak.
+- **`monster.rs:4190` `pin_loot_ids` has the same partial-write shape** as
+  `scale_loot_chances` and `batch_edit` (Part 1, finding 6): `save(…)?` inside the
+  corpus loop returns before the caller can refresh.
+- **`probe_monster.rs:230` prints "pacifist/leash voices: 0/1655 files survive"**
+  for every engine without the pacifist system, where the check never ran. It
+  reads as a failure and is not one.
+
+---
+
+## Checked and found clean
+
+Worth recording so the next pass does not re-walk them:
+
+- **`spr.rs`** — the header-layout scoring, the RLE decoder's truncation
+  fallbacks and the atlas blits are all bounds-safe; `sprite_data`'s `id - 1` is
+  guarded by the `id > 0` filter in its only caller.
+- **`dat.rs` composition** — `sprite_slot`, `blend_tile`'s "over" compositing and
+  `blit_scaled_into_cell` are correct and in-bounds. Pattern-axis clamping lives
+  in the callers rather than the composer, which is worth knowing but is not
+  currently violated.
+- **`appearances.rs:83` `FrameGroup::index`** matches otclient's
+  layer-fastest / frame-slowest order exactly, and **`protocol.rs:94`
+  `outfit_colour`** reproduces the HSI sweep including the `HSI_H_STEPS - 1`
+  divisor that reads like an off-by-one and is not.
+- **`appearances.rs:308` implied frame count** looked like it would misread a
+  multi-tile object as an animation, but `probe_assets` shows modern bundles
+  express large things through the sheet layout (64×64) rather than through
+  extra sprites per cell, so the path is not exercised.
+- **`luadoc.rs` splicing** — `skip_table`'s depth counter cannot underflow from
+  its guarded entry points, and `write_with`'s insertion offset is correct
+  because every edit lands at or before the last assignment.
+- **`monster_lua.rs` flag names** — `canonical_flag` and `lua_flag_name` round-trip
+  the camel-cased Lua spellings correctly. (This looked like a bug until the
+  profile tables were checked; recording it so it does not look like one twice.)
+- **`spell.min-max-swapped`** fires zero times across the Ironcore corpus, so the
+  `.abs()` comparison at `lint.rs:507` is not producing false positives on real
+  data whatever the loader does internally.
