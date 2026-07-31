@@ -20,3 +20,10 @@ sources/
 # Reference client sources, dropped in alongside `sources/` for the same reason:
 # needed on disk to read a format, never ours to commit.
 clients/
+
+# Docs
+/BUGS.md
+/ENGINES.md
+/MISMATCHES.md
+/SHORTCUTS.md
+/ENGINES.md
