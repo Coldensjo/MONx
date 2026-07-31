@@ -19,11 +19,13 @@ export default defineConfig({
 		}
 	},
 	clearScreen: false,
-	// The F2 UI inspector reads component names off the React fibers; without
-	// this they are mangled to single letters in release builds.
-	esbuild: { keepNames: true },
 	build: {
 		outDir: 'dist',
-		target: 'chrome110'
+		target: 'chrome110',
+		// The F2 UI inspector reads component names off the React fibers; without
+		// this they are mangled to single letters in release builds. Vite 8 bundles
+		// with Rolldown, so this is an output option — the old `esbuild.keepNames`
+		// is read and ignored.
+		rolldownOptions: { output: { keepNames: true } }
 	}
 });
