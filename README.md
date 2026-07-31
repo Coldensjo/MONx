@@ -1,4 +1,15 @@
+<div align="center">
+
+<img src="src-tauri/icons/128x128@2x.png" alt="MONx" width="128" height="128">
+
 # MONx
+
+[![Stars](https://img.shields.io/github/stars/Coldensjo/MONx?style=flat-square&logo=github&color=e03131)](https://github.com/Coldensjo/MONx/stargazers)
+[![License](https://img.shields.io/github/license/Coldensjo/MONx?style=flat-square&color=e03131)](LICENSE)
+
+<img src="monx.png" alt="The Warlock's attack editor, with the loot tray and derived stats on the right" width="900">
+
+</div>
 
 A monster editor for OpenTibia servers — Ironcore, TheForgottenServer, TheVioletProject, Nostalrius, Canary/OTServBR, CrystalServer and BlackTek. Open a workspace, pick a monster, edit, save.
 
