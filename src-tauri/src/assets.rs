@@ -447,7 +447,19 @@ fn to_rgba(bmp: &[u8]) -> Option<Vec<u8>> {
             out[d] = r;
             out[d + 1] = g;
             out[d + 2] = b;
-            out[d + 3] = if a == 0 { 0xFF } else { a };
+            // The alpha byte is authoritative and always written: across a
+            // 60-sheet sample every sheet carries a real binary channel (0 or
+            // 255, never partial) and not one was uniformly zero, so there is
+            // no "alpha unused" case to compensate for.
+            //
+            // It is *not* redundant with the magenta key. The two mostly agree
+            // — in most sheets every alpha-0 pixel is also magenta — but not
+            // always: one sampled sheet has 82,461 transparent pixels of which
+            // only 79,405 are magenta. Forcing the other 3,056 opaque is what
+            // put solid white and black blocks over outfits 1555/1561/1562 and
+            // 1826/1827/1838, whose transparent margins are plain white or
+            // plain black rather than keyed.
+            out[d + 3] = a;
         }
     }
     Some(out)
