@@ -6,6 +6,7 @@
 
 [![Stars](https://img.shields.io/github/stars/Coldensjo/MONx?style=flat-square&logo=github&color=e03131)](https://github.com/Coldensjo/MONx/stargazers)
 [![License](https://img.shields.io/github/license/Coldensjo/MONx?style=flat-square&color=e03131)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-e03131?style=flat-square&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Coldensjo)
 
 <img src="monx.png" alt="The Warlock's attack editor, with the loot tray and derived stats on the right" width="900">
 
@@ -84,3 +85,7 @@ GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
 - [AGENTS.md](AGENTS.md) — architecture, conventions, directory map
 - [ENGINES.md](ENGINES.md) — what each of the seven servers does differently
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to get set up and send a change
+
+## Sponsor
+
+MONx is free and MIT-licensed. If it saves you time, you can support the work through [GitHub Sponsors](https://github.com/sponsors/Coldensjo).
