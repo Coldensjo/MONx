@@ -1,6 +1,6 @@
 [package]
 name = "monx"
-version = "0.1.43"
+version = "0.1.44"
 description = "MONx — Ironcore monster XML editor"
 authors = ["Ironcore"]
 edition = "2021"
@@ -27,7 +27,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rayon = "1.10"
 image = { version = "0.24", default-features = false, features = ["png", "gif"] }
-zip = "0.6"
 quick-xml = "0.31"
 byteorder = "1.5"
 # Modern Tibia clients ship sprite sheets as raw LZMA1. Pure Rust on purpose:
