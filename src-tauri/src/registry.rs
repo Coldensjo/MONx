@@ -30,11 +30,40 @@ pub struct RegistryEntry {
 #[derive(Debug, Clone, Default)]
 pub struct Registry {
     pub entries: Vec<RegistryEntry>,
+    /// Byte range of each entry's `<monster … />` tag, parallel to `entries`.
+    ///
+    /// Editing used to work by searching the whole document for
+    /// `file="demon.xml"` and taking the first hit. That finds a commented-out
+    /// entry naming the same file before the live one, and the rename fallback
+    /// used `String::replace`, which rewrites *every* occurrence — so renaming
+    /// one of two entries that share a name rewrote both. A span is the entry;
+    /// a substring is a guess.
+    spans: Vec<(usize, usize)>,
     /// Group headings in file order, for the new-monster dialog.
     pub groups: Vec<String>,
     /// Raw bytes, so `add`/`rename` can splice rather than reformat.
     pub bytes: Vec<u8>,
     pub present: bool,
+}
+
+/// `&`, `<` and `"` in a name would produce XML the server's parser rejects —
+/// and MONx's own parser would then read the file as having fewer entries,
+/// reporting every monster below the broken line as an orphan. Names come
+/// straight from the new-monster and rename dialogs, so this is reachable
+/// without anyone hand-editing anything.
+fn escape_attr(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 impl Registry {
@@ -62,9 +91,38 @@ impl Registry {
     }
 
     pub fn entry_for_file(&self, file: &str) -> Option<&RegistryEntry> {
+        self.index_for_file(file).map(|i| &self.entries[i])
+    }
+
+    fn index_for_file(&self, file: &str) -> Option<usize> {
         self.entries
             .iter()
-            .find(|e| e.file.eq_ignore_ascii_case(file))
+            .position(|e| e.file.eq_ignore_ascii_case(file))
+    }
+
+    /// The whole line an entry sits on, as a byte range including its newline.
+    fn line_span(&self, text: &str, index: usize) -> Option<(usize, usize)> {
+        let (start, end) = *self.spans.get(index)?;
+        if end > text.len() {
+            return None;
+        }
+        let line_start = text[..start].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        // Only swallow the leading whitespace if nothing else shares the line.
+        let start = if text[line_start..start].trim().is_empty() {
+            line_start
+        } else {
+            start
+        };
+        let line_end = text[end..]
+            .find('\n')
+            .map(|i| end + i + 1)
+            .unwrap_or(text.len());
+        let end = if text[end..line_end].trim().is_empty() {
+            line_end
+        } else {
+            end
+        };
+        Some((start, end))
     }
 
     pub fn len(&self) -> usize {
@@ -79,7 +137,11 @@ impl Registry {
     /// when the group is unknown. Returns the new file bytes.
     pub fn with_added(&self, name: &str, file: &str, group: Option<&str>) -> Vec<u8> {
         let text = String::from_utf8_lossy(&self.bytes).into_owned();
-        let entry_line = format!("<monster name=\"{name}\" file=\"{file}\" />");
+        let entry_line = format!(
+            "<monster name=\"{}\" file=\"{}\" />",
+            escape_attr(name),
+            escape_attr(file)
+        );
 
         // Insert after the last entry of the requested group, so the file's
         // comment structure keeps its meaning.
@@ -87,12 +149,8 @@ impl Registry {
             self.entries
                 .iter()
                 .rposition(|e| e.group.as_deref() == Some(g))
-                .and_then(|i| self.entries.get(i))
-                .and_then(|e| {
-                    let needle = format!("file=\"{}\"", e.file);
-                    text.find(&needle)
-                        .and_then(|p| text[p..].find('\n').map(|nl| p + nl + 1))
-                })
+                .and_then(|i| self.line_span(&text, i))
+                .map(|(_, end)| end)
         });
 
         let (indent, eol) = self.style(&text);
@@ -124,37 +182,39 @@ impl Registry {
     /// indentation and any trailing comment stay as they are.
     pub fn with_renamed(&self, file: &str, new_name: &str, new_file: &str) -> Vec<u8> {
         let text = String::from_utf8_lossy(&self.bytes).into_owned();
-        let Some(entry) = self.entry_for_file(file) else {
+        let Some(index) = self.index_for_file(file) else {
             return self.bytes.clone();
         };
-        let old = format!("name=\"{}\" file=\"{}\"", entry.name, entry.file);
-        let new = format!("name=\"{new_name}\" file=\"{new_file}\"");
-        if let Some(pos) = text.find(&old) {
-            let mut out = String::with_capacity(text.len());
-            out.push_str(&text[..pos]);
-            out.push_str(&new);
-            out.push_str(&text[pos + old.len()..]);
-            return out.into_bytes();
+        let Some(&(start, end)) = self.spans.get(index) else {
+            return self.bytes.clone();
+        };
+        if end > text.len() {
+            return self.bytes.clone();
         }
-        // Attribute order differs on this line — fall back to replacing just
-        // the two values in place.
-        text.replace(&format!("file=\"{}\"", entry.file), &format!("file=\"{new_file}\""))
-            .replace(&format!("name=\"{}\"", entry.name), &format!("name=\"{new_name}\""))
-            .into_bytes()
+        // Rewrite the two attribute values *inside this tag only*. Any other
+        // attribute, the spacing and any trailing comment stay exactly as they
+        // are, and no other line in the document is touched.
+        let tag = replace_attr(
+            &replace_attr(&text[start..end], "name", &escape_attr(new_name)),
+            "file",
+            &escape_attr(new_file),
+        );
+        let mut out = String::with_capacity(text.len());
+        out.push_str(&text[..start]);
+        out.push_str(&tag);
+        out.push_str(&text[end..]);
+        out.into_bytes()
     }
 
     /// Removes the entry pointing at `file`, and the whole line it sits on.
     pub fn with_removed(&self, file: &str) -> Vec<u8> {
         let text = String::from_utf8_lossy(&self.bytes).into_owned();
-        let Some(entry) = self.entry_for_file(file) else {
+        let Some(index) = self.index_for_file(file) else {
             return self.bytes.clone();
         };
-        let needle = format!("file=\"{}\"", entry.file);
-        let Some(pos) = text.find(&needle) else {
+        let Some((start, end)) = self.line_span(&text, index) else {
             return self.bytes.clone();
         };
-        let start = text[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0);
-        let end = text[pos..].find('\n').map(|i| pos + i + 1).unwrap_or(text.len());
         let mut out = String::with_capacity(text.len());
         out.push_str(&text[..start]);
         out.push_str(&text[end..]);
@@ -173,15 +233,42 @@ impl Registry {
     }
 }
 
+/// Replaces one attribute's value within a single tag, leaving everything else
+/// alone. Returns the tag unchanged when the attribute is not on it.
+fn replace_attr(tag: &str, key: &str, value: &str) -> String {
+    let lower = tag.to_ascii_lowercase();
+    let needle = format!("{}=\"", key.to_ascii_lowercase());
+    let Some(at) = lower.find(&needle) else {
+        return tag.to_string();
+    };
+    let open = at + needle.len();
+    let Some(close) = tag[open..].find('"').map(|i| open + i) else {
+        return tag.to_string();
+    };
+    format!("{}{}{}", &tag[..open], value, &tag[close..])
+}
+
+/// Exposed for the probes: parse without touching the filesystem.
+pub fn parse_bytes(bytes: &[u8]) -> Registry {
+    let mut reg = parse(bytes);
+    reg.bytes = bytes.to_vec();
+    reg.present = true;
+    reg
+}
+
 fn parse(bytes: &[u8]) -> Registry {
     let mut reader = quick_xml::Reader::from_reader(bytes);
     reader.check_end_names(false);
     let mut buf = Vec::new();
     let mut entries = Vec::new();
+    let mut spans: Vec<(usize, usize)> = Vec::new();
     let mut groups: Vec<String> = Vec::new();
     let mut current: Option<String> = None;
 
     loop {
+        // Events tile the document, so the position before a read is where this
+        // event starts and the position after is where it ends.
+        let start = reader.buffer_position();
         match reader.read_event_into(&mut buf) {
             Ok(quick_xml::events::Event::Eof) | Err(_) => break,
             Ok(quick_xml::events::Event::Comment(e)) => {
@@ -223,6 +310,7 @@ fn parse(bytes: &[u8]) -> Registry {
                         file,
                         group: current.clone(),
                     });
+                    spans.push((start, reader.buffer_position()));
                 }
             }
             _ => {}
@@ -232,6 +320,7 @@ fn parse(bytes: &[u8]) -> Registry {
 
     Registry {
         entries,
+        spans,
         groups,
         bytes: Vec::new(),
         present: false,

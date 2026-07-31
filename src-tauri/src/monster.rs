@@ -4170,8 +4170,13 @@ pub struct PinReport {
     /// Bare ids that gain a naming comment. Empty for an ambiguous-only sweep.
     pub named: Vec<NamedLoot>,
     pub unresolved: Vec<UnresolvedLoot>,
-    /// Files the pin touches, not files scanned.
+    /// Files the pin touches, not files scanned. Counts files actually written
+    /// once `applied`.
     pub files: usize,
+    /// One message per file that could not be written. A corpus-wide sweep must
+    /// not abandon the remaining files — or the refresh — because one of them
+    /// was locked.
+    pub failed: Vec<String>,
 }
 
 /// Rewrites name-based loot entries as `id` + a trailing comment naming the
@@ -4209,9 +4214,13 @@ pub fn pin_loot_ids(
         if !changed {
             continue;
         }
-        report.files += 1;
         if apply {
-            save(profile, dir, registry, &next)?;
+            match save(profile, dir, registry, &next) {
+                Ok(_) => report.files += 1,
+                Err(e) => report.failed.push(format!("{}: {e}", next.file)),
+            }
+        } else {
+            report.files += 1;
         }
     }
 

@@ -29,17 +29,39 @@ export interface CompareGroup {
 
 const ABSENT = '—';
 
-function row(label: string, a: string, b: string): CompareRow {
-	const na = Number(a.replace(/[,%]/g, ''));
-	const nb = Number(b.replace(/[,%]/g, ''));
+/**
+ * A cell is either plain display text or a rendered number that still knows
+ * what it was.
+ *
+ * The delta used to be recovered by parsing the rendered string back —
+ * `Number(a.replace(/[,%]/g, ''))` — which works in English and nowhere else.
+ * `toLocaleString()` under `pl` groups with a non-breaking space and under `pt`
+ * with a `.`, neither of which that strip removes, so every delta in the dialog
+ * silently became `null` the moment the user changed language. Carrying the
+ * value alongside the text means the formatter can do whatever it likes.
+ */
+interface NumCell {
+	text: string;
+	value: number;
+}
+type Cell = string | NumCell;
+
+const cellText = (c: Cell): string => (typeof c === 'string' ? c : c.text);
+const cellValue = (c: Cell): number | null => (typeof c === 'string' ? null : c.value);
+
+function row(label: string, a: Cell, b: Cell): CompareRow {
+	const [ta, tb] = [cellText(a), cellText(b)];
+	const [na, nb] = [cellValue(a), cellValue(b)];
 	const delta =
-		Number.isFinite(na) && Number.isFinite(nb) && na !== 0 && a !== ABSENT && b !== ABSENT
+		na !== null && nb !== null && na !== 0 && ta !== ABSENT && tb !== ABSENT
 			? ((nb - na) / Math.abs(na)) * 100
 			: null;
-	return { label, a, b, same: a === b, delta };
+	return { label, a: ta, b: tb, same: ta === tb, delta };
 }
 
-const num = (n: number) => n.toLocaleString();
+const num = (n: number): NumCell => ({ text: n.toLocaleString(), value: n });
+/** A number that displays with a unit and still compares as a number. */
+const unit = (n: number, suffix: string): NumCell => ({ text: `${n.toLocaleString()}${suffix}`, value: n });
 const text = (v: string | null | undefined) => (v === null || v === undefined || v === '' ? ABSENT : v);
 
 /** Union of two records' keys, in a stable order. */
@@ -51,7 +73,7 @@ function keys(a: object, b: object): string[] {
 function spellText(s: SpellBlock): string {
 	const bits = [s.name ?? s.script ?? s.kind];
 	bits.push(`${s.interval}ms`, `${s.chance}%`);
-	if (s.min !== 0 || s.max !== 0) bits.push(`${num(s.min)}–${num(s.max)}`);
+	if (s.min !== 0 || s.max !== 0) bits.push(`${num(s.min).text}–${num(s.max).text}`);
 	if (s.range) bits.push(`range ${s.range}`);
 	return bits.join(' · ');
 }
@@ -79,12 +101,29 @@ function spellRows(title: string, a: SpellBlock[], b: SpellBlock[]): CompareGrou
 	};
 }
 
-/** Loot flattened to `label → chance ×count`, containers included. */
-function lootIndex(entries: LootEntry[], out = new Map<string, string>()): Map<string, string> {
+/**
+ * Loot flattened to `label → chance ×count`, containers included.
+ *
+ * The label alone is not a key. The same item can sit in two different
+ * containers, or twice at top level with different chances, and keying on the
+ * label alone kept only the last of them — so the Loot group quietly
+ * under-reported exactly the monsters whose loot tables are worth comparing.
+ * The path disambiguates within a corpse, and a repeat at the same path gets an
+ * occurrence suffix.
+ */
+function lootIndex(
+	entries: LootEntry[],
+	out = new Map<string, string>(),
+	prefix = ''
+): Map<string, string> {
+	const seen = new Map<string, number>();
 	for (const e of entries) {
 		const label = e.comment || e.name || (e.id !== null ? `id ${e.id}` : 'entry');
-		out.set(label, `${percentText(e.chance)}${e.countmax > 1 ? ` ×${e.countmax}` : ''}`);
-		lootIndex(e.children, out);
+		const n = (seen.get(label) ?? 0) + 1;
+		seen.set(label, n);
+		const key = `${prefix}${label}${n > 1 ? ` (${n})` : ''}`;
+		out.set(key, `${percentText(e.chance)}${e.countmax > 1 ? ` ×${e.countmax}` : ''}`);
+		lootIndex(e.children, out, `${key} › `);
 	}
 	return out;
 }
@@ -141,7 +180,7 @@ export function compareDocs(a: MonsterDoc, b: MonsterDoc): CompareGroup[] {
 		{
 			title: 'Elements',
 			rows: keys(a.elements, b.elements).map(k =>
-				row(k, a.elements[k] === undefined ? ABSENT : `${a.elements[k]}%`, b.elements[k] === undefined ? ABSENT : `${b.elements[k]}%`)
+				row(k, a.elements[k] === undefined ? ABSENT : unit(a.elements[k], '%'), b.elements[k] === undefined ? ABSENT : unit(b.elements[k], '%'))
 			)
 		},
 		spellRows('Attacks', a.attacks, b.attacks),
@@ -170,8 +209,8 @@ export function compareDocs(a: MonsterDoc, b: MonsterDoc): CompareGroup[] {
 		{
 			title: 'Voices',
 			rows: [
-				row('Interval', `${a.voices.interval}ms`, `${b.voices.interval}ms`),
-				row('Chance', `${a.voices.chance}%`, `${b.voices.chance}%`),
+				row('Interval', unit(a.voices.interval, 'ms'), unit(b.voices.interval, 'ms')),
+				row('Chance', unit(a.voices.chance, '%'), unit(b.voices.chance, '%')),
 				row('Lines', num(a.voices.lines.length), num(b.voices.lines.length)),
 				row('Pacifist line', text(a.voices.pacifist), text(b.voices.pacifist)),
 				row('Leash line', text(a.voices.leash), text(b.voices.leash))

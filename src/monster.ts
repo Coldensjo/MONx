@@ -356,8 +356,10 @@ export interface PinReport {
 	named: NamedLoot[];
 	/** Names no items.xml entry owns; left untouched (§24). */
 	unresolved: UnresolvedLoot[];
-	/** Files the pin touches, not files scanned. */
+	/** Files the pin touches, not files scanned. Files written once applied. */
 	files: number;
+	/** One message per file that could not be written. */
+	failed: string[];
 }
 
 // ---------- Corpus scaling ----------
@@ -381,6 +383,8 @@ export interface ScaleReport {
 	sample: ScaledEntry[];
 	/** True when more entries change than `sample` lists. */
 	truncated: boolean;
+	/** One message per file that could not be written. */
+	failed: string[];
 }
 
 export interface ScaleOptions {
@@ -442,6 +446,8 @@ export interface BatchReport {
 	structural: number;
 	sample: BatchChange[];
 	truncated: boolean;
+	/** One message per file that could not be written. */
+	failed: string[];
 }
 
 /** Corpus-wide field edit; `apply: false` is the preview. */
@@ -644,6 +650,24 @@ let cacheKey = 0;
 
 export function setProtocolCacheKey(v: number): void {
 	cacheKey = v;
+	corpusKey = 0;
+}
+
+// Bumped whenever the backend's in-memory corpus is rewritten — that is, on
+// every save.
+//
+// `/monsters.png` renders each look from that corpus rather than from anything
+// in the URL, but the URL only carried `files`, `cell` and the workspace-open
+// `v`, and responses are served `max-age=86400`. So editing an outfit and
+// saving left the list drawing the old sprite for the rest of the session,
+// while `lookUrl` — which encodes the look's own field values — updated
+// immediately. That difference is what made it read as a preview bug rather
+// than a cache one.
+let corpusKey = 0;
+
+/** Call after any save or batch write, so corpus-rendered atlases re-fetch. */
+export function bumpCorpusKey(): void {
+	corpusKey += 1;
 }
 
 /** One outfit cell for a monster's `<look>`. Under `typeex` the colours and addons are ignored. */
@@ -738,12 +762,17 @@ export function thingsRowUrlFor(
 	return `${protocolBase}/things.png?${q}`;
 }
 
-/** Horizontal row atlas of monster looks, addressed by monster file name. */
+/**
+ * Horizontal row atlas of monster looks, addressed by monster file name.
+ *
+ * The only route whose pixels come from the backend's mutable corpus, so it is
+ * the only one that needs `corpusKey` on top of the workspace key.
+ */
 export function monstersRowUrl(files: string[], cell: number): string {
 	const q = new URLSearchParams({
 		files: files.join(','),
 		cell: String(cell),
-		v: String(cacheKey)
+		v: `${cacheKey}.${corpusKey}`
 	});
 	return `${protocolBase}/monsters.png?${q}`;
 }

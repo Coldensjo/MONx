@@ -18,7 +18,8 @@ import type { ItemInfo, LootEntry } from './monster';
 // the stack count being uniform in 1..countmax. The dialog's caption says so.
 
 export const MAX_CHANCE = 100000;
-const MAX_COUNTMAX = 100;
+/** §13: the loader rejects the whole entry above this, it does not clamp. */
+export const MAX_COUNTMAX = 100;
 
 /** mulberry32 — small, seedable, good enough for loot rolls. No dependency. */
 export function makeRng(seed: number): () => number {
@@ -108,7 +109,8 @@ export function countDeadEntries(loot: LootEntry[], resolve: Resolve): number {
 	return dead;
 }
 
-function effectiveChance(entry: LootEntry, lootRate: number): number {
+/** A negative `chance` cannot roll, and the rate cannot push it past 100%. */
+export function effectiveChance(entry: LootEntry, lootRate: number): number {
 	return Math.min(Math.max(entry.chance, 0) * lootRate, MAX_CHANCE);
 }
 

@@ -61,12 +61,16 @@ const PRINTABLE: Record<string, string> = {
 export function chordFrom(e: KeyboardEvent): string | null {
 	const raw = e.key;
 	if (raw === 'Control' || raw === 'Shift' || raw === 'Alt' || raw === 'Meta') return null;
-	// `e.key` for a shifted letter is the upper case one, and for a shifted digit
-	// it is the symbol ("!"), which would make Ctrl+Shift+1 unmatchable. `e.code`
-	// is the physical key, so digits and letters both stay stable.
+	// `e.key` for a shifted digit is the symbol ("!"), which would make
+	// Ctrl+Shift+1 unmatchable, so digits come from `e.code` — the physical key.
+	//
+	// Letters must NOT. `e.code` names the QWERTY position, so on AZERTY the key
+	// labelled A reports `KeyQ`: the manager would record and display Ctrl+Q for
+	// a key the user's keyboard calls A, and Ctrl+S would fire from wherever S
+	// sits on a US board. `e.key` is the letter the layout actually produces,
+	// which is the one printed on the keycap and the one to bind.
 	let key = PRINTABLE[raw] ?? raw;
 	if (/^Digit\d$/.test(e.code)) key = e.code.slice(5);
-	else if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
 	else if (key.length === 1) key = key.toUpperCase();
 	return chordOf(key, { ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey });
 }

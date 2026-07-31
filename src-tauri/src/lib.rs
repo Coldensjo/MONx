@@ -221,12 +221,24 @@ fn bundle_things(bundle: &assets::Bundle, cat: Category) -> Vec<ThingSummary> {
 #[tauri::command]
 fn get_thing(
     state: State<DatManagerState>,
+    ws: State<WorkspaceState>,
     path: String,
     category: String,
     id: u32,
 ) -> Result<dat::Thing, String> {
     let cat =
         Category::parse(&category).ok_or_else(|| format!("invalid category: {}", category))?;
+    // `dat::Thing` is a `.dat` record and a bundle has none — its appearance
+    // tables describe the same things in a different shape, which is why
+    // `get_things` can serve both and this cannot. Say so, rather than falling
+    // through to `manager.file(&path)` and failing with a path error about a
+    // file the workspace was never going to have.
+    if ws.read().map_err(|e| format!("lock: {e}"))?.bundle.is_some() {
+        return Err(
+            "This workspace uses a modern asset bundle, which has no .dat things — use get_things"
+                .to_string(),
+        );
+    }
     let manager = state.read().map_err(|e| format!("lock: {e}"))?;
     let file = manager.file(&path)?;
     file.thing(cat, id)
@@ -345,7 +357,7 @@ fn open_workspace(
     // the workspace. An explicit key from the Landing picker wins; otherwise the
     // probe's detection does, and the label goes into `WorkspaceInfo` so the
     // titlebar can say which rules are in force.
-    let detection = workspace::probe(&paths).engine;
+    let detection = workspace::resolve_engine(&paths);
     let profile = paths
         .engine
         .as_deref()
@@ -489,6 +501,30 @@ fn item_lints(index: &items::ItemIndex) -> Vec<Lint> {
 
 /// Re-parses the corpus into the workspace after a mutating command, so the
 /// list, the lint drawer and cross-file checks never see a stale view.
+/// Writes a batch, never stopping at the first failure, and always refreshing.
+///
+/// `save(…)?` inside a corpus loop is the wrong shape for a bulk edit: if the
+/// fortieth of three hundred files is read-only or locked, the `?` returns
+/// before `refresh`, so the disk holds 39 edited files and memory still
+/// describes all 300 as they were. The list, the lint drawer and every preview
+/// are then wrong until the workspace is reopened, and the single error toast
+/// says nothing about a partial write.
+///
+/// Returns the files written and one message per file that would not be.
+fn save_all(ws: &mut workspace::Workspace, docs: &[monster::MonsterDoc]) -> (u32, Vec<String>) {
+    let (dir, profile) = (ws.monsters_dir(), ws.profile);
+    let mut written = 0;
+    let mut failed = Vec::new();
+    for d in docs {
+        match monster::save(profile, &dir, &ws.registry, d) {
+            Ok(_) => written += 1,
+            Err(e) => failed.push(format!("{}: {e}", d.file)),
+        }
+    }
+    refresh(ws);
+    (written, failed)
+}
+
 fn refresh(ws: &mut workspace::Workspace) {
     let dir = ws.monsters_dir();
     ws.registry = registry::Registry::load(&dir.join("monsters.xml"));
@@ -583,8 +619,14 @@ fn reveal_monster(state: State<WorkspaceState>, file: String) -> Result<(), Stri
     // exit status is not worth reading — only a failure to spawn is real.
     #[cfg(target_os = "windows")]
     let mut cmd = {
+        use std::os::windows::process::CommandExt;
         let mut c = std::process::Command::new("explorer.exe");
-        c.arg(format!("/select,{}", path.display()));
+        // `raw_arg`, not `arg`. Rust quotes an argument containing spaces, and
+        // explorer parses `"/select,C:\My Server\data\monster\demon.xml"` as one
+        // malformed token — it opens Documents instead of selecting the file.
+        // The path comes from the workspace, not from the user, so passing it
+        // through unquoted is safe here in a way it would not be generally.
+        c.raw_arg(format!("/select,\"{}\"", path.display()));
         c
     };
     #[cfg(target_os = "macos")]
@@ -678,7 +720,9 @@ fn pin_loot_ids(
     );
     ws.docs = docs;
     let report = report?;
-    if apply && report.files > 0 {
+    // Refresh whenever anything was written *or attempted*: a sweep that wrote
+    // nine files and failed on the tenth still leaves the index stale.
+    if apply && (report.files > 0 || !report.failed.is_empty()) {
         refresh(&mut ws);
     }
     Ok(report)
@@ -737,6 +781,9 @@ struct ScaleReport {
     sample: Vec<ScaledEntry>,
     /// True when more entries change than `sample` lists.
     truncated: bool,
+    /// One message per file that could not be written. Empty on success; a
+    /// partial write is a thing the user has to be told about.
+    failed: Vec<String>,
 }
 
 /// How many changed entries the preview lists before it says "and N more".
@@ -880,17 +927,17 @@ fn scale_loot_chances(
             to_save.push(d);
         }
     }
-    let files = to_save.len() as u32;
+    let mut files = to_save.len() as u32;
     let truncated = entries as usize > sample.len();
 
+    let mut failed = Vec::new();
     if apply {
-        for d in &to_save {
-            monster::save(ws.profile, &ws.monsters_dir(), &ws.registry, d)?;
-        }
-        refresh(&mut ws);
+        let (written, errs) = save_all(&mut ws, &to_save);
+        files = written;
+        failed = errs;
     }
 
-    Ok(ScaleReport { applied: apply, entries, files, zeroed, sample, truncated })
+    Ok(ScaleReport { applied: apply, entries, files, zeroed, sample, truncated, failed })
 }
 
 // ---------- Batch field edit ----------
@@ -922,6 +969,8 @@ struct BatchReport {
     structural: u32,
     sample: Vec<BatchChange>,
     truncated: bool,
+    /// One message per file that could not be written.
+    failed: Vec<String>,
 }
 
 const BATCH_PREVIEW_ROWS: usize = 500;
@@ -976,17 +1025,17 @@ fn batch_edit(
         }
     }
 
-    let files = to_save.len() as u32;
+    let mut files = to_save.len() as u32;
     let truncated = changed as usize > sample.len();
 
+    let mut failed = Vec::new();
     if apply {
-        for d in &to_save {
-            monster::save(ws.profile, &ws.monsters_dir(), &ws.registry, d)?;
-        }
-        refresh(&mut ws);
+        let (written, errs) = save_all(&mut ws, &to_save);
+        files = written;
+        failed = errs;
     }
 
-    Ok(BatchReport { applied: apply, matched, changed, files, structural, sample, truncated })
+    Ok(BatchReport { applied: apply, matched, changed, files, structural, sample, truncated, failed })
 }
 
 #[derive(Serialize, Clone)]
@@ -1227,6 +1276,21 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| format!("write {path}: {e}"))
 }
 
+/// `%` must introduce a two-digit hex escape, so it cannot also read as cmd's
+/// variable expansion.
+fn percent_escapes_well_formed(url: &str) -> bool {
+    let b = url.as_bytes();
+    let mut i = 0;
+    while let Some(pos) = b[i..].iter().position(|&c| c == b'%') {
+        let at = i + pos;
+        match (b.get(at + 1), b.get(at + 2)) {
+            (Some(h), Some(l)) if h.is_ascii_hexdigit() && l.is_ascii_hexdigit() => i = at + 3,
+            _ => return false,
+        }
+    }
+    true
+}
+
 /// Hands a URL to the OS browser. The webview refuses to navigate away from
 /// the app, so a plain `<a href>` does nothing in a Tauri window.
 ///
@@ -1234,9 +1298,23 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
 /// argument reaches a shell on Windows, and anything else — `file:`, a bare
 /// path, a flag — would be a way to run something. There is exactly one caller
 /// and it passes a literal.
+///
+/// The check is an **allowlist**. A denylist of shell metacharacters is the
+/// wrong shape for a claim this strong, and the one that used to be here proved
+/// it by omitting `^` (cmd's escape), `%` (variable expansion) and `<`/`>`
+/// (redirection). Enumerating what may appear cannot have that failure mode.
 #[tauri::command]
 fn open_external(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") || url.contains(['"', '\'', '\n', '\r', '&', '|']) {
+    let safe = url.starts_with("https://")
+        && url.len() <= 2048
+        && url[8..].chars().all(|c| {
+            c.is_ascii_alphanumeric() || "-._~:/?#[]@!$'()*+,;=%".contains(c)
+        })
+        // `%` is legal in a URL as an escape, and is also cmd's variable
+        // expansion. Both uses cannot be told apart by the shell, so require
+        // it to be a well-formed percent-escape and nothing else.
+        && percent_escapes_well_formed(&url);
+    if !safe {
         return Err(format!("refusing to open {url}"));
     }
 

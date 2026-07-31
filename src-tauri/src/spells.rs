@@ -84,7 +84,17 @@ impl SpellIndex {
         for doc in docs {
             for spell in doc.attacks.iter().chain(doc.defenses.iter()) {
                 let Some(name) = &spell.name else { continue };
-                if let Some(entry) = out.iter_mut().find(|s| s.name.eq_ignore_ascii_case(name)) {
+                // Registered names are appended after the built-ins, so a plain
+                // `find` hit the built-in row whenever a `spells.xml` name
+                // shadowed one — and shadowing is the §8.1 hazard this whole
+                // module exists to surface. The registered entry is the one in
+                // force at runtime, so it is the one whose count means
+                // anything; searching from the back reaches it first.
+                if let Some(entry) = out
+                    .iter_mut()
+                    .rev()
+                    .find(|s| s.name.eq_ignore_ascii_case(name))
+                {
                     entry.usage += 1;
                 }
             }

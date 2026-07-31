@@ -172,9 +172,17 @@ pub fn resolve_folder(raw: &str) -> Option<PathBuf> {
 pub fn expand_data_root(dir: &Path) -> Option<WorkspacePaths> {
     let monsters = dir.join("monster");
     let items = dir.join("items");
-    if !monsters.is_dir() || !items.is_dir() {
+    // Only the monsters folder is required — that is the rule everywhere else
+    // in the app, and demanding `items/` here meant a data root that had one
+    // and not the other expanded to nothing at all rather than to what it had.
+    if !monsters.is_dir() {
         return None;
     }
+    let items = if items.is_dir() {
+        items.to_string_lossy().into_owned()
+    } else {
+        String::new()
+    };
     let spells = dir.join("spells");
     // A client folder is a sibling of `data/`, not a child — look one level up.
     let client = dir
@@ -187,7 +195,7 @@ pub fn expand_data_root(dir: &Path) -> Option<WorkspacePaths> {
 
     Some(WorkspacePaths {
         monsters: monsters.to_string_lossy().into_owned(),
-        items: items.to_string_lossy().into_owned(),
+        items,
         client: client.to_string_lossy().into_owned(),
         spells: spells
             .is_dir()
@@ -210,8 +218,13 @@ fn has_ext(dir: &Path, ext: &str) -> bool {
         })
 }
 
+/// Both kinds of client count. `probe`'s own slot check
+/// (`slot(Some(&expanded.client), …)`) has always accepted a modern asset
+/// bundle as a first-class client; this scan recognised only a `.spr`/`.dat`
+/// pair, so dropping a Canary `data/` root filled three slots and left the
+/// client empty for no reason the user could see.
 fn has_client_files(dir: &Path) -> bool {
-    has_ext(dir, "dat") && has_ext(dir, "spr")
+    (has_ext(dir, "dat") && has_ext(dir, "spr")) || dir.join("catalog-content.json").is_file()
 }
 
 /// Finds the single file in `dir` with the given extension, preferring `tibia.*`.
@@ -289,29 +302,39 @@ fn collect_xml(dir: &Path, out: &mut Vec<PathBuf>, depth: u32) {
     out.extend(crate::monster::candidate_files(dir, DETECT_SAMPLE));
 }
 
-pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
-    // A data/ root dropped on any slot fills all of them.
-    let expanded = resolve_folder(&paths.monsters)
+/// A data/ root dropped on any slot fills all of them.
+fn expanded_paths(paths: &WorkspacePaths) -> WorkspacePaths {
+    resolve_folder(&paths.monsters)
         .as_deref()
         .and_then(expand_data_root)
-        .unwrap_or_else(|| paths.clone());
+        .unwrap_or_else(|| paths.clone())
+}
 
+/// Which engine's rules a set of paths implies.
+///
+/// Split out of `probe` because `open_workspace` wants only this, and `probe`
+/// is not cheap: it loads the item database, the registry and any asset bundle
+/// to fill in the slot summaries. Opening a workspace was paying for all of
+/// that twice — and when the Landing picker sent an explicit key, which is the
+/// common case, the second parse was thrown away unread.
+pub fn resolve_engine(paths: &WorkspacePaths) -> crate::engine::EngineDetection {
     // An explicit choice always wins over detection — the user may know the
     // corpus is mid-migration, or simply be right where the heuristics are not.
-    let engine = match paths
-        .engine
-        .as_deref()
-        .and_then(crate::engine::by_key)
-    {
-        Some(p) => crate::engine::EngineDetection {
+    if let Some(p) = paths.engine.as_deref().and_then(crate::engine::by_key) {
+        return crate::engine::EngineDetection {
             candidates: Vec::new(),
             best: p.key.to_string(),
             confident: true,
-        },
-        None => resolve_folder(&expanded.monsters)
-            .map(|dir| detect_engine(&dir))
-            .unwrap_or_default(),
-    };
+        };
+    }
+    resolve_folder(&expanded_paths(paths).monsters)
+        .map(|dir| detect_engine(&dir))
+        .unwrap_or_default()
+}
+
+pub fn probe(paths: &WorkspacePaths) -> WorkspaceProbe {
+    let expanded = expanded_paths(paths);
+    let engine = resolve_engine(paths);
     let profile = crate::engine::by_key(&engine.best).unwrap_or_else(crate::engine::default_profile);
 
     WorkspaceProbe {

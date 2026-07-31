@@ -5,6 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { AlertCircle, CheckCircle2, Minus, Moon, Square, Sun, X } from 'lucide-react';
 import {
+	bumpCorpusKey,
 	closeWorkspace,
 	listMonsters,
 	openWorkspace,
@@ -102,6 +103,11 @@ export default function App() {
 	}, [dirty, t]);
 
 	const refreshMonsters = useCallback((focusFile: string | null) => {
+		// Every save and every batch write comes through here, which makes it the
+		// one place that knows the backend's corpus has moved. `/monsters.png`
+		// draws from that corpus and is cached for a day, so without this the
+		// list keeps the pre-save sprite for the rest of the session.
+		bumpCorpusKey();
 		listMonsters()
 			.then(list => {
 				setMonsters(list);

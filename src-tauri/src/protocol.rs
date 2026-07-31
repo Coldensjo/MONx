@@ -762,13 +762,11 @@ fn dispatch(
 
             let dat_manager = dat.read().map_err(|e| format!("lock: {e}"))?;
             let file = dat_manager.file(&dat_path)?;
-            let things: Vec<&dat::Thing> = ids
-                .iter()
-                .map(|&id| {
-                    file.thing(cat, id)
-                        .ok_or_else(|| format!("unknown thing id {}", id))
-                })
-                .collect::<Result<_, _>>()?;
+            // A single missing id must not blank the whole row — the same rule
+            // `/items.png`, `/monsters.png` and the bundle `/things.png` all
+            // follow. Unresolvable cells render empty and keep their place.
+            let things: Vec<Option<&dat::Thing>> =
+                ids.iter().map(|&id| file.thing(cat, id)).collect();
 
             let spr_manager = spr.read().map_err(|e| format!("lock: {e}"))?;
             let render = dat::compose_things_row(
@@ -807,15 +805,31 @@ pub fn handle<R: tauri::Runtime>(
         // file, so those two go the workspace route as well when one is open —
         // the frontend asks the same URL either way and cannot tell.
         let bundle_open = ws.read().map(|w| w.bundle.is_some()).unwrap_or(false);
-        let result = match path_seg.as_str() {
-            "/look.png" | "/item.png" | "/items.png" | "/monsters.png" => {
-                dispatch_monx(&spr, &dat, &ws, &path_seg, &query)
+        // `responder.respond` is only reached at the bottom of this closure, so
+        // a panic anywhere above it drops the responder without a response: the
+        // `<img>` then never loads *and* never errors, leaving a permanently
+        // blank cell and nothing in the console. The composition paths index
+        // into pixel buffers, which is exactly where an unexpected length would
+        // panic, so the one thing this must not do is let one through.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            match path_seg.as_str() {
+                "/look.png" | "/item.png" | "/items.png" | "/monsters.png" => {
+                    dispatch_monx(&spr, &dat, &ws, &path_seg, &query)
+                }
+                "/thing.png" | "/things.png" if bundle_open => {
+                    dispatch_monx(&spr, &dat, &ws, &path_seg, &query)
+                }
+                _ => dispatch(&spr, &dat, &path_seg, &query),
             }
-            "/thing.png" | "/things.png" if bundle_open => {
-                dispatch_monx(&spr, &dat, &ws, &path_seg, &query)
-            }
-            _ => dispatch(&spr, &dat, &path_seg, &query),
-        };
+        }))
+        .unwrap_or_else(|panic| {
+            let what = panic
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            Err(format!("{path_seg} panicked: {what}"))
+        });
         let response = match result {
             Ok((content_type, bytes)) => tauri::http::Response::builder()
                 .status(200)

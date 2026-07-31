@@ -1,4 +1,5 @@
 import type { BalanceBand, ItemInfo, LootEntry, MonsterDoc, SpellBlock } from './monster';
+import { MAX_CHANCE, MAX_COUNTMAX, effectiveChance } from './lootsim';
 
 // Combat math the XML never states. Every formula here is engine behaviour from
 // MONSTER_EDITOR_REFERENCE §23 / §11 / §16 — not a design choice. A wrong number
@@ -260,8 +261,13 @@ export function expectedLootValue(loot: LootEntry[], items: Map<number, ItemInfo
 
 function walkLoot(entries: LootEntry[], items: Map<number, ItemInfo>, carried: number, acc: LootValue): void {
 	for (const entry of entries) {
-		const p = carried * (Math.min(entry.chance, 100000) / 100000);
 		const item = entry.id === null ? undefined : items.get(entry.id);
+		// §13: above the ceiling the loader drops the entry rather than clamping
+		// it, so it can never contribute — nor can anything nested inside it.
+		// `lootsim.entryIsDead` has always known this; this walk did not, and the
+		// two are supposed to be the same model.
+		if (entry.countmax > MAX_COUNTMAX) continue;
+		const p = carried * (effectiveChance(entry, 1) / MAX_CHANCE);
 		const worth = item ? Number(item.attributes.worth) : NaN;
 		if (Number.isFinite(worth)) {
 			const count = item?.stackable ? (1 + Math.max(1, entry.countmax)) / 2 : 1;
@@ -270,7 +276,9 @@ function walkLoot(entries: LootEntry[], items: Map<number, ItemInfo>, carried: n
 		} else {
 			acc.unknown++;
 		}
-		if (entry.children.length > 0) walkLoot(entry.children, items, p, acc);
+		// Children only drop with the container that holds them; on anything
+		// else the loader never reads them (`loot.children-on-non-container`).
+		if (item?.container && entry.children.length > 0) walkLoot(entry.children, items, p, acc);
 	}
 }
 

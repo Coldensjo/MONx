@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { confirm, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { Bookmark, Package, Percent, PersonStanding, Plus, Save, Skull, Sparkles, Star, Trash2, Users, Wand2, X } from 'lucide-react';
 import {
@@ -141,6 +142,22 @@ const THING_CAT: Record<ThingView, 'outfit' | 'effect' | 'missile'> = {
 	effects: 'effect',
 	missiles: 'missile'
 };
+
+/**
+ * A corpus-wide write that did not finish. Says how much landed and names the
+ * first file that would not — "one error toast and no indication that a partial
+ * write happened" is the state this exists to prevent.
+ */
+function partialWrite(t: TFunction, written: number, failed: string[]): string {
+	const first = failed[0] ?? '';
+	return failed.length === 1
+		? t('Wrote {{count}} file, then failed on {{error}}', { count: written, error: first })
+		: t('Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})', {
+				count: written,
+				failures: failed.length,
+				error: first
+			});
+}
 
 interface Props {
 	info: WorkspaceInfo;
@@ -2466,7 +2483,11 @@ export default function Workspace({
 						onMonstersChanged(null);
 						lintWorkspace().then(setWorkspaceLints).catch(() => {});
 						setReloadKey(k => k + 1);
-						showToast('ok', t('Changed {{count}} monster', { count: report.changed }));
+						if (report.failed.length > 0) {
+							showToast('error', partialWrite(t, report.files, report.failed));
+						} else {
+							showToast('ok', t('Changed {{count}} monster', { count: report.changed }));
+						}
 					}}
 				/>
 			)}
@@ -2481,11 +2502,13 @@ export default function Workspace({
 						lintWorkspace().then(setWorkspaceLints).catch(() => {});
 						setReloadKey(k => k + 1);
 						showToast(
-							'ok',
-							t('Scaled {{count}} loot chance across {{files}}', {
-								count: report.entries,
-								files: t('{{count}} file', { count: report.files })
-							})
+							report.failed.length > 0 ? 'error' : 'ok',
+							report.failed.length > 0
+								? partialWrite(t, report.files, report.failed)
+								: t('Scaled {{count}} loot chance across {{files}}', {
+										count: report.entries,
+										files: t('{{count}} file', { count: report.files })
+									})
 						);
 					}}
 				/>
@@ -2501,11 +2524,13 @@ export default function Workspace({
 						lintWorkspace().then(setWorkspaceLints).catch(() => {});
 						setReloadKey(k => k + 1);
 						showToast(
-							'ok',
-							t('Pinned {{count}} loot entry across {{files}}', {
-								count: report.pinned.length + report.named.length,
-								files: t('{{count}} file', { count: report.files })
-							})
+							report.failed.length > 0 ? 'error' : 'ok',
+							report.failed.length > 0
+								? partialWrite(t, report.files, report.failed)
+								: t('Pinned {{count}} loot entry across {{files}}', {
+										count: report.pinned.length + report.named.length,
+										files: t('{{count}} file', { count: report.files })
+									})
 						);
 					}}
 				/>

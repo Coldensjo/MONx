@@ -1400,10 +1400,17 @@ fn blit_scaled_into_cell(
 /// Composes a horizontal strip of thing previews, one `cell`×`cell` square per
 /// thing, in the given order. One request per grid row instead of per thing.
 #[allow(clippy::too_many_arguments)]
+/// A row of thing cells.
+///
+/// `things` is a slice of `Option` so a cell the `.dat` does not define renders
+/// empty and keeps its place, rather than failing the request. A grid row is
+/// one image: making one unknown id blank all sixteen cells was the opposite of
+/// what every other row route does, and it showed as a broken image with no
+/// clue which id caused it.
 pub fn compose_things_row(
     spr: &SprManager,
     spr_path: &str,
-    things: &[&Thing],
+    things: &[Option<&Thing>],
     cell: u32,
     global_frame: u32,
     animate_enabled: bool,
@@ -1414,26 +1421,29 @@ pub fn compose_things_row(
 
     let cell = cell as usize;
     let mut all_ids = Vec::new();
-    for t in things {
+    for t in things.iter().flatten() {
         let frame = preview_frame(t, global_frame, animate_enabled);
         let (_, px, py, pz) = preview_pattern(t);
         cell_sprite_ids(t, frame, px, py, pz, None, addons, &mut all_ids);
     }
     let decoded = read_decoded(spr, spr_path, &all_ids, transparent)?;
 
-    let renders: Vec<ThingRender> = things
+    let renders: Vec<Option<ThingRender>> = things
         .par_iter()
         .map(|t| {
+            let t = (*t)?;
             let frame = preview_frame(t, global_frame, animate_enabled);
             let (_, px, py, pz) = preview_pattern(t);
-            compose_from_decoded(&decoded, t, frame, px, py, pz, None, addons)
+            Some(compose_from_decoded(&decoded, t, frame, px, py, pz, None, addons))
         })
         .collect();
 
     let row_w = cell * things.len().max(1);
     let mut row = vec![0u8; row_w * cell * 4];
     for (i, render) in renders.iter().enumerate() {
-        blit_scaled_into_cell(&mut row, row_w, i * cell, cell, render);
+        if let Some(render) = render {
+            blit_scaled_into_cell(&mut row, row_w, i * cell, cell, render);
+        }
     }
 
     Ok(ThingRender {

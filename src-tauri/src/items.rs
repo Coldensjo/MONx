@@ -148,13 +148,20 @@ impl ItemIndex {
             }
         }
 
+        // Prefix matches rank above substring matches. Breaking once `prefix`
+        // is full is sound rather than arbitrary: `by_id` is a BTreeMap so the
+        // scan is in id order, and `take(limit)` below then yields prefix
+        // matches only — whatever `substring` holds at that point is discarded.
+        // The cap on `substring` is not a correctness fix, only a bound: a broad
+        // query used to grow it to the size of the whole database to throw all
+        // but `limit` of it away.
         let mut prefix: Vec<&ItemInfo> = Vec::new();
         let mut substring: Vec<&ItemInfo> = Vec::new();
         for item in items() {
             let name = item.name.to_lowercase();
             if name.starts_with(&q) {
                 prefix.push(item);
-            } else if name.contains(&q) {
+            } else if substring.len() < limit && name.contains(&q) {
                 substring.push(item);
             }
             if prefix.len() >= limit {
@@ -259,6 +266,16 @@ impl ItemIndex {
             if line.starts_with("[[") {
                 flush(&mut current, &mut index);
                 current = Some((None, None, BTreeMap::new()));
+                continue;
+            }
+            // Any other bracketed header — a single-bracket `[section]`, or a
+            // top-level table BlackTek adds later — ends the current record
+            // without starting one. Treating only `[[` as a delimiter folded
+            // such a section's keys into the preceding item's attributes, where
+            // they surfaced in the editor as that item's properties.
+            if line.starts_with('[') {
+                flush(&mut current, &mut index);
+                current = None;
                 continue;
             }
             let Some((key, value)) = line.split_once('=') else {
@@ -459,7 +476,26 @@ impl ItemIndex {
 
     /// Flags every id whose name is shared with another — the §13 drop hazard,
     /// and the same in all three database formats.
+    ///
+    /// The name index is rebuilt from `by_id` first. All three loaders `insert`
+    /// into `by_id` — so a duplicated id keeps the *last* definition — while
+    /// `push`ing onto `by_name` for every definition they read, including the
+    /// overwritten ones. That left two names both claiming one id: an
+    /// `ids_for_name` that resolved to an item no longer carrying that name,
+    /// and, worse, an ambiguity flag on a perfectly unambiguous item, which is
+    /// what the loot lints key on. Deriving the index from the surviving
+    /// records means it cannot disagree with them.
     fn mark_ambiguous_names(&mut self) {
+        self.by_name.clear();
+        for (id, item) in &self.by_id {
+            let name = item.name.to_lowercase();
+            // An empty name resolves nothing, so it is not an ambiguity either.
+            if name.is_empty() {
+                continue;
+            }
+            self.by_name.entry(name).or_default().push(*id);
+        }
+
         let ambiguous: Vec<u32> = self
             .by_name
             .values()
