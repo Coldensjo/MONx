@@ -227,27 +227,49 @@ export interface SampledSpell {
  * are what make the block belong to this engine and this corpus.
  */
 export function sampleSpells(rng: Rng, donors: MonsterDoc[], health: number, count: number): SampledSpell[] {
+	return pickSome(rng, spellPool(donors, health), count);
+}
+
+/**
+ * One more spell than the monster already has, for the step's "add another".
+ *
+ * Nothing beyond what the pool holds: with every donated spell already on the
+ * monster this returns null and the button says so, rather than repeating one
+ * the loader would then read twice.
+ */
+export function sampleOneSpell(rng: Rng, donors: MonsterDoc[], health: number, taken: string[]): SampledSpell | null {
+	const already = new Set(taken);
+	return pick(
+		rng,
+		spellPool(donors, health).filter(s => !already.has(spellKey(s)))
+	);
+}
+
+/** What makes two donated spells the same spell: the loader reads both and the
+ *  second is dead weight. */
+export function spellKey(sampled: SampledSpell): string {
+	return sampled.block.name ?? sampled.block.script ?? 'script';
+}
+
+/** Every non-melee block the donors carry, rescaled and deduplicated. Melee is
+ *  drawn separately and asked about separately — it is the one attack every
+ *  monster either has or does not, rather than one of a handful it might. */
+function spellPool(donors: MonsterDoc[], health: number): SampledSpell[] {
 	const pool: SampledSpell[] = [];
 	for (const donor of donors) {
 		const ratio = donor.health.max > 0 ? health / donor.health.max : 1;
-		// Melee is drawn separately and asked about separately — it is the one
-		// attack every monster either has or does not, rather than one of a
-		// handful it might.
 		for (const block of donor.attacks) {
 			if (isMelee(block)) continue;
 			pool.push({ block: rescale(block, ratio), from: donor.name });
 		}
 	}
-	// Two donors that both carry `melee` should contribute one melee, not two —
-	// the loader would read both and the second is dead weight.
 	const seen = new Set<string>();
-	const unique = pool.filter(s => {
-		const key = s.block.name ?? s.block.script ?? 'script';
+	return pool.filter(s => {
+		const key = spellKey(s);
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;
 	});
-	return pickSome(rng, unique, count);
 }
 
 /** A melee block, whatever the engine calls it: Nostalrius carries the same

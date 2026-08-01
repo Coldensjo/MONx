@@ -1677,6 +1677,110 @@
 	color: var(--text-muted);
 }
 
+/* The melee question: one line, because it is one yes or no — and its two
+   numbers sit on that line rather than opening a block of their own. */
+.mx-wiz-melee {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.mx-wiz-mini {
+	color: var(--text-muted);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+.mx-wiz-num {
+	width: 72px;
+	height: 26px;
+}
+
+.mx-wiz-sub {
+	margin: 14px 0 6px;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+/* The whole kit at a glance. One chip per ability, the open one lit, the
+   unticked ones dimmed — judging a monster's kit is reading this row, and
+   changing one of them is what the card below is for. */
+.mx-wiz-rail {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+.mx-wiz-chip {
+	padding: 4px 10px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--bg);
+	color: var(--text);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.mx-wiz-chip-on {
+	border-color: var(--accent);
+	background: var(--accent-dim);
+}
+
+.mx-wiz-card {
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+}
+
+.mx-wiz-card-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--border);
+	font-size: 12px;
+}
+
+.mx-wiz-card-tick {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	cursor: pointer;
+}
+
+.mx-wiz-card-head .mx-wiz-item-from {
+	margin-left: auto;
+}
+
+.mx-wiz-card-body {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	padding: 10px 8px;
+}
+
+/* The two effect pickers are wider than a number field and should not be
+   squeezed to its width. */
+.mx-wiz-card-body .mx-wiz-field {
+	flex: 1 1 150px;
+}
+
+/* The step's own actions, bottom right, clear of the wizard's footer. */
+.mx-wiz-rowend {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 10px;
+}
+
 .mx-wiz-list {
 	display: flex;
 	flex-direction: column;

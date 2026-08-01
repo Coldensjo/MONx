@@ -196,27 +196,38 @@ to the nearest thick band — the same retreat `bandForHealth` already makes.
 
 ### 5 — How does it fight?
 
-Two questions, in the order they are decided.
+Two questions, in the order they are decided, and **one ability on screen at a
+time**.
 
-**Melee is a yes or no**, on its own line at the top, because it is the one
-attack a monster either has or does not — the spells are a handful it might.
-With it on, `skill` and `attack` are editable and the **derived max damage**
-sits beside them, read-only, because that is what the loader computes from the
-two (`ceil(skill × attack × 0.05 + attack × 0.5)`): a damage field here would be
+**Melee is a yes or no**, one line at the top, because it is the one attack a
+monster either has or does not — the abilities are a handful it might. Ticked,
+`skill` and `attack` sit on that same line with the **derived max damage** after
+them, read-only: the loader computes melee damage from the two
+(`ceil(skill × attack × 0.05 + attack × 0.5)`), so a damage field there would be
 a number the server throws away. The block itself is still a donor's — a
-composed melee would be the one place the generator invented a figure that
-means something, and a `skill`/`attack` pair guessed from the health is a pair
-no monster on this server has. With no melee anywhere in the donor pool the line
-says so rather than offering a toggle that would have nothing to write.
+composed melee would be the one place the generator invented a figure that means
+something, and a `skill`/`attack` pair guessed from the health is a pair no
+monster on this server has. With no melee anywhere in the donor pool the line
+says so rather than offering a toggle with nothing to write.
 
-**Then the spell cards**, three to five, each ticked and each showing where it
-came from ("from *ice witch*"). Untick to drop, ⟳ to redraw the set. A ticked
-card opens on what is worth changing per monster: **min and max damage**, and
-the **effect** and **shoot effect**, picked through the editor's own
-`EffectSelect` — the sprite grid, so the choice is the swirly red one and not
-`CONST_ME_MORTAREA`. A registered spell shows neither, because the loader
-ignores effects written on one (§8.1) and a control with no consequence is worse
-than no control.
+**Then the abilities: a rail of chips, and one open card.** The rail is the
+whole kit at a glance — which is what a user judges — with the open one lit and
+the unticked ones dimmed; the card below is the one being changed. Five cards
+open at once was a page rather than a question, and the step was taller than the
+screen.
+
+The open card carries what is worth changing per monster: **use this ability**,
+**min and max damage**, and the **effect** and **shoot effect** through the
+editor's own `EffectSelect` — the sprite grid, so the choice is the swirly red
+one and not `CONST_ME_MORTAREA`. A registered spell shows neither, because the
+loader ignores effects written on one (§8.1) and a control with no consequence
+is worse than no control. **Remove** drops the ability outright, where the tick
+only stands it down.
+
+Bottom right, clear of the wizard's own footer: **Draw again** for a fresh set,
+and **Add another ability**, which draws one more off the donors and never one
+the monster already has — the loader reads a repeated spell twice and the second
+is dead weight. With the pool exhausted it says so rather than repeating one.
 
 Everything else about a block is donated untouched, and that is the point.
 Blocks are copied **whole** off donors and rescaled only in `min`, `max` and —

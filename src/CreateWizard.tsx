@@ -53,8 +53,10 @@ import {
 	sampleLoot,
 	sampleLook,
 	sampleMelee,
+	sampleOneSpell,
 	sampleSpells,
 	sampleStats,
+	spellKey,
 	usableBands,
 	type Kind,
 	type SampledLoot,
@@ -147,6 +149,9 @@ export default function CreateWizard({
 	const [melee, setMelee] = useState<SampledSpell | null>(null);
 	const [meleeOn, setMeleeOn] = useState(true);
 	const [spells, setSpells] = useState<Ticked<SampledSpell>[]>([]);
+	/** Which ability the fight step has open. One at a time: the rail above it
+	 *  carries the whole kit, and five open cards is a page, not a question. */
+	const [active, setActive] = useState(0);
 	const [loot, setLoot] = useState<Ticked<SampledLoot>[]>([]);
 
 	// ---- Corpus ----
@@ -303,6 +308,7 @@ export default function CreateWizard({
 		if (touched.has('spells') || donors.length === 0 || !stats) return;
 		const drawn = sampleSpells(makeRng((seed ^ 0x77aa) + nonce.spells), donors, stats.health, kind === 'critter' ? 1 : 4);
 		setSpells(drawn.map(item => ({ item, on: true })));
+		setActive(0);
 	}, [donors, stats, seed, nonce.spells, kind, touched]);
 
 	useEffect(() => {
@@ -329,6 +335,37 @@ export default function CreateWizard({
 		}
 		onPickUsed();
 	}, [picked, mark, onPickUsed]);
+
+	const current = spells[Math.min(active, spells.length - 1)] ?? null;
+
+	const editSpell = useCallback(
+		(patch: Partial<SpellBlock>) => {
+			mark('spells');
+			setSpells(prev =>
+				prev.map((x, j) => (j === active ? { ...x, item: { ...x.item, block: { ...x.item.block, ...patch } } } : x))
+			);
+		},
+		[active, mark]
+	);
+
+	// One more off the donors, and never one the monster already has: the loader
+	// reads a repeated spell twice and the second is dead weight.
+	const addSpell = useCallback(() => {
+		if (!stats) return;
+		const drawn = sampleOneSpell(
+			makeRng((seed ^ 0x91b7) + spells.length + nonce.spells),
+			donors,
+			stats.health,
+			spells.map(s => spellKey(s.item))
+		);
+		if (!drawn) {
+			showToast('ok', t('The donors have no other spell to lend.'));
+			return;
+		}
+		mark('spells');
+		setSpells(prev => [...prev, { item: drawn, on: true }]);
+		setActive(spells.length);
+	}, [donors, stats, seed, nonce.spells, spells, mark, showToast, t]);
 
 	// ---- The document, assembled ----
 	const assemble = useCallback(
@@ -721,28 +758,24 @@ export default function CreateWizard({
 								    number you write: the loader derives it from skill and attack, so
 								    those are the two fields and the derived figure is shown beside
 								    them rather than being editable and ignored. */}
-								<label className={melee ? 'mx-wiz-melee' : 'mx-wiz-melee mx-wiz-item-off'}>
-									<input
-										type="checkbox"
-										checked={meleeOn && melee !== null}
-										disabled={melee === null}
-										onChange={() => {
-											mark('melee');
-											setMeleeOn(v => !v);
-										}}
-									/>
-									<span className="mx-wiz-item-name">{t('Fights in melee')}</span>
-									{melee && <span className="mx-wiz-item-from">{t('from {{name}}', { name: melee.from })}</span>}
-								</label>
-								{melee === null && (
-									<div className="ss-modal-desc">{t('No donor in this band fights in melee, so there is no block to copy.')}</div>
-								)}
-								{melee && meleeOn && (
-									<div className="mx-wiz-fields mx-wiz-melee-fields">
-										<label className="mx-wiz-field">
-											<span>{t('Skill')}</span>
+								<div className={melee ? 'mx-wiz-melee' : 'mx-wiz-melee mx-wiz-item-off'}>
+									<label className="mx-wiz-card-tick">
+										<input
+											type="checkbox"
+											checked={meleeOn && melee !== null}
+											disabled={melee === null}
+											onChange={() => {
+												mark('melee');
+												setMeleeOn(v => !v);
+											}}
+										/>
+										{t('Fights in melee')}
+									</label>
+									{melee && meleeOn && (
+										<>
+											<span className="mx-wiz-mini">{t('Skill')}</span>
 											<input
-												className="mx-wiz-input mono"
+												className="mx-wiz-input mono mx-wiz-num"
 												type="number"
 												min={0}
 												value={melee.block.melee?.skill ?? 0}
@@ -751,11 +784,9 @@ export default function CreateWizard({
 													setMelee(setMeleeField(melee, 'skill', Number(e.target.value)));
 												}}
 											/>
-										</label>
-										<label className="mx-wiz-field">
-											<span>{t('Attack')}</span>
+											<span className="mx-wiz-mini">{t('Attack')}</span>
 											<input
-												className="mx-wiz-input mono"
+												className="mx-wiz-input mono mx-wiz-num"
 												type="number"
 												min={0}
 												value={melee.block.melee?.attack ?? 0}
@@ -764,91 +795,128 @@ export default function CreateWizard({
 													setMelee(setMeleeField(melee, 'attack', Number(e.target.value)));
 												}}
 											/>
-										</label>
-										<div className="mx-wiz-field">
-											<span>{t('Max damage')}</span>
-											<span className="mono mx-wiz-derived">{meleeBlockMax(melee.block) ?? '—'}</span>
-										</div>
-									</div>
+											<span className="mx-wiz-mini">
+												{t('max {{damage}}', { damage: meleeBlockMax(melee.block) ?? '—' })}
+											</span>
+										</>
+									)}
+									{melee && !meleeOn && <span className="mx-wiz-item-from">{t('from {{name}}', { name: melee.from })}</span>}
+								</div>
+								{melee === null && (
+									<div className="ss-modal-desc">{t('No donor in this band fights in melee, so there is no block to copy.')}</div>
 								)}
 
-								<div className="mx-wiz-sub">{t('Spells')}</div>
-								{spells.length === 0 && <div className="ss-modal-desc">{t('No spells drawn — the donors have none to lend.')}</div>}
-								<div className="mx-wiz-cards">
-									{spells.map((s, i) => {
-										const block = s.item.block;
-										const edit = (patch: Partial<SpellBlock>) => {
-											mark('spells');
-											setSpells(spells.map((x, j) => (j === i ? { ...x, item: { ...x.item, block: { ...x.item.block, ...patch } } } : x)));
-										};
-										return (
-											<div key={i} className={s.on ? 'mx-wiz-card' : 'mx-wiz-card mx-wiz-item-off'}>
-												<label className="mx-wiz-card-head">
-													<input
-														type="checkbox"
-														checked={s.on}
-														onChange={() => {
+								{/* One ability at a time. The rail is the whole kit at a glance —
+								    which is what the user is judging — and only the one being
+								    changed is opened, so the step stays the height of a card
+								    instead of the height of five. */}
+								<div className="mx-wiz-sub">{t('Abilities')}</div>
+								{spells.length === 0 ? (
+									<div className="ss-modal-desc">{t('No spells drawn — the donors have none to lend.')}</div>
+								) : (
+									<>
+										<div className="mx-wiz-rail">
+											{spells.map((s, i) => (
+												<button
+													key={i}
+													className={
+														(i === active ? 'mx-wiz-chip mx-wiz-chip-on' : 'mx-wiz-chip') + (s.on ? '' : ' mx-wiz-item-off')
+													}
+													onClick={() => setActive(i)}
+													title={s.item.block.name ?? s.item.block.script ?? undefined}
+												>
+													{s.item.block.name ?? s.item.block.script ?? t('script')}
+												</button>
+											))}
+										</div>
+										{current && (
+											<div className="mx-wiz-card">
+												<div className="mx-wiz-card-head">
+													<label className="mx-wiz-card-tick">
+														<input
+															type="checkbox"
+															checked={current.on}
+															onChange={() => {
+																mark('spells');
+																setSpells(spells.map((x, j) => (j === active ? { ...x, on: !x.on } : x)));
+															}}
+														/>
+														{t('Use this ability')}
+													</label>
+													<span className="mx-wiz-item-from">{t('from {{name}}', { name: current.item.from })}</span>
+													<button
+														className="ss-btn ss-btn-ghost ss-ed-mini"
+														title={t('Remove this ability')}
+														onClick={() => {
 															mark('spells');
-															setSpells(spells.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
+															setSpells(spells.filter((_, j) => j !== active));
+															setActive(a => Math.max(0, a - 1));
 														}}
-													/>
-													<span className="mx-wiz-item-name">{block.name ?? block.script ?? t('script')}</span>
-													<span className="mx-wiz-item-from">{t('from {{name}}', { name: s.item.from })}</span>
-												</label>
-												{s.on && (
-													<div className="mx-wiz-card-body">
-														<label className="mx-wiz-field">
-															<span>{t('Min damage')}</span>
-															<input
-																className="mx-wiz-input mono"
-																type="number"
-																value={block.min}
-																onChange={e => edit({ min: Number(e.target.value) })}
-															/>
-														</label>
-														<label className="mx-wiz-field">
-															<span>{t('Max damage')}</span>
-															<input
-																className="mx-wiz-input mono"
-																type="number"
-																value={block.max}
-																onChange={e => edit({ max: Number(e.target.value) })}
-															/>
-														</label>
-														{/* A registered spell carries its own effects and the loader
-														    ignores anything written here, so the pickers stand down
-														    rather than offering a choice with no consequence. */}
-														{block.kind === 'builtin' && (
-															<>
-																<label className="mx-wiz-field">
-																	<span>{t('Effect')}</span>
-																	<EffectSelect
-																		kind="area"
-																		engine={engine.key}
-																		value={block.effects.areaEffect}
-																		onChange={v => edit({ effects: { ...block.effects, areaEffect: v } })}
-																	/>
-																</label>
-																<label className="mx-wiz-field">
-																	<span>{t('Shoot effect')}</span>
-																	<EffectSelect
-																		kind="shoot"
-																		engine={engine.key}
-																		value={block.effects.shootEffect}
-																		onChange={v => edit({ effects: { ...block.effects, shootEffect: v } })}
-																	/>
-																</label>
-															</>
-														)}
-													</div>
-												)}
+													>
+														{t('Remove')}
+													</button>
+												</div>
+												<div className="mx-wiz-card-body">
+													<label className="mx-wiz-field">
+														<span>{t('Min damage')}</span>
+														<input
+															className="mx-wiz-input mono"
+															type="number"
+															value={current.item.block.min}
+															onChange={e => editSpell({ min: Number(e.target.value) })}
+														/>
+													</label>
+													<label className="mx-wiz-field">
+														<span>{t('Max damage')}</span>
+														<input
+															className="mx-wiz-input mono"
+															type="number"
+															value={current.item.block.max}
+															onChange={e => editSpell({ max: Number(e.target.value) })}
+														/>
+													</label>
+													{/* A registered spell carries its own effects and the loader
+													    ignores anything written here, so the pickers stand down
+													    rather than offering a choice with no consequence. */}
+													{current.item.block.kind === 'builtin' && (
+														<>
+															<label className="mx-wiz-field">
+																<span>{t('Effect')}</span>
+																<EffectSelect
+																	kind="area"
+																	engine={engine.key}
+																	value={current.item.block.effects.areaEffect}
+																	onChange={v =>
+																		editSpell({ effects: { ...current.item.block.effects, areaEffect: v } })
+																	}
+																/>
+															</label>
+															<label className="mx-wiz-field">
+																<span>{t('Shoot effect')}</span>
+																<EffectSelect
+																	kind="shoot"
+																	engine={engine.key}
+																	value={current.item.block.effects.shootEffect}
+																	onChange={v =>
+																		editSpell({ effects: { ...current.item.block.effects, shootEffect: v } })
+																	}
+																/>
+															</label>
+														</>
+													)}
+												</div>
 											</div>
-										);
-									})}
+										)}
+									</>
+								)}
+								<div className="mx-wiz-rowend">
+									<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => redraw('spells')}>
+										{t('Draw again')}
+									</button>
+									<button className="ss-btn" onClick={addSpell}>
+										{t('Add another ability')}
+									</button>
 								</div>
-								<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => redraw('spells')}>
-									{t('Draw again')}
-								</button>
 							</Step>
 						)}
 
