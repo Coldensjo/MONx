@@ -1826,39 +1826,40 @@
 	grid-row: 2;
 }
 
-/* The shape runs the width of the card, under the three columns.
+/* The shape sits under the cadence, in the left column — what the spell costs
+   to cast and where it lands, read down one side.
  
-   It was in the left column and did not fit: four segments and, for a beam, two
-   more numbers, in a column narrower than the segments themselves — the ring
-   button ran under the visualiser and a beam grew a scrollbar. Given the whole
-   width it is one line of segments and one of numbers, and neither costs the
-   card any height it did not already have. */
+   It was full width for a version, because four segments and a beam's two
+   numbers did not fit a column narrower than the segments themselves. Compact
+   turns those segments into a select, which is one control instead of four, and
+   the numbers pair off beside each other underneath. The card stops growing a
+   scrollbar the moment a shape is chosen, which is what the full-width row was
+   really working around. */
 .mx-wiz-designer .ss-ed-card > .ss-ed-area {
-	grid-column: 1 / -1;
-	grid-row: 4;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 6px 14px;
+	grid-column: 1;
+	grid-row: 3;
 }
 
-.mx-wiz-designer .ss-ed-area > .ss-ed-subgroup-title {
-	flex: 0 0 auto;
+/* Length and spread, radius, ring: narrow enough to pair off rather than stack,
+   which is the difference between the card fitting and not. */
+.mx-wiz-designer .ss-ed-area .ss-ed-card-grid > .ss-ed-field {
+	flex: 1 1 76px;
+	max-width: 120px;
 }
 
-/* The note is the long part: it takes what is left of the line and wraps inside
-   it rather than pushing the numbers onto a row of their own. */
-.mx-wiz-designer .ss-ed-area > .ss-ed-field-note {
-	flex: 1 1 100%;
-	order: 3;
+.mx-wiz-designer .ss-ed-area .ss-ed-input-num {
+	width: 100%;
 }
 
-.mx-wiz-designer .ss-ed-area > .ss-ed-card-grid {
-	flex: 1 1 260px;
+/* The shape select takes the column rather than its own text width — it is the
+   heading of everything under it. */
+.mx-wiz-designer .ss-ed-area > .ss-ed-select {
+	flex: 1 1 auto;
+	width: 100%;
 }
 
-.mx-wiz-designer .ss-ed-area .ss-ed-toggle-group {
-	flex-wrap: wrap;
+.mx-wiz-designer .ss-ed-toggle {
+	font-size: 11px;
 }
 
 /* What the spell does, whichever shape that takes: a damage grid for a direct

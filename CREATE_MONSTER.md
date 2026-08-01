@@ -242,10 +242,12 @@ refused out loud rather than written as a value the loader would drop without a
 word. The editor keeps its popover grid, where the browsers are a click away in
 the sidebar anyway.
 
-The shape runs the full width of the card, under the three columns. It was in the
-left column at first and did not fit: four segments plus, for a beam, two more
-numbers, in a column narrower than the segments — the ring button ran under the
-visualiser and a beam grew a scrollbar.
+The shape sits under the cadence in the left column, so what a cast costs and
+where it lands read down one side. Getting it there took compact: four segments
+plus a beam's two numbers never fitted a column narrower than the segments
+themselves, so in compact a `ToggleGroup` is a select — one control instead of
+four — and the numbers pair off beneath it. Choosing a shape stops growing the
+card, which is what the full-width row it briefly had was working around.
 
 That is CSS and nothing else: grid placement ignores document order, so the card
 names its two grids and its sub-groups and the wizard's stylesheet puts them
