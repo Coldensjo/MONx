@@ -65,6 +65,15 @@ import { n as fmt } from './i18n';
 import type { Toast } from './App';
 
 interface Props {
+	/** Set while the workspace's own browser is being used to answer a question.
+	 *  The wizard stays mounted — everything answered so far is in its state and
+	 *  a round trip to the outfit grid must not cost the user any of it. */
+	hidden?: boolean;
+	/** Hands the question to the browser the sidebar opens. */
+	onBrowse: (kind: 'outfit' | 'corpse') => void;
+	/** The cell the user clicked over there, on its way back. */
+	picked: { kind: 'outfit' | 'corpse'; id: number } | null;
+	onPickUsed: () => void;
 	monsters: MonsterSummary[];
 	/** Comment groups in monsters.xml, for the registry entry. */
 	groups: string[];
@@ -90,7 +99,20 @@ const STEP_COUNT = 6;
  *  set has keys for. A field the user has edited is never redrawn under them. */
 type Field = 'name' | 'stats' | 'look' | 'race' | 'corpse' | 'melee' | 'spells' | 'loot';
 
-export default function CreateWizard({ monsters, groups, engine, outfitIds, itemIndex, onCreated, onClose, showToast }: Props) {
+export default function CreateWizard({
+	hidden,
+	onBrowse,
+	picked,
+	onPickUsed,
+	monsters,
+	groups,
+	engine,
+	outfitIds,
+	itemIndex,
+	onCreated,
+	onClose,
+	showToast
+}: Props) {
 	const { t } = useTranslation();
 
 	const [step, setStep] = useState(0);
@@ -139,6 +161,9 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 	const takenNames = useMemo(() => new Set(monsters.map(m => m.name.toLowerCase())), [monsters]);
 	const corpusNames = useMemo(() => monsters.map(m => m.name), [monsters]);
 	const band = useMemo(() => bands.find(b => b.label === bandLabel) ?? null, [bands, bandLabel]);
+
+	// The corpse by name, because an id is not something anyone reads.
+	const corpseInfo = useItemInfo(itemIndex, corpse || null, null);
 
 	// The item database is optional — Canary and BlackTek ship none — and without
 	// one there is no way to know an id is real, so the loot step stands down
@@ -290,6 +315,21 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 		setLoot(drawn.map(item => ({ item, on: true })));
 	}, [donors, dropped, items, seed, nonce.loot, kind, hasItems, touched]);
 
+	// A cell clicked in the browser lands here on the way back. Marked touched,
+	// like any other answer the user gave with their own hands: the generator
+	// must not redraw it when they step back and change the band.
+	useEffect(() => {
+		if (!picked) return;
+		if (picked.kind === 'outfit') {
+			mark('look');
+			setLook(l => ({ ...l, type: picked.id }));
+		} else {
+			mark('corpse');
+			setCorpse(picked.id);
+		}
+		onPickUsed();
+	}, [picked, mark, onPickUsed]);
+
 	// ---- The document, assembled ----
 	const assemble = useCallback(
 		(base: MonsterDoc): MonsterDoc => {
@@ -427,7 +467,10 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 	const bandIndex = band ? bands.indexOf(band) : 0;
 
 	return (
-		<div className="ss-backdrop" onMouseDown={onClose}>
+		// Hidden rather than unmounted while a browser answers a question: the
+		// wizard's state *is* the monster, and losing it to fetch one id would make
+		// the trip cost more than it saves.
+		<div className={hidden ? 'ss-backdrop mx-wiz-away' : 'ss-backdrop'} onMouseDown={onClose}>
 			<div className="ss-modal mx-wiz" onMouseDown={e => e.stopPropagation()} onKeyDown={onKeyDown}>
 				<div className="ss-modal-title">
 					{t('New monster')}
@@ -500,6 +543,7 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 													setCorpse(Number(e.target.value));
 												}}
 											/>
+											<span className="mx-wiz-pick-name">{corpseInfo?.name ?? ''}</span>
 										</label>
 										<label className="mx-wiz-field">
 											<span>{t('Race')}</span>
@@ -523,28 +567,18 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 										<Dices size={14} />
 									</button>
 								</div>
-								{/* Two grids, side by side, because both answers are pictures. The
-								    corpse used to be a number field beside an outfit you could see,
-								    which asked the user to know that 5972 is a dead orc. */}
-								<div className="mx-wiz-pickers">
-									{outfitIds.length > 0 && (
-										<OutfitPicker
-											ids={outfitIds}
-											look={look}
-											onPick={id => {
-												mark('look');
-												setLook({ ...look, type: id });
-											}}
-										/>
-									)}
-									<CorpsePicker
-										index={itemIndex}
-										value={corpse}
-										onPick={id => {
-											mark('corpse');
-											setCorpse(id);
-										}}
-									/>
+								{/* Both answers are pictures, and the app already has the two
+								    places those pictures live. Sending the user there beats a
+								    second grid in here that is worse than the real one: no
+								    animation, no filters, no name search, and a separate thing to
+								    keep working. The wizard steps aside and takes the answer back. */}
+								<div className="mx-wiz-browse">
+									<button className="ss-btn" onClick={() => onBrowse('outfit')}>
+										{t('Pick an outfit…')}
+									</button>
+									<button className="ss-btn" onClick={() => onBrowse('corpse')}>
+										{t('Pick a corpse…')}
+									</button>
 								</div>
 								<div className="ss-modal-desc">
 									{outfitIds.length === 0
@@ -930,191 +964,6 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 					</button>
 				</div>
 			</div>
-		</div>
-	);
-}
-
-const CELL = 40;
-const GRID_COLS = 6;
-const GRID_VIEW = 176;
-
-/** One cell of a sprite grid: what to draw, what to call it, and what picking
- *  it means. */
-interface Cell {
-	id: number;
-	title: string;
-	src: string;
-}
-
-/**
- * A windowed grid of sprite cells, shared by the outfit and corpse pickers.
- *
- * Windowed on whole rows because every cell is its own protocol request: a
- * client ships thousands of outfits and a server's database thousands of items,
- * and asking for all of them to fill a 176-pixel box would be thousands of PNG
- * renders for the twenty-four that are on screen.
- */
-function SpriteGrid({ cells, active, onPick }: { cells: Cell[]; active: number; onPick: (id: number) => void }) {
-	const [scrollTop, setScrollTop] = useState(0);
-	const scrollRef = useRef<HTMLDivElement>(null);
-
-	const rows = Math.ceil(cells.length / GRID_COLS);
-	const first = Math.max(0, Math.floor(scrollTop / CELL) - 2);
-	const last = Math.min(rows - 1, Math.ceil((scrollTop + GRID_VIEW) / CELL) + 2);
-
-	// Bring the current cell into view — on arrival at the step, and again
-	// whenever ⟳ draws a different one, or the grid shows a screenful with the
-	// chosen one nowhere among them.
-	useEffect(() => {
-		const el = scrollRef.current;
-		if (!el) return;
-		const idx = cells.findIndex(c => c.id === active);
-		if (idx < 0) return;
-		const top = Math.floor(idx / GRID_COLS) * CELL;
-		if (top < el.scrollTop || top + CELL > el.scrollTop + el.clientHeight) {
-			el.scrollTop = Math.max(0, top - (el.clientHeight - CELL) / 2);
-		}
-	}, [cells, active]);
-
-	const drawn: React.ReactNode[] = [];
-	for (let row = first; row <= last; row++) {
-		for (let col = 0; col < GRID_COLS; col++) {
-			const cell = cells[row * GRID_COLS + col];
-			if (!cell) break;
-			drawn.push(
-				<button
-					key={cell.id}
-					type="button"
-					className={cell.id === active ? 'mx-wiz-outfit mx-wiz-outfit-on' : 'mx-wiz-outfit'}
-					style={{ top: row * CELL, left: col * CELL }}
-					title={cell.title}
-					onClick={() => onPick(cell.id)}
-				>
-					{/* An id the client or the database cannot draw reads as an empty
-					    tile rather than as the browser's broken-image glyph. */}
-					<img src={cell.src} alt="" onError={e => (e.currentTarget.style.visibility = 'hidden')} />
-				</button>
-			);
-		}
-	}
-
-	return (
-		<div className="mx-wiz-outfit-grid" ref={scrollRef} style={{ height: GRID_VIEW }} onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
-			<div style={{ height: rows * CELL, width: GRID_COLS * CELL, position: 'relative' }}>{drawn}</div>
-		</div>
-	);
-}
-
-/**
- * Every outfit the client has, drawn in the colours the wizard drew — the
- * generator picks an id no monster in the corpus wears, and this is where that
- * proposal is either accepted or overruled by eye. Typing an id still works;
- * the grid is for the far commoner case of not knowing which number is the
- * thing you can picture.
- */
-function OutfitPicker({
-	ids,
-	look,
-	onPick
-}: {
-	ids: number[];
-	look: { type: number; head: number; body: number; legs: number; feet: number };
-	onPick: (id: number) => void;
-}) {
-	const { t } = useTranslation();
-	const [search, setSearch] = useState('');
-
-	const cells = useMemo(() => {
-		const needle = search.trim();
-		const shown = needle ? ids.filter(id => String(id).includes(needle)) : ids;
-		return shown.map(id => ({
-			id,
-			title: String(id),
-			src: lookUrl({ ...blankLook, ...look, mode: 'type', type: id }, { cell: 32 })
-		}));
-	}, [ids, search, look]);
-
-	return (
-		<div className="mx-wiz-outfits">
-			<div className="mx-wiz-pick-head">{t('Outfit')}</div>
-			<input
-				className="mx-wiz-input mx-wiz-outfit-search"
-				value={search}
-				placeholder={t('Filter by outfit id')}
-				onChange={e => setSearch(e.target.value)}
-			/>
-			<SpriteGrid cells={cells} active={look.type} onPick={onPick} />
-		</div>
-	);
-}
-
-/** How many corpses one search fills the grid with. Above what anyone scrolls
- *  through, and the search box is how you get past it. */
-const CORPSE_LIMIT = 300;
-
-/**
- * The same grid, over the item database's corpses.
- *
- * The corpse was the one answer on this step that was still a number field
- * beside an outfit you could see, which asked the user to know that 5972 is a
- * dead orc. It is an item like any other, so it is picked like one: `search`
- * already takes the corpse filter the editor's own `ItemPicker` uses, and every
- * id it returns is one the database resolves — which is what keeps the rule
- * that MONx never invents an item id.
- *
- * The filter asks for `corpseType`, an attribute only some item databases carry.
- * Where none do it would filter every item away, so an empty result on the first
- * search turns the filter off rather than showing an empty grid: an unfiltered
- * database is a worse picker, but a blank one is a broken picker.
- */
-function CorpsePicker({ index, value, onPick }: { index: ItemIndex; value: number; onPick: (id: number) => void }) {
-	const { t } = useTranslation();
-	const [query, setQuery] = useState('');
-	const [corpsesOnly, setCorpsesOnly] = useState(true);
-	const [rows, setRows] = useState<ItemInfo[]>([]);
-	const [searched, setSearched] = useState(false);
-	const current = useItemInfo(index, value || null, null);
-
-	useEffect(() => {
-		let live = true;
-		const timer = setTimeout(() => {
-			void index
-				.search(query, CORPSE_LIMIT, corpsesOnly)
-				.then(found => {
-					if (!live) return;
-					if (found.length === 0 && corpsesOnly && !query.trim()) {
-						setCorpsesOnly(false);
-						return;
-					}
-					setRows(found);
-					setSearched(true);
-				})
-				.catch(() => undefined);
-		}, 120);
-		return () => {
-			live = false;
-			clearTimeout(timer);
-		};
-	}, [index, query, corpsesOnly]);
-
-	const cells = useMemo(
-		() => rows.map(item => ({ id: item.serverId, title: `${item.name} · ${item.serverId}`, src: itemUrl(item.serverId, 32) })),
-		[rows]
-	);
-
-	return (
-		<div className="mx-wiz-outfits">
-			<div className="mx-wiz-pick-head">
-				{t('Corpse')}
-				{current && <span className="mx-wiz-pick-name">{current.name}</span>}
-			</div>
-			<input
-				className="mx-wiz-input mx-wiz-outfit-search"
-				value={query}
-				placeholder={corpsesOnly ? t('Search corpses…') : t('Search items…')}
-				onChange={e => setQuery(e.target.value)}
-			/>
-			{cells.length === 0 && searched ? <div className="mx-wiz-pick-empty">{t('No match')}</div> : <SpriteGrid cells={cells} active={value} onPick={onPick} />}
 		</div>
 	);
 }

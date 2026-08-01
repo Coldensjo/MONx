@@ -1458,6 +1458,47 @@ export default function Workspace({
 		setView('items');
 	}, []);
 
+	// The create wizard borrows the browsers rather than carrying its own grids:
+	// asked for an outfit or a corpse it steps aside, the browser it sends you to
+	// is the same one the sidebar opens — every filter, every search, the real
+	// animation — and the cell you click comes back as the answer. `wizardPick`
+	// is what that round trip is made of: which answer is outstanding, and which
+	// view to put back when it arrives.
+	const [wizardPick, setWizardPick] = useState<{ kind: 'outfit' | 'corpse'; from: View } | null>(null);
+	const [wizardPicked, setWizardPicked] = useState<{ kind: 'outfit' | 'corpse'; id: number } | null>(null);
+
+	const startWizardPick = useCallback(
+		(kind: 'outfit' | 'corpse') => {
+			setWizardPick({ kind, from: view });
+			if (kind === 'corpse') {
+				setItemsInitialFilters(['corpses']);
+				setView('items');
+			} else {
+				setView('outfits');
+			}
+		},
+		[view]
+	);
+
+	const finishWizardPick = useCallback(
+		(id: number) => {
+			setWizardPick(pick => {
+				if (!pick) return null;
+				setWizardPicked({ kind: pick.kind, id });
+				setView(pick.from);
+				return null;
+			});
+		},
+		[]
+	);
+
+	const cancelWizardPick = useCallback(() => {
+		setWizardPick(pick => {
+			if (pick) setView(pick.from);
+			return null;
+		});
+	}, []);
+
 	const browseItems = useCallback(() => {
 		setItemsInitialFilters([]);
 		setView('items');
@@ -1955,6 +1996,9 @@ export default function Workspace({
 								onClick={() => {
 									// Plain navigation never inherits a picker preset.
 									setItemsInitialFilters(['pickupable']);
+									// Navigating away from a borrowed browser ends the loan. Without
+									// this the wizard stays hidden with nothing left that reopens it.
+									setWizardPick(null);
 									setView(n.key);
 								}}
 							>
@@ -1985,6 +2029,20 @@ export default function Workspace({
 				</aside>
 
 				<main className="ss-main">
+					{/* The wizard is still open behind this, holding everything answered
+					    so far — the browser is on loan, and this says so. */}
+					{wizardPick && (
+						<div className="mx-pickbar">
+							<span>
+								{wizardPick.kind === 'outfit'
+									? t('Double-click an outfit to give it to the new monster')
+									: t('Double-click an item to make it the new monster’s corpse')}
+							</span>
+							<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={cancelWizardPick}>
+								{t('Cancel')}
+							</button>
+						</div>
+					)}
 					{tabs.length > 0 && (
 						<div className="ss-ed-tabs">
 							{tabs.map(f => {
@@ -2142,8 +2200,8 @@ export default function Workspace({
 									name: i.name,
 									container: i.container
 								})}
-								onContextMenu={itemContextMenu}
-								onPick={i => addToTray([i])}
+								onContextMenu={wizardPick ? undefined : itemContextMenu}
+								onPick={i => (wizardPick?.kind === 'corpse' ? finishWizardPick(i.serverId) : addToTray([i]))}
 								searchPlaceholder={t('Search server id or name')}
 							/>
 							<div className="ss-loot-tray">
@@ -2375,6 +2433,7 @@ export default function Workspace({
 							filters={view === 'outfits' ? outfitFilters : undefined}
 							selectionMode="single"
 							view={view}
+							onPick={wizardPick?.kind === 'outfit' && view === 'outfits' ? t => finishWizardPick(t.id) : undefined}
 							draggable={view === 'outfits'}
 							dragPayload={t => (view === 'outfits' ? { kind: 'outfit', type: t.id } : null)}
 							onContextMenu={
@@ -2658,6 +2717,10 @@ export default function Workspace({
 				   provider is inside MonsterEditor, which is not mounted here. */
 				<PreviewProvider value={previewUrl}>
 				<CreateWizard
+					hidden={wizardPick !== null}
+					onBrowse={startWizardPick}
+					picked={wizardPicked}
+					onPickUsed={() => setWizardPicked(null)}
 					monsters={monsters}
 					groups={groups}
 					engine={engineInfo(info.engine)}

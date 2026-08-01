@@ -128,25 +128,29 @@ of donors every later step samples from. A boss draws from bosses.
 
 ### 2 — What does it look like?
 
-The `OutfitPicker`, prefilled with a looktype **no monster in the corpus already
-uses** — a new monster that looks exactly like an existing one is the least
-useful default available; colours are drawn freely. The whole grid sits directly
-beneath it, because the wizard proposes and the eye decides — an id is not
-something anyone should have to picture. Addons and mount appear only where
-`lookAddons` / `lookMount` are true for the engine.
+The proposed outfit, the proposed corpse, and the race, with **Pick an
+outfit…** and **Pick a corpse…** beside them.
 
-Beside it, on the same footing and in the same grid, **the corpse** — because
-both answers to "what does it look like" are pictures, and a number field beside
-an outfit you can see asks the user to know that 5972 is a dead orc. It draws on
-`search`'s corpse filter, the one the editor's own `ItemPicker` uses, so every id
-in the grid is one the database resolves; where a database carries no
-`corpseType` at all the filter would empty the grid, so the first empty result
-turns it off rather than showing nothing. The proposed corpse is still *copied
-from a donor*, never drawn — a corpse id has to exist and actually be a corpse,
-and a donor's is known to be both.
+Those two buttons hand the question to the workspace's own browsers — the same
+outfit grid and item grid the sidebar opens, with their filters, their name
+search and their real animation. The wizard hides itself, a bar over the browser
+says what is being picked and offers **Cancel**, and the cell double-clicked
+comes back as the answer. It stays mounted the whole time: its state *is* the
+monster so far, and a trip to fetch one id must not cost the user the other
+five answers. Navigating away by the sidebar ends the loan rather than leaving
+it hidden with nothing to reopen it.
 
-Race sits with them, and the immunity/element block is copied from that same
-donor rather than composed: the correlation between `undead` and death immunity
+A second grid inside the wizard was the first attempt and the wrong one. It was
+a worse copy of a thing the app already has — no animation, no filters, no name
+search — and a second place for the same feature to rot. The id fields stay for
+anyone who knows the number.
+
+The proposal itself is unchanged: a looktype **no monster in the corpus already
+uses**, since a new monster that looks exactly like an existing one is the least
+useful default available, and a corpse *copied from a donor*, never drawn — a
+corpse id has to exist in the item database and actually be a corpse, and a
+donor's is known to be both. Immunities and elements come from that same donor
+rather than being composed: the correlation between `undead` and death immunity
 is a fact about the corpus, and copying it gets it right without asserting it.
 
 ### 3 — What is it called?
