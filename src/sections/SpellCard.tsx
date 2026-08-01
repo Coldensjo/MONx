@@ -55,6 +55,10 @@ interface Props {
 	/** Engine key, from the document. Decides which fields the loader reads at
 	 *  all and how effect values are spelled. */
 	engine: string;
+	/** Opens the re-enactment straight away. The create wizard designs a spell
+	 *  from nothing, where seeing the shape is the point; the editor opens on
+	 *  spells that already work and keeps it folded away. */
+	defaultStaged?: boolean;
 }
 
 /**
@@ -62,10 +66,10 @@ interface Props {
  * actually reads — picking a different name reshapes it — because every other
  * field is silently ignored by the loader (§8.1, §9).
  */
-export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, parent, look, engine }: Props) {
+export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, parent, look, engine, defaultStaged }: Props) {
 	const { t } = useTranslation();
 	const info = engineInfo(engine);
-	const [staged, setStaged] = useMonsterState(file, () => false);
+	const [staged, setStaged] = useMonsterState(file, () => !!defaultStaged);
 	const family = familyOf(block);
 	const registered = family === 'registered';
 	const scripted = family === 'script';

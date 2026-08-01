@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dices, ChevronLeft } from 'lucide-react';
+import { Dices, ChevronLeft, Plus } from 'lucide-react';
 import {
 	balanceBands,
 	createMonster,
@@ -36,11 +36,13 @@ import {
 	type Lint,
 	type MonsterDoc,
 	type MonsterSummary,
-	type SpellBlock
+	type SpellBlock,
+	type SpellName
 } from './monster';
 import type { EngineInfo } from './engine';
-import { EffectSelect } from './fields/EffectSelect';
 import { useItemInfo } from './fields/ItemPicker';
+import { SpellCard } from './sections/SpellCard';
+import { blankSpell } from './sections/Spells';
 import { meleeBlockMax } from './derive';
 import { makeRng } from './lootsim';
 import { generateName, type NameStyle } from './namegen';
@@ -50,13 +52,10 @@ import {
 	flagsFor,
 	newSeed,
 	pickDonors,
+	pickMelee,
 	sampleLoot,
 	sampleLook,
-	sampleMelee,
-	sampleOneSpell,
-	sampleSpells,
 	sampleStats,
-	spellKey,
 	usableBands,
 	type Kind,
 	type SampledLoot,
@@ -83,6 +82,9 @@ interface Props {
 	/** Outfit ids from the client, so the look can avoid one already in use. */
 	outfitIds: number[];
 	itemIndex: ItemIndex;
+	/** The spell catalogue, so the ability designer offers this server's own
+	 *  registered spells beside the engine's built-ins. */
+	spellNames: SpellName[];
 	/** Fired after the monster is on disk, with the file to select. */
 	onCreated: (file: string) => void;
 	onClose: () => void;
@@ -99,7 +101,7 @@ const STEP_COUNT = 6;
 
 /** Everything the generator can fill in, and therefore everything the `touched`
  *  set has keys for. A field the user has edited is never redrawn under them. */
-type Field = 'name' | 'stats' | 'look' | 'race' | 'corpse' | 'melee' | 'spells' | 'loot';
+type Field = 'name' | 'stats' | 'look' | 'race' | 'corpse' | 'melee' | 'loot';
 
 export default function CreateWizard({
 	hidden,
@@ -111,6 +113,7 @@ export default function CreateWizard({
 	engine,
 	outfitIds,
 	itemIndex,
+	spellNames,
 	onCreated,
 	onClose,
 	showToast
@@ -132,7 +135,7 @@ export default function CreateWizard({
 	// proposal standing. Bumping the seed instead would redraw every untouched
 	// field at once, which makes "draw another name" quietly replace the outfit
 	// and the loot table the user was already happy with.
-	const [nonce, setNonce] = useState<Record<Field, number>>({ name: 0, stats: 0, look: 0, race: 0, corpse: 0, melee: 0, spells: 0, loot: 0 });
+	const [nonce, setNonce] = useState<Record<Field, number>>({ name: 0, stats: 0, look: 0, race: 0, corpse: 0, melee: 0, loot: 0 });
 
 	// ---- Answers ----
 	const [name, setName] = useState('');
@@ -148,8 +151,11 @@ export default function CreateWizard({
 	const [corpse, setCorpse] = useState(0);
 	const [melee, setMelee] = useState<SampledSpell | null>(null);
 	const [meleeOn, setMeleeOn] = useState(true);
-	const [spells, setSpells] = useState<Ticked<SampledSpell>[]>([]);
-	/** Which ability the fight step has open. One at a time: the rail above it
+	/** The abilities the user designed. Nothing is drawn into this: a monster's
+	 *  kit is the one part of it nobody wants handed to them, and a sampled spell
+	 *  is one you have to read before you can trust it. */
+	const [abilities, setAbilities] = useState<SpellBlock[]>([]);
+	/** Which ability the designer has open. One at a time: the rail above it
 	 *  carries the whole kit, and five open cards is a page, not a question. */
 	const [active, setActive] = useState(0);
 	const [loot, setLoot] = useState<Ticked<SampledLoot>[]>([]);
@@ -296,20 +302,16 @@ export default function CreateWizard({
 	}, [donors, engine.races, touched]);
 
 	// Melee is its own answer, because it is the one attack a monster either has
-	// or does not — the other four are a handful it might.
+	// or does not — the abilities are a handful it might. Taken off the nearest
+	// donor rather than drawn, so the numbers in front of the user are numbers
+	// this server already fights with, and the same band opens the same way
+	// twice running.
 	useEffect(() => {
 		if (touched.has('melee') || donors.length === 0 || !stats) return;
-		const drawn = sampleMelee(makeRng((seed ^ 0x33cd) + nonce.melee), donors, stats.health);
-		setMelee(drawn);
-		setMeleeOn(drawn !== null && kind !== 'critter');
-	}, [donors, stats, seed, nonce.melee, kind, touched]);
-
-	useEffect(() => {
-		if (touched.has('spells') || donors.length === 0 || !stats) return;
-		const drawn = sampleSpells(makeRng((seed ^ 0x77aa) + nonce.spells), donors, stats.health, kind === 'critter' ? 1 : 4);
-		setSpells(drawn.map(item => ({ item, on: true })));
-		setActive(0);
-	}, [donors, stats, seed, nonce.spells, kind, touched]);
+		const found = pickMelee(donors, stats.health);
+		setMelee(found);
+		setMeleeOn(found !== null && kind !== 'critter');
+	}, [donors, stats, kind, touched]);
 
 	useEffect(() => {
 		if (touched.has('loot') || donors.length === 0 || !hasItems) return;
@@ -336,36 +338,23 @@ export default function CreateWizard({
 		onPickUsed();
 	}, [picked, mark, onPickUsed]);
 
-	const current = spells[Math.min(active, spells.length - 1)] ?? null;
+	const openIndex = Math.min(active, Math.max(0, abilities.length - 1));
+	const open = abilities[openIndex] ?? null;
 
-	const editSpell = useCallback(
-		(patch: Partial<SpellBlock>) => {
-			mark('spells');
-			setSpells(prev =>
-				prev.map((x, j) => (j === active ? { ...x, item: { ...x.item, block: { ...x.item.block, ...patch } } } : x))
-			);
-		},
-		[active, mark]
-	);
+	// Where an ability's lints sit in the document being linted: melee, when it
+	// is on, is `attacks[0]`.
+	const abilityOffset = meleeOn && melee ? 1 : 0;
 
-	// One more off the donors, and never one the monster already has: the loader
-	// reads a repeated spell twice and the second is dead weight.
-	const addSpell = useCallback(() => {
-		if (!stats) return;
-		const drawn = sampleOneSpell(
-			makeRng((seed ^ 0x91b7) + spells.length + nonce.spells),
-			donors,
-			stats.health,
-			spells.map(s => spellKey(s.item))
-		);
-		if (!drawn) {
-			showToast('ok', t('The donors have no other spell to lend.'));
-			return;
-		}
-		mark('spells');
-		setSpells(prev => [...prev, { item: drawn, on: true }]);
-		setActive(spells.length);
-	}, [donors, stats, seed, nonce.spells, spells, mark, showToast, t]);
+	/** A new ability opens on the commonest direct-damage spell in the engine's
+	 *  own catalogue. A starting position, not a proposal — the designer's first
+	 *  field is which spell this is, and changing it reshapes everything under
+	 *  it. */
+	const addAbility = useCallback(() => {
+		setAbilities(prev => {
+			setActive(prev.length);
+			return [...prev, { ...blankSpell('attacks'), name: 'physical', range: 4, melee: null }];
+		});
+	}, []);
 
 	// ---- The document, assembled ----
 	const assemble = useCallback(
@@ -388,11 +377,11 @@ export default function CreateWizard({
 				// it gets it right without asserting it.
 				immunities: donor ? { ...donor.immunities } : base.immunities,
 				elements: donor ? { ...donor.elements } : base.elements,
-				attacks: [...(meleeOn && melee ? [melee.block] : []), ...spells.filter(s => s.on).map(s => s.item.block)],
+				attacks: [...(meleeOn && melee ? [melee.block] : []), ...abilities],
 				loot: loot.filter(l => l.on).map(l => l.item.entry)
 			};
 		},
-		[donors, name, race, raceid, engine, stats, look, corpse, kind, melee, meleeOn, spells, loot]
+		[donors, name, race, raceid, engine, stats, look, corpse, kind, melee, meleeOn, abilities, loot]
 	);
 
 	const draft = useMemo(() => (template ? assemble(template) : null), [template, assemble]);
@@ -806,115 +795,64 @@ export default function CreateWizard({
 									<div className="ss-modal-desc">{t('No donor in this band fights in melee, so there is no block to copy.')}</div>
 								)}
 
-								{/* One ability at a time. The rail is the whole kit at a glance —
-								    which is what the user is judging — and only the one being
-								    changed is opened, so the step stays the height of a card
-								    instead of the height of five. */}
+								{/* The ability designer. One ability on screen, the rail above it
+								    the whole kit — and the card is the editor's own SpellCard, so
+								    the fields offered are the ones the chosen spell family actually
+								    reads, spelled the way this engine spells them, with the same
+								    live re-enactment behind its eye. A second, wizard-shaped copy
+								    of that would be a second thing to keep true across seven
+								    engines and would be wrong first. */}
 								<div className="mx-wiz-sub">{t('Abilities')}</div>
-								{spells.length === 0 ? (
-									<div className="ss-modal-desc">{t('No spells drawn — the donors have none to lend.')}</div>
+								{abilities.length === 0 ? (
+									<div className="ss-modal-desc">
+										{t('No abilities yet. Design one, or leave it — a monster with only melee is a monster.')}
+									</div>
 								) : (
 									<>
 										<div className="mx-wiz-rail">
-											{spells.map((s, i) => (
+											{abilities.map((b, i) => (
 												<button
 													key={i}
-													className={
-														(i === active ? 'mx-wiz-chip mx-wiz-chip-on' : 'mx-wiz-chip') + (s.on ? '' : ' mx-wiz-item-off')
-													}
+													className={i === openIndex ? 'mx-wiz-chip mx-wiz-chip-on' : 'mx-wiz-chip'}
 													onClick={() => setActive(i)}
-													title={s.item.block.name ?? s.item.block.script ?? undefined}
 												>
-													{s.item.block.name ?? s.item.block.script ?? t('script')}
+													{b.name ?? b.script ?? t('script')}
 												</button>
 											))}
 										</div>
-										{current && (
-											<div className="mx-wiz-card">
-												<div className="mx-wiz-card-head">
-													<label className="mx-wiz-card-tick">
-														<input
-															type="checkbox"
-															checked={current.on}
-															onChange={() => {
-																mark('spells');
-																setSpells(spells.map((x, j) => (j === active ? { ...x, on: !x.on } : x)));
-															}}
-														/>
-														{t('Use this ability')}
-													</label>
-													<span className="mx-wiz-item-from">{t('from {{name}}', { name: current.item.from })}</span>
-													<button
-														className="ss-btn ss-btn-ghost ss-ed-mini"
-														title={t('Remove this ability')}
-														onClick={() => {
-															mark('spells');
-															setSpells(spells.filter((_, j) => j !== active));
-															setActive(a => Math.max(0, a - 1));
-														}}
-													>
-														{t('Remove')}
-													</button>
-												</div>
-												<div className="mx-wiz-card-body">
-													<label className="mx-wiz-field">
-														<span>{t('Min damage')}</span>
-														<input
-															className="mx-wiz-input mono"
-															type="number"
-															value={current.item.block.min}
-															onChange={e => editSpell({ min: Number(e.target.value) })}
-														/>
-													</label>
-													<label className="mx-wiz-field">
-														<span>{t('Max damage')}</span>
-														<input
-															className="mx-wiz-input mono"
-															type="number"
-															value={current.item.block.max}
-															onChange={e => editSpell({ max: Number(e.target.value) })}
-														/>
-													</label>
-													{/* A registered spell carries its own effects and the loader
-													    ignores anything written here, so the pickers stand down
-													    rather than offering a choice with no consequence. */}
-													{current.item.block.kind === 'builtin' && (
-														<>
-															<label className="mx-wiz-field">
-																<span>{t('Effect')}</span>
-																<EffectSelect
-																	kind="area"
-																	engine={engine.key}
-																	value={current.item.block.effects.areaEffect}
-																	onChange={v =>
-																		editSpell({ effects: { ...current.item.block.effects, areaEffect: v } })
-																	}
-																/>
-															</label>
-															<label className="mx-wiz-field">
-																<span>{t('Shoot effect')}</span>
-																<EffectSelect
-																	kind="shoot"
-																	engine={engine.key}
-																	value={current.item.block.effects.shootEffect}
-																	onChange={v =>
-																		editSpell({ effects: { ...current.item.block.effects, shootEffect: v } })
-																	}
-																/>
-															</label>
-														</>
-													)}
-												</div>
+										{open && (
+											<div className="mx-wiz-designer">
+												<SpellCard
+													block={open}
+													file={file || 'new'}
+													onChange={next => setAbilities(abilities.map((b, j) => (j === openIndex ? next : b)))}
+													spells={spellNames}
+													engine={engine.key}
+													lintAt={suffix => lints.filter(l => l.path === `attacks[${openIndex + abilityOffset}].${suffix}`)}
+													readOnly={false}
+													parent="attacks"
+													look={{ ...blankLook, ...look, mode: 'type' }}
+													defaultStaged
+												/>
 											</div>
 										)}
 									</>
 								)}
 								<div className="mx-wiz-rowend">
-									<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => redraw('spells')}>
-										{t('Draw again')}
-									</button>
-									<button className="ss-btn" onClick={addSpell}>
-										{t('Add another ability')}
+									{open && (
+										<button
+											className="ss-btn ss-btn-ghost ss-ed-mini"
+											onClick={() => {
+												setAbilities(abilities.filter((_, j) => j !== openIndex));
+												setActive(a => Math.max(0, a - 1));
+											}}
+										>
+											{t('Remove this ability')}
+										</button>
+									)}
+									<button className="ss-btn" onClick={addAbility}>
+										<Plus size={14} />
+										{t('Add an ability')}
 									</button>
 								</div>
 							</Step>

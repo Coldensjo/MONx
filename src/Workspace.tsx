@@ -2726,6 +2726,7 @@ export default function Workspace({
 					engine={engineInfo(info.engine)}
 					outfitIds={things.outfit.map(o => o.id)}
 					itemIndex={tauriItemIndex}
+					spellNames={spells}
 					onCreated={file => {
 						setWizardOpen(false);
 						setView('monsters');

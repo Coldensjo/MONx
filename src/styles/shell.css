@@ -1772,6 +1772,15 @@
 	flex: 1 1 150px;
 }
 
+/* The designer is the editor's own card, which is as tall as the spell being
+   designed needs — a condition spell carries more than a plain one. Bounded
+   here rather than in the card, so the step never outgrows the screen. */
+.mx-wiz-designer {
+	max-height: 46vh;
+	overflow-y: auto;
+	padding-right: 4px;
+}
+
 /* The step's own actions, bottom right, clear of the wizard's footer. */
 .mx-wiz-rowend {
 	display: flex;

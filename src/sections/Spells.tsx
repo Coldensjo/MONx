@@ -11,7 +11,9 @@ interface Props extends SectionProps {
 	onToggle: (id: SectionId) => void;
 }
 
-function blankSpell(which: 'attacks' | 'defenses'): SpellBlock {
+/** Also the create wizard's starting ability, which is why it is exported: one
+ *  definition of what a new spell block is. */
+export function blankSpell(which: 'attacks' | 'defenses'): SpellBlock {
 	// Defaults chosen from what each parent overwhelmingly holds (§9.5): melee
 	// leads the attack list, healing leads the defense list.
 	const attack = which === 'attacks';

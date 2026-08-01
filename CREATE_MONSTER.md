@@ -37,6 +37,12 @@ That also makes the feature honest about its own weakest link. A sampled loot
 table is a guess; a sampled *name* is a good one. The wizard puts each in front
 of the user at the point where accepting or rejecting it is a single keystroke.
 
+**And where a proposal is worth less than a blank sheet, there isn't one.** The
+spells were sampled until 0.1.68 and are now designed: a monster's kit is what
+makes it that monster, and a drawn list is one the user has to read and audit
+before they can trust it — slower than writing the two they meant. Step five is
+a designer with a visualiser, and it starts empty.
+
 ## The rule the defaults hang off
 
 > **A default answer is sampled from the open corpus. Nothing in it is invented.**
@@ -196,56 +202,43 @@ to the nearest thick band — the same retreat `bandForHealth` already makes.
 
 ### 5 — How does it fight?
 
-Two questions, in the order they are decided, and **one ability on screen at a
-time**.
+The one step that does not propose anything, and deliberately. A monster's kit
+is what makes it that monster; a sampled spell list is one you have to read
+before you can trust it, and reading someone else's list is slower than writing
+your own. So this step is a **designer**, not a proposal.
 
-**Melee is a yes or no**, one line at the top, because it is the one attack a
-monster either has or does not — the abilities are a handful it might. Ticked,
-`skill` and `attack` sit on that same line with the **derived max damage** after
-them, read-only: the loader computes melee damage from the two
-(`ceil(skill × attack × 0.05 + attack × 0.5)`), so a damage field there would be
-a number the server throws away. The block itself is still a donor's — a
-composed melee would be the one place the generator invented a figure that means
-something, and a `skill`/`attack` pair guessed from the health is a pair no
-monster on this server has. With no melee anywhere in the donor pool the line
-says so rather than offering a toggle with nothing to write.
+**Melee first, as a yes or no.** It is the one attack a monster either has or
+does not — abilities are a handful it might. Ticked, `skill` and `attack` sit on
+that same line with the **derived max damage** after them, read-only, because
+that is what the loader computes from the two
+(`ceil(skill × attack × 0.05 + attack × 0.5)`) and a damage field there would be
+a number the server throws away. The starting pair is `pickMelee`'s: the nearest
+donor's, rescaled by the health ratio — not drawn, so the same band opens the
+same way twice running. Composed melee would be the one place the generator
+invented a figure that means something, and a pair guessed from the health is a
+pair no monster on this server has. With no melee anywhere in the donor pool the
+line says so.
 
-**Then the abilities: a rail of chips, and one open card.** The rail is the
-whole kit at a glance — which is what a user judges — with the open one lit and
-the unticked ones dimmed; the card below is the one being changed. Five cards
-open at once was a page rather than a question, and the step was taller than the
-screen.
+**Then the abilities: a rail of chips and one open designer.** The rail is the
+whole kit at a glance; the card below is the one being designed. **Add an
+ability** appends a new one and opens it; **Remove this ability** drops the open
+one. A monster with only melee is a monster, so the step is happy with none.
 
-The open card carries what is worth changing per monster: **use this ability**,
-**min and max damage**, and the **effect** and **shoot effect** through the
-editor's own `EffectSelect` — the sprite grid, so the choice is the swirly red
-one and not `CONST_ME_MORTAREA`. A registered spell shows neither, because the
-loader ignores effects written on one (§8.1) and a control with no consequence
-is worse than no control. **Remove** drops the ability outright, where the tick
-only stands it down.
+The card is **the editor's own `SpellCard`**, with the re-enactment open by
+default rather than folded behind its eye. That is the whole point of reusing it:
+picking the spell reshapes the card to the fields that family actually reads —
+damage for a direct spell, `tick`/`start` or `cycle` or `count` for a condition
+as that engine requires, duration and speed for a status — and beside them the
+geometry the loader understands: beam `length` and `spread`, `radius`, `ring`
+where the engine allows one, `target`, `direction`, `range`, `interval` and
+`chance`. The `SpellStage` draws the result: the caster waits out the cooldown,
+rolls `chance`, throws the projectile and lights every tile the area covers.
+Change `spread` and the next cast is wider.
 
-Bottom right, clear of the wizard's own footer: **Draw again** for a fresh set,
-and **Add another ability**, which draws one more off the donors and never one
-the monster already has — the loader reads a repeated spell twice and the second
-is dead weight. With the pool exhausted it says so rather than repeating one.
-
-Everything else about a block is donated untouched, and that is the point.
-Blocks are copied **whole** off donors and rescaled only in `min`, `max` and —
-for melee — `attack`, by the ratio of the new monster's health to the donor's.
-Whole blocks, because a block is internally consistent in ways the generator
-would otherwise have to re-derive per engine: its effects are spelled the way
-the profile spells them, `ring` appears only where `geometryRing` allows, its
-condition uses `tick`/`start` or `cycle` or `count` as that engine requires, and
-its `interval` is absent on Nostalrius because Nostalrius has none. A block
-lifted off a monster the server already loads is a block the server will load.
-The four fields the step exposes are the four that are about *this* monster
-rather than about the engine.
-
-Under Nostalrius melee is the `<attacks>` container itself rather than a spell,
-which is why the melee test is the block's `melee` sub-object and not its name.
-That engine writes no sub-object at all, so the first edit to skill or attack
-materialises one — both attributes, since the loader only derives damage when
-both are written.
+A second, wizard-shaped copy of that card would be a second thing to keep true
+across seven engines, and would be the one that was wrong. The wizard scopes the
+live lints to the open ability (`attacks[n]`, offset by one when melee is on) and
+otherwise stays out of the way.
 
 ### 6 — What does it drop?
 

@@ -213,65 +213,6 @@ export interface SampledSpell {
 	from: string;
 }
 
-/**
- * Whole spell blocks off the donors, rescaled to the new monster's health.
- *
- * Whole blocks, because a block is internally consistent in ways this would
- * otherwise have to re-derive per engine: its effects are spelled the way the
- * profile spells them, `ring` geometry appears only where the engine allows it,
- * its condition uses tick/start or cycle or count as that engine requires, and
- * its interval is absent on Nostalrius because Nostalrius has none.
- *
- * Only the damage is rescaled — `min`, `max`, and a melee block's `skill` and
- * `attack`. Cadence, geometry and effects are donated untouched, because they
- * are what make the block belong to this engine and this corpus.
- */
-export function sampleSpells(rng: Rng, donors: MonsterDoc[], health: number, count: number): SampledSpell[] {
-	return pickSome(rng, spellPool(donors, health), count);
-}
-
-/**
- * One more spell than the monster already has, for the step's "add another".
- *
- * Nothing beyond what the pool holds: with every donated spell already on the
- * monster this returns null and the button says so, rather than repeating one
- * the loader would then read twice.
- */
-export function sampleOneSpell(rng: Rng, donors: MonsterDoc[], health: number, taken: string[]): SampledSpell | null {
-	const already = new Set(taken);
-	return pick(
-		rng,
-		spellPool(donors, health).filter(s => !already.has(spellKey(s)))
-	);
-}
-
-/** What makes two donated spells the same spell: the loader reads both and the
- *  second is dead weight. */
-export function spellKey(sampled: SampledSpell): string {
-	return sampled.block.name ?? sampled.block.script ?? 'script';
-}
-
-/** Every non-melee block the donors carry, rescaled and deduplicated. Melee is
- *  drawn separately and asked about separately — it is the one attack every
- *  monster either has or does not, rather than one of a handful it might. */
-function spellPool(donors: MonsterDoc[], health: number): SampledSpell[] {
-	const pool: SampledSpell[] = [];
-	for (const donor of donors) {
-		const ratio = donor.health.max > 0 ? health / donor.health.max : 1;
-		for (const block of donor.attacks) {
-			if (isMelee(block)) continue;
-			pool.push({ block: rescale(block, ratio), from: donor.name });
-		}
-	}
-	const seen = new Set<string>();
-	return pool.filter(s => {
-		const key = spellKey(s);
-		if (seen.has(key)) return false;
-		seen.add(key);
-		return true;
-	});
-}
-
 /** A melee block, whatever the engine calls it: Nostalrius carries the same
  *  numbers on `<attacks>` itself, so the `melee` sub-object is the test and the
  *  name is only the common case. */
@@ -280,23 +221,25 @@ export function isMelee(block: SpellBlock): boolean {
 }
 
 /**
- * The melee attack, drawn off the donors like everything else.
+ * The melee attack the wizard opens with, taken off the donors.
  *
- * Composed melee would be the one place the generator had to invent a number
- * that means something: `skill` and `attack` multiply into the damage the
- * loader derives, and a pair guessed from the health is a pair no monster on
- * this server has. A donor's is a pair the server already fights with, and
- * rescaling `attack` by the health ratio moves it without inventing it.
+ * Not drawn: the first donor that fights in melee, so the same band gives the
+ * same starting numbers twice running. Composed melee would be the one place
+ * the generator invented a figure that means something — `skill` and `attack`
+ * multiply into the damage the loader derives, and a pair guessed from the
+ * health is a pair no monster on this server has. A donor's is a pair the
+ * server already fights with, and rescaling `attack` by the health ratio moves
+ * it without inventing it. The user then edits both by hand, which is the
+ * point: this is a starting position, not a proposal.
  */
-export function sampleMelee(rng: Rng, donors: MonsterDoc[], health: number): SampledSpell | null {
-	const pool: SampledSpell[] = [];
+export function pickMelee(donors: MonsterDoc[], health: number): SampledSpell | null {
 	for (const donor of donors) {
 		const ratio = donor.health.max > 0 ? health / donor.health.max : 1;
 		for (const block of donor.attacks) {
-			if (isMelee(block)) pool.push({ block: rescale(block, ratio), from: donor.name });
+			if (isMelee(block)) return { block: rescale(block, ratio), from: donor.name };
 		}
 	}
-	return pick(rng, pool);
+	return null;
 }
 
 /** Damage scaled by the health ratio; everything else donated as written. */
