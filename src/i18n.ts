@@ -22,7 +22,7 @@ export type Locale = 'en' | 'pl' | 'pt';
 export const LOCALES: { key: Locale; label: string }[] = [
 	{ key: 'en', label: 'English' },
 	{ key: 'pl', label: 'Polski' },
-	{ key: 'pt', label: 'Português' }
+	{ key: 'pt', label: 'Português (Brasil)' }
 ];
 
 const LOCALE_KEY = 'monx.locale';

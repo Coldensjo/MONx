@@ -12,8 +12,12 @@ import { getLocale, LOCALES, setLocale, type Locale } from './i18n';
 //
 // They are drawn simplified for a 14px row: the Union Jack's diagonals are
 // centred rather than offset (the pale is under a pixel at this size) and
-// Portugal's armillary sphere is two rings. Both read correctly as flags; at
-// this scale the detail would be mud.
+// Brazil's globe is a plain disc with its band, no stars or motto. Both read
+// correctly as flags; at this scale the detail would be mud.
+//
+// `pt` flies the Brazilian flag, not Portugal's: the Portuguese-speaking users
+// of MONx are Brazilian, and the flag is the one part of the picker read before
+// the label.
 
 function Flag({ locale, size }: { locale: Locale; size: number }) {
 	// A common 3:2 box for all three, so the row is even. Poland is 8:5 and the
@@ -41,11 +45,10 @@ function Flag({ locale, size }: { locale: Locale; size: number }) {
 		case 'pt':
 			return (
 				<svg {...box} aria-hidden="true">
-					<rect width="24" height="16" fill="#da291c" />
-					<rect width="9.6" height="16" fill="#046a38" />
-					<circle cx="9.6" cy="8" r="3.8" fill="#ffe900" />
-					<circle cx="9.6" cy="8" r="2.4" fill="#da291c" />
-					<circle cx="9.6" cy="8" r="1" fill="#fff" />
+					<rect width="24" height="16" fill="#009b3a" />
+					<path d="M12 1.6 22.4 8 12 14.4 1.6 8Z" fill="#fedf00" />
+					<circle cx="12" cy="8" r="3.1" fill="#002776" />
+					<path d="M9.2 9.1a3.1 3.1 0 0 1 5.7-1.5" fill="none" stroke="#fff" strokeWidth="0.9" />
 				</svg>
 			);
 	}
