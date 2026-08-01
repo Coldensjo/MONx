@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
 import { engineInfo } from '../engine';
 import { mergeEffects } from '../customeffects';
 import { useCustomEffects } from './customctx';
-import { EffectGrid } from './EffectGrid';
+import { EffectGrid, Sprite } from './EffectGrid';
 
 interface Props {
 	kind: 'area' | 'shoot';
@@ -46,5 +48,54 @@ export function EffectSelect({ kind, value, onChange, disabled, noneLabel = '(no
 			disabled={disabled}
 			noneLabel={noneLabel}
 		/>
+	);
+}
+
+/**
+ * The same choice, made in the effects browser instead of in a popover.
+ *
+ * The create wizard hands its picture-shaped questions to the workspace's own
+ * browsers — the outfit grid, the item grid, and these two — because they are
+ * the real ones: every filter, the name search, the animation playing at the
+ * client's own frame rate. This is the trigger and the read-out; the choosing
+ * happens over there.
+ */
+export function EffectBrowse({
+	kind,
+	value,
+	engine,
+	onBrowse,
+	onClear
+}: {
+	kind: 'area' | 'shoot';
+	value: string | null;
+	engine?: string;
+	onBrowse: () => void;
+	onClear: () => void;
+}) {
+	const { t } = useTranslation();
+	const info = engineInfo(engine);
+	const custom = useCustomEffects();
+	const entries = useMemo(
+		() => (kind === 'area' ? mergeEffects(info.magicEffects, custom.magic) : mergeEffects(info.shootEffects, custom.shoot)),
+		[kind, info, custom]
+	);
+	// An effect the catalogue does not carry still shows as itself rather than as
+	// "(none)": a value the editor renders as nothing is a value the next click
+	// deletes.
+	const entry = value ? entries.find(e => e.name === value) : null;
+
+	return (
+		<div className="ss-ed-effect-browse">
+			<button type="button" className="ss-ed-input ss-ed-item-trigger" onClick={onBrowse}>
+				{entry ? <Sprite id={entry.id} kind={kind} /> : <span className="ss-ed-effect-chip">—</span>}
+				<span className="ss-ed-item-name">{value ?? t('(none)')}</span>
+			</button>
+			{value && (
+				<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" title={t('Clear')} onClick={onClear}>
+					<X size={13} />
+				</button>
+			)}
+		</div>
 	);
 }

@@ -13,7 +13,7 @@ import { SpellStage } from './SpellStage';
 import { meleeBlockMax } from '../derive';
 import { Field } from '../fields/Field';
 import { EnumSelect, type EnumOption } from '../fields/EnumSelect';
-import { EffectSelect } from '../fields/EffectSelect';
+import { EffectBrowse, EffectSelect } from '../fields/EffectSelect';
 import { engineInfo } from '../engine';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
@@ -55,6 +55,11 @@ interface Props {
 	/** Engine key, from the document. Decides which fields the loader reads at
 	 *  all and how effect values are spelled. */
 	engine: string;
+	/** Sends the effect choice to the workspace's own browsers instead of the
+	 *  popover grid. Set by the create wizard, which hands every picture-shaped
+	 *  question to the real browser; the editor keeps the popover, because there
+	 *  the browsers are a click away in the sidebar anyway. */
+	onBrowseEffect?: (kind: 'area' | 'shoot') => void;
 	/** Opens the re-enactment straight away. The create wizard designs a spell
 	 *  from nothing, where seeing the shape is the point; the editor opens on
 	 *  spells that already work and keeps it folded away. */
@@ -66,7 +71,19 @@ interface Props {
  * actually reads — picking a different name reshapes it — because every other
  * field is silently ignored by the loader (§8.1, §9).
  */
-export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, parent, look, engine, defaultStaged }: Props) {
+export function SpellCard({
+	block,
+	file,
+	onChange,
+	spells,
+	lintAt,
+	readOnly,
+	parent,
+	look,
+	engine,
+	onBrowseEffect,
+	defaultStaged
+}: Props) {
 	const { t } = useTranslation();
 	const info = engineInfo(engine);
 	const [staged, setStaged] = useMonsterState(file, () => !!defaultStaged);
@@ -661,22 +678,42 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 				<SubGroup title={t('Effects')} className="ss-ed-effects">
 					<div className="ss-ed-card-grid">
 						<Field label={t('Projectile')} lints={lintAt('effects.shootEffect')}>
-							<EffectSelect
-								kind="shoot"
-								engine={engine}
-								value={block.effects.shootEffect}
-								onChange={v => set({ effects: { ...block.effects, shootEffect: v } })}
-								disabled={readOnly}
-							/>
+							{onBrowseEffect ? (
+								<EffectBrowse
+									kind="shoot"
+									engine={engine}
+									value={block.effects.shootEffect}
+									onBrowse={() => onBrowseEffect('shoot')}
+									onClear={() => set({ effects: { ...block.effects, shootEffect: null } })}
+								/>
+							) : (
+								<EffectSelect
+									kind="shoot"
+									engine={engine}
+									value={block.effects.shootEffect}
+									onChange={v => set({ effects: { ...block.effects, shootEffect: v } })}
+									disabled={readOnly}
+								/>
+							)}
 						</Field>
 						<Field label={t('Magic effect')} lints={lintAt('effects.areaEffect')}>
-							<EffectSelect
-								kind="area"
-								engine={engine}
-								value={block.effects.areaEffect}
-								onChange={v => set({ effects: { ...block.effects, areaEffect: v } })}
-								disabled={readOnly}
-							/>
+							{onBrowseEffect ? (
+								<EffectBrowse
+									kind="area"
+									engine={engine}
+									value={block.effects.areaEffect}
+									onBrowse={() => onBrowseEffect('area')}
+									onClear={() => set({ effects: { ...block.effects, areaEffect: null } })}
+								/>
+							) : (
+								<EffectSelect
+									kind="area"
+									engine={engine}
+									value={block.effects.areaEffect}
+									onChange={v => set({ effects: { ...block.effects, areaEffect: v } })}
+									disabled={readOnly}
+								/>
+							)}
 						</Field>
 					</div>
 					{/* Only Ironcore implements this key; the others log "Effect type

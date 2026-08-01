@@ -117,6 +117,25 @@ const NOMINAL_SPEED = 100;
  *  reference browsers, kept beside the editor rather than in a separate mode. */
 type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
 
+/** What the create wizard can ask a browser to answer, and which browser
+ *  answers it. Every one of them is a picture, which is the whole reason the
+ *  wizard hands them over rather than drawing a grid of its own. */
+type WizardPickKind = 'outfit' | 'corpse' | 'effect' | 'missile';
+
+const PICK_VIEW: Record<WizardPickKind, View> = {
+	outfit: 'outfits',
+	corpse: 'items',
+	effect: 'effects',
+	missile: 'missiles'
+};
+
+const PICK_PROMPT: Record<WizardPickKind, string> = {
+	outfit: 'Double-click an outfit to give it to the new monster',
+	corpse: 'Double-click an item to make it the new monster’s corpse',
+	effect: 'Double-click a magic effect to give it to the ability being designed',
+	missile: 'Double-click a projectile to give it to the ability being designed'
+};
+
 /** The three nav entries backed by a dat category, and that category's own name. */
 type ThingView = 'outfits' | 'effects' | 'missiles';
 
@@ -1464,17 +1483,17 @@ export default function Workspace({
 	// animation — and the cell you click comes back as the answer. `wizardPick`
 	// is what that round trip is made of: which answer is outstanding, and which
 	// view to put back when it arrives.
-	const [wizardPick, setWizardPick] = useState<{ kind: 'outfit' | 'corpse'; from: View } | null>(null);
-	const [wizardPicked, setWizardPicked] = useState<{ kind: 'outfit' | 'corpse'; id: number } | null>(null);
+	const [wizardPick, setWizardPick] = useState<{ kind: WizardPickKind; from: View } | null>(null);
+	const [wizardPicked, setWizardPicked] = useState<{ kind: WizardPickKind; id: number } | null>(null);
 
 	const startWizardPick = useCallback(
-		(kind: 'outfit' | 'corpse') => {
+		(kind: WizardPickKind) => {
 			setWizardPick({ kind, from: view });
 			if (kind === 'corpse') {
 				setItemsInitialFilters(['corpses']);
 				setView('items');
 			} else {
-				setView('outfits');
+				setView(PICK_VIEW[kind]);
 			}
 		},
 		[view]
@@ -2034,9 +2053,7 @@ export default function Workspace({
 					{wizardPick && (
 						<div className="mx-pickbar">
 							<span>
-								{wizardPick.kind === 'outfit'
-									? t('Double-click an outfit to give it to the new monster')
-									: t('Double-click an item to make it the new monster’s corpse')}
+								{t(PICK_PROMPT[wizardPick.kind])}
 							</span>
 							<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={cancelWizardPick}>
 								{t('Cancel')}
@@ -2433,7 +2450,7 @@ export default function Workspace({
 							filters={view === 'outfits' ? outfitFilters : undefined}
 							selectionMode="single"
 							view={view}
-							onPick={wizardPick?.kind === 'outfit' && view === 'outfits' ? t => finishWizardPick(t.id) : undefined}
+							onPick={wizardPick && view === PICK_VIEW[wizardPick.kind] ? t => finishWizardPick(t.id) : undefined}
 							draggable={view === 'outfits'}
 							dragPayload={t => (view === 'outfits' ? { kind: 'outfit', type: t.id } : null)}
 							onContextMenu={

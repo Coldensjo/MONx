@@ -233,8 +233,22 @@ then the projectile and the magic effect). Both columns are describing the thing
 between them. The step is the one that widens the wizard, because three columns
 need the room and the other five steps read better narrow.
 
+The two effect fields hand off like the outfit and the corpse do: **Projectile**
+and **Magic effect** open the missiles and effects browsers, and the cell
+double-clicked comes back. An effect is written by *name* — `CONST_ME_FIREAREA`
+under Ironcore, `firearea` under TFS — so the id is looked up in the engine's own
+catalogue plus whatever this server declared, and a cell nothing in it names is
+refused out loud rather than written as a value the loader would drop without a
+word. The editor keeps its popover grid, where the browsers are a click away in
+the sidebar anyway.
+
+The shape runs the full width of the card, under the three columns. It was in the
+left column at first and did not fit: four segments plus, for a beam, two more
+numbers, in a column narrower than the segments — the ring button ran under the
+visualiser and a beam grew a scrollbar.
+
 That is CSS and nothing else: grid placement ignores document order, so the card
-names its two grids and its two sub-groups and the wizard's stylesheet puts them
+names its two grids and its sub-groups and the wizard's stylesheet puts them
 either side of the stage — the same card still reads as one column in the editor,
 and folding the stage away collapses its column rather than leaving a hole. The
 one change that is real: `range` now sits with `min` and `max` rather than with

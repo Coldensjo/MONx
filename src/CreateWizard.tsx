@@ -39,8 +39,10 @@ import {
 	type SpellBlock,
 	type SpellName
 } from './monster';
-import type { EngineInfo } from './engine';
+import { engineInfo, type EngineInfo } from './engine';
 import { useItemInfo } from './fields/ItemPicker';
+import { useCustomEffects } from './fields/customctx';
+import { mergeEffects } from './customeffects';
 import { SpellCard } from './sections/SpellCard';
 import { blankSpell } from './sections/Spells';
 import { meleeBlockMax } from './derive';
@@ -71,9 +73,9 @@ interface Props {
 	 *  a round trip to the outfit grid must not cost the user any of it. */
 	hidden?: boolean;
 	/** Hands the question to the browser the sidebar opens. */
-	onBrowse: (kind: 'outfit' | 'corpse') => void;
+	onBrowse: (kind: PickKind) => void;
 	/** The cell the user clicked over there, on its way back. */
-	picked: { kind: 'outfit' | 'corpse'; id: number } | null;
+	picked: { kind: PickKind; id: number } | null;
 	onPickUsed: () => void;
 	monsters: MonsterSummary[];
 	/** Comment groups in monsters.xml, for the registry entry. */
@@ -90,6 +92,10 @@ interface Props {
 	onClose: () => void;
 	showToast: (kind: Toast['kind'], msg: string) => void;
 }
+
+/** The questions this wizard hands to the workspace's own browsers. Every one
+ *  of them is a picture, which is why none of them is answered in here. */
+export type PickKind = 'outfit' | 'corpse' | 'effect' | 'missile';
 
 /** A ticked proposal — the shape both the spell and loot lists use. */
 interface Ticked<T> {
@@ -172,6 +178,8 @@ export default function CreateWizard({
 	const takenNames = useMemo(() => new Set(monsters.map(m => m.name.toLowerCase())), [monsters]);
 	const corpusNames = useMemo(() => monsters.map(m => m.name), [monsters]);
 	const band = useMemo(() => bands.find(b => b.label === bandLabel) ?? null, [bands, bandLabel]);
+
+	const custom = useCustomEffects();
 
 	// The corpse by name, because an id is not something anyone reads.
 	const corpseInfo = useItemInfo(itemIndex, corpse || null, null);
@@ -323,21 +331,6 @@ export default function CreateWizard({
 		setLoot(drawn.map(item => ({ item, on: true })));
 	}, [donors, dropped, items, seed, nonce.loot, kind, hasItems, touched]);
 
-	// A cell clicked in the browser lands here on the way back. Marked touched,
-	// like any other answer the user gave with their own hands: the generator
-	// must not redraw it when they step back and change the band.
-	useEffect(() => {
-		if (!picked) return;
-		if (picked.kind === 'outfit') {
-			mark('look');
-			setLook(l => ({ ...l, type: picked.id }));
-		} else {
-			mark('corpse');
-			setCorpse(picked.id);
-		}
-		onPickUsed();
-	}, [picked, mark, onPickUsed]);
-
 	const openIndex = Math.min(active, Math.max(0, abilities.length - 1));
 	const open = abilities[openIndex] ?? null;
 
@@ -355,6 +348,45 @@ export default function CreateWizard({
 			return [...prev, { ...blankSpell('attacks'), name: 'physical', range: 4, melee: null }];
 		});
 	}, []);
+
+	// A cell clicked in the browser lands here on the way back. Marked touched,
+	// like any other answer the user gave with their own hands: the generator
+	// must not redraw it when they step back and change the band.
+	useEffect(() => {
+		if (!picked) return;
+		if (picked.kind === 'outfit') {
+			mark('look');
+			setLook(l => ({ ...l, type: picked.id }));
+		} else if (picked.kind === 'corpse') {
+			mark('corpse');
+			setCorpse(picked.id);
+		} else {
+			// An effect is written by name, not by id — `CONST_ME_FIREAREA` under
+			// Ironcore, `firearea` under TFS — so a cell the catalogue cannot name
+			// is one this engine has no way to ask for. Saying so beats writing an
+			// id the loader would drop without a word.
+			const area = picked.kind === 'effect';
+			const table = area
+				? mergeEffects(engineInfo(engine.key).magicEffects, custom.magic)
+				: mergeEffects(engineInfo(engine.key).shootEffects, custom.shoot);
+			const found = table.find(e => e.id === picked.id);
+			if (!found) {
+				showToast('error', t('Nothing in this engine’s catalogue names client effect {{id}}.', { id: picked.id }));
+			} else {
+				setAbilities(prev =>
+					prev.map((b, j) =>
+						j === openIndex
+							? {
+									...b,
+									effects: area ? { ...b.effects, areaEffect: found.name } : { ...b.effects, shootEffect: found.name }
+								}
+							: b
+					)
+				);
+			}
+		}
+		onPickUsed();
+	}, [picked, mark, onPickUsed, engine.key, custom, openIndex, showToast, t]);
 
 	// ---- The document, assembled ----
 	const assemble = useCallback(
@@ -838,6 +870,7 @@ export default function CreateWizard({
 													readOnly={false}
 													parent="attacks"
 													look={{ ...blankLook, ...look, mode: 'type' }}
+													onBrowseEffect={kind => onBrowse(kind === 'area' ? 'effect' : 'missile')}
 													defaultStaged
 												/>
 											</div>

@@ -1826,9 +1826,39 @@
 	grid-row: 2;
 }
 
+/* The shape runs the width of the card, under the three columns.
+ 
+   It was in the left column and did not fit: four segments and, for a beam, two
+   more numbers, in a column narrower than the segments themselves — the ring
+   button ran under the visualiser and a beam grew a scrollbar. Given the whole
+   width it is one line of segments and one of numbers, and neither costs the
+   card any height it did not already have. */
 .mx-wiz-designer .ss-ed-card > .ss-ed-area {
-	grid-column: 1;
-	grid-row: 3;
+	grid-column: 1 / -1;
+	grid-row: 4;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 14px;
+}
+
+.mx-wiz-designer .ss-ed-area > .ss-ed-subgroup-title {
+	flex: 0 0 auto;
+}
+
+/* The note is the long part: it takes what is left of the line and wraps inside
+   it rather than pushing the numbers onto a row of their own. */
+.mx-wiz-designer .ss-ed-area > .ss-ed-field-note {
+	flex: 1 1 100%;
+	order: 3;
+}
+
+.mx-wiz-designer .ss-ed-area > .ss-ed-card-grid {
+	flex: 1 1 260px;
+}
+
+.mx-wiz-designer .ss-ed-area .ss-ed-toggle-group {
+	flex-wrap: wrap;
 }
 
 /* What the spell does, whichever shape that takes: a damage grid for a direct

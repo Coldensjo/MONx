@@ -1182,6 +1182,21 @@
 	color: var(--accent);
 }
 
+/* The effect trigger the create wizard uses in place of the popover grid: the
+   current effect, its name, and a way to take it off again. The choosing itself
+   happens in the effects or missiles browser. */
+.ss-ed-effect-browse {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.ss-ed-effect-browse .ss-ed-item-trigger {
+	flex: 1;
+	min-width: 0;
+}
+
 .mx-stage {
 	display: flex;
 	flex-direction: column;
