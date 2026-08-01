@@ -542,6 +542,12 @@ export function saveMonster(doc: MonsterDoc): Promise<Lint[]> {
 	return invoke<Lint[]>('save_monster', { doc });
 }
 
+/** The skeleton `createMonster` would write, without writing it — what the
+ *  create wizard fills in and lints as the user answers. */
+export function monsterTemplate(name: string, file: string): Promise<MonsterDoc> {
+	return invoke<MonsterDoc>('monster_template', { name, file });
+}
+
 export function createMonster(name: string, file: string, group: string): Promise<MonsterDoc> {
 	return invoke<MonsterDoc>('create_monster', { name, file, group });
 }

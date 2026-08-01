@@ -645,6 +645,23 @@ fn save_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<Vec<Lin
     Ok(all)
 }
 
+/// The skeleton `create_monster` would write, without writing it.
+///
+/// The create wizard needs a real document to fill in and to lint as it goes,
+/// and building one frontend-side would mean a second `template()` in
+/// TypeScript that has to be kept in step with this one across seven engines.
+/// Handing out the same one the create path uses costs three lines and keeps a
+/// single definition of what a new monster starts as.
+#[tauri::command]
+fn monster_template(
+    state: State<WorkspaceState>,
+    name: String,
+    file: String,
+) -> Result<MonsterDoc, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    Ok(monster::template(ws.profile, &name, &file))
+}
+
 #[tauri::command]
 fn create_monster(
     state: State<WorkspaceState>,
@@ -1457,6 +1474,7 @@ pub fn run() {
             list_monsters,
             get_monster,
             save_monster,
+            monster_template,
             create_monster,
             duplicate_monster,
             delete_monster,

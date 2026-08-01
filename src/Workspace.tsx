@@ -23,6 +23,7 @@ import {
 	saveMonster,
 	scanExternalChanges,
 	searchItems,
+	tauriItemIndex,
 	thingsRowUrlFor,
 	thingUrlFor,
 	type SpellName,
@@ -34,6 +35,7 @@ import {
 	type MonsterSummary,
 	type WorkspaceInfo
 } from './monster';
+import { engineInfo } from './engine';
 import Menubar, { type Menu, type MenuItem } from './Menubar';
 import { newLootEntry } from './sections/Loot';
 import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
@@ -98,6 +100,7 @@ const EXTERNAL_POLL_MS = 10000;
 /** Scoped to the corpus, like the patch-notes cut-off. */
 const lastMonsterKey = (monstersPath: string) => `monx.lastMonster.${monstersPath}`;
 import MonsterList, { type ListActions } from './MonsterList';
+import CreateWizard from './CreateWizard';
 import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
@@ -576,6 +579,12 @@ export default function Workspace({
 	// A workspace that has never had one gets it at open, which is where the old
 	// baseline lived — the difference is that this one survives the session.
 	const [patchOpen, setPatchOpen] = useState(false);
+
+	// The create wizard. The list owns the entry point — its context menu and
+	// `ListActions.newMonster` both go through it — but the wizard itself lives
+	// here, because it needs the engine profile, the client's outfits and the
+	// item index, and the list has none of the three.
+	const [wizardOpen, setWizardOpen] = useState(false);
 	useEffect(() => {
 		if (loadCutoff(info.paths.monsters)) return;
 		patchMarks()
@@ -1946,6 +1955,7 @@ export default function Workspace({
 						showToast={showToast}
 						groups={groups}
 						onReveal={reveal}
+						onNewMonster={() => setWizardOpen(true)}
 					/>
 				</aside>
 
@@ -2614,6 +2624,23 @@ export default function Workspace({
 						setSelected(file);
 					}}
 					onClose={() => setBalanceOpen(false)}
+				/>
+			)}
+
+			{wizardOpen && (
+				<CreateWizard
+					monsters={monsters}
+					groups={groups}
+					engine={engineInfo(info.engine)}
+					outfitIds={things.outfit.map(o => o.id)}
+					itemIndex={tauriItemIndex}
+					onCreated={file => {
+						setWizardOpen(false);
+						setView('monsters');
+						refreshMonsters(file);
+					}}
+					onClose={() => setWizardOpen(false)}
+					showToast={showToast}
 				/>
 			)}
 

@@ -49,6 +49,11 @@ interface Props {
 	showToast: (kind: Toast['kind'], msg: string) => void;
 	/** Comment groups from monsters.xml (`<!-- bosses -->`, …) for the new-monster dialog. */
 	groups?: string[];
+	/** Opens the create wizard, which the shell owns — it needs the engine, the
+	 *  client's outfits and the item index, none of which the list has. The list
+	 *  still owns the *entry point*, because the context menu and
+	 *  `ListActions.newMonster` both come through here. */
+	onNewMonster?: () => void;
 	/** Opens the monsters folder with the file highlighted. Omitted until the backend has it. */
 	onReveal?: (file: string) => void;
 	/** Double-click: jump to the editor for the row's monster. */
@@ -175,7 +180,8 @@ export default function MonsterList({
 	onOpen,
 	showToast,
 	groups = [],
-	onReveal
+	onReveal,
+	onNewMonster
 }: Props) {
 	const { t } = useTranslation();
 	const [search, setSearch] = useState('');
@@ -363,12 +369,21 @@ export default function MonsterList({
 
 	const selected = useMemo(() => monsters.find(m => m.file === selectedFile) ?? null, [monsters, selectedFile]);
 
+	// The wizard supersedes the two-field dialog this used to open — its first
+	// step asks the same two things, and **Create blank** on it does exactly what
+	// the old dialog did. The local `new` dialog stays reachable only if the shell
+	// has not wired the wizard up, which is how the list keeps rendering against
+	// fixtures.
 	const openNew = useCallback(() => {
+		if (onNewMonster) {
+			onNewMonster();
+			return;
+		}
 		setFormName('');
 		setFormFile('');
 		setFormGroup(groups[0] ?? '');
 		setDialog('new');
-	}, [groups]);
+	}, [groups, onNewMonster]);
 
 	const openRename = useCallback(() => {
 		if (!selected) return;

@@ -5,7 +5,8 @@ with an answer already filled in, and takes Enter to accept it. Six presses of
 Enter produce a complete, lint-clean monster; stopping to change an answer is
 always optional and never required.
 
-This document is the design, not the implementation.
+**Status:** built in 0.1.57. Everything below is implemented bar the two items
+listed under "Not built yet".
 
 ## Why a wizard, and where the randomness went
 
@@ -63,14 +64,15 @@ own below.
 
 ## Where it lives
 
-Almost no new backend surface: every input is an existing command, and the write
-is the one `create_monster` already does.
+One new backend command; every other input is one that already existed, and the
+write is the one `create_monster` already does.
 
 | Piece | Where | Status |
 |---|---|---|
 | `CreateWizard.tsx` | `src/CreateWizard.tsx` | new — the six steps |
 | `generate.ts` | `src/generate.ts` | new — the samplers, pure, no React |
 | `namegen.ts` | `src/namegen.ts` | new — vendored from TibiaNameGen |
+| `monster_template` | `lib.rs` → `monster::template` | new — the skeleton, unwritten |
 | Entry: `new-monster` command | `Workspace.tsx` / `MonsterList.tsx` | exists, repointed |
 | Corpus stats | `balanceBands()` | exists |
 | Drop pool | `droppedItemIds()` | exists |
@@ -85,6 +87,13 @@ is the one `create_monster` already does.
 what makes it testable against `fixtures.ts` without a backend, the way
 `lootsim.ts` and `compare.ts` are.
 
+**`monster_template` is the one addition, and it earns its place.** The wizard
+needs a real document to fill in and to lint as it goes. Building one frontend-
+side would mean a second `template()` in TypeScript, kept in step with the Rust
+one across seven engines forever; handing out the same skeleton the create path
+already produces costs three lines and keeps one definition of what a new
+monster starts as. It writes nothing.
+
 **The wizard replaces today's new-monster dialog rather than sitting beside it.**
 Two entry points for "make a monster" is one concept too many, and the fast path
 is preserved inside it: step 1 carries a **Create blank** button that does exactly
@@ -94,9 +103,8 @@ what the current dialog does, in the same one second it takes today. The
 ## The six steps
 
 The frame is fixed: title, question, the answer, ⟳ to redraw it, and a footer.
-**Enter** advances, **Shift+Tab / ←** goes back, **Esc** cancels, **Space** on a
-focused ⟳ redraws. The live preview sits to the right from step 3 onward, so the
-monster visibly assembles as you go.
+**Enter** advances, **Back** returns, **Esc** cancels. The review rail sits to
+the right the whole way through, so the monster visibly assembles as you go.
 
 ### 1 — What is it called?
 
@@ -214,11 +222,22 @@ That list is not decoration. It is what makes a proposal judgeable — a user wh
 can see the spells came off *ice witch* can decide in a second; one who sees only
 numbers has to take them on faith and won't.
 
-Voices and summons are not steps. They are two collapsed rows here, off by
-default, each one click to fill with a donor's. A wizard that asks about voices
-is a wizard people learn to click through.
-
 **Create monster** is the only write in the whole flow.
+
+## Not built yet
+
+Two things this design describes that 0.1.57 does not do. Both are additive and
+neither changes the shape of anything above.
+
+- **Voices and summons.** They are deliberately not steps — a wizard that asks
+  about voices is a wizard people learn to click through — and the intent is two
+  collapsed rows on the review rail, off by default, each one click to fill from
+  a donor. Today a new monster gets neither and the editor's own sections are
+  where you add them.
+- **Re-rolling the offending stage on a lint finding.** The lint gate runs and
+  reports live, which is most of the value; what it does not yet do is
+  automatically redraw the one stage that owns a failing path. A finding is
+  shown on the rail and the user redraws that step themselves.
 
 ## Nothing is written until the last click
 
@@ -264,17 +283,21 @@ Five changes:
    drives the name. Determinism is worth the small edit: a seed reproduces a
    whole wizard session, which makes a good result shareable as a number and a
    bug report reproducible.
-3. **Retune the validator.** Its rules are *character*-name rules, and two of
+3. **Retune the validator.** Its rules are *character*-name rules, and three of
    them are wrong here. The 15-character cap is a character limit — monsters are
-   routinely longer (*orc warlord*, *elder wyrm*) so the default rises to 30. The
-   `blockedPrefixes` list (`admin `, `gm `) exists to stop players impersonating
-   staff and has no meaning for a monster; it goes. The charset, length floor,
-   double-space, trailing-connector and trailing-punctuation rules all stay —
-   they are what keeps output well-formed.
+   routinely longer (*orc warlord*, *demon skeleton*) so the default rises to 30.
+   The `blockedPrefixes` list (`admin `, `gm `) exists to stop players
+   impersonating staff and has no meaning for a monster; it goes, along with the
+   staff words in `blockedWords`. And the block list matched on bare substrings,
+   which for monster names is actively wrong: `nig` rejects *Night Stalker* and
+   `god` rejects *Godslayer*. What is left matches on word boundaries, with a
+   short substring list kept for the slurs that must not survive however they
+   are embedded. The charset, length floor, double-space, trailing-connector and
+   trailing-punctuation rules all stay — they are what keeps output well-formed.
 4. **Point the uniqueness check at the registry.** `checkName()` asked a server
    whether a character name was taken; `registry.has_name` asks the corpus
    whether a monster name is. Same role, and `create` rejects a collision anyway.
-5. **Keep `blockedWords`.** Cheap, and a generator that can emit a slur into a
+5. **Keep the slurs blocked.** Cheap, and a generator that can emit one into a
    user's server data is a generator with a bug, not a feature.
 
 The `monsters` table (~200 Tibia names) is left in and is what **classic** style
@@ -285,15 +308,14 @@ better on a themed one, and neither is right often enough to be the only option.
 
 ## Verification
 
-Every proposal, and the document at each step, goes through `lintMonster()` —
-the same engine-accurate rules the editor uses. A finding at `error` or `silent`
-redraws only the stage that owns the offending path, up to three times; one that
-survives is shown in the footer rather than hidden, with **Create monster** still
-enabled.
+The document as it stands goes through `lintMonster()` on every change — the
+same engine-accurate rules the editor uses — debounced, with findings at `error`
+and `silent` counted on the review rail and the first three shown in full.
+**Create monster** stays enabled: a finding is information, not a veto, and
+plenty of shipped monsters carry `warning`s.
 
-That is the gate, and it is a live one rather than a probe. A generator that
-cannot reach a clean document under it has a bug. Findings at `warning` are left
-alone — plenty of shipped monsters carry them.
+That is the gate, and it is a live one rather than a probe: a generator that
+cannot reach a clean document under it has a bug, and this is where it shows.
 
 ## What it will not do
 

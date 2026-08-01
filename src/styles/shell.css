@@ -1455,3 +1455,301 @@
 	grid-column: 1 / -1;
 	margin: 0;
 }
+
+/* ---------- Create wizard ---------- */
+
+.mx-wiz {
+	width: min(760px, 92vw);
+}
+
+/* One dot per step, filled at the current one. A progress bar would imply the
+   six are the same size; they are not, and the dots only claim position. */
+.mx-wiz-steps {
+	display: inline-flex;
+	gap: 5px;
+	margin-left: 10px;
+	vertical-align: middle;
+}
+
+.mx-wiz-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--border);
+}
+
+.mx-wiz-dot-on {
+	background: var(--accent);
+}
+
+.mx-wiz-body {
+	display: flex;
+	gap: 16px;
+	min-height: 260px;
+}
+
+.mx-wiz-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.mx-wiz-q {
+	margin: 0 0 12px;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.mx-wiz-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.mx-wiz-input {
+	height: 32px;
+	padding: 0 10px;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	color: var(--text);
+	font-size: 13px;
+	outline: none;
+	width: 100%;
+}
+
+.mx-wiz-input:focus {
+	border-color: var(--accent);
+}
+
+.mx-wiz-name {
+	font-size: 15px;
+	height: 38px;
+}
+
+.mx-wiz-redraw {
+	flex: 0 0 auto;
+	height: 38px;
+}
+
+.mx-wiz-styles {
+	display: flex;
+	gap: 14px;
+	margin-top: 10px;
+}
+
+.mx-wiz-style {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+}
+
+.mx-wiz-disclose {
+	margin-top: 10px;
+	font-size: 12px;
+}
+
+.mx-wiz-fields {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 10px;
+}
+
+.mx-wiz-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	flex: 1 1 140px;
+	min-width: 0;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.mx-wiz-kinds {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+
+.mx-wiz-kind {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding: 10px 12px;
+	text-align: left;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	color: var(--text);
+	cursor: pointer;
+}
+
+.mx-wiz-kind-on {
+	border-color: var(--accent);
+}
+
+.mx-wiz-kind-label {
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.mx-wiz-kind-blurb {
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.mx-wiz-slider {
+	width: 100%;
+}
+
+.mx-wiz-band {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	font-size: 12px;
+	color: var(--text-muted);
+	margin: 4px 0 10px;
+}
+
+/* A band too thin for its middle to be a norm. The figures still show — they
+   are facts about the corpus — but nothing is concluded from them. */
+.mx-wiz-thin {
+	opacity: 0.6;
+	font-style: italic;
+}
+
+.mx-wiz-stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.mx-wiz-look {
+	display: flex;
+	gap: 12px;
+	align-items: flex-start;
+}
+
+.mx-wiz-sprite {
+	width: 64px;
+	height: 64px;
+	image-rendering: pixelated;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	flex: 0 0 auto;
+}
+
+.mx-wiz-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 220px;
+	overflow-y: auto;
+	margin-bottom: 8px;
+}
+
+.mx-wiz-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 6px;
+	border-radius: var(--radius);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.mx-wiz-item:hover {
+	background: var(--bg);
+}
+
+/* Unticked rows stay listed rather than disappearing: the user is choosing
+   against them, and a row that vanishes cannot be chosen back. */
+.mx-wiz-item-off {
+	opacity: 0.45;
+}
+
+.mx-wiz-item-icon {
+	width: 24px;
+	height: 24px;
+	image-rendering: pixelated;
+}
+
+.mx-wiz-item-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mx-wiz-item-num {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+}
+
+.mx-wiz-item-from {
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--text-muted);
+	opacity: 0.8;
+}
+
+.mx-wiz-side {
+	flex: 0 0 200px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-left: 16px;
+	border-left: 1px solid var(--border);
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.mx-wiz-side-name {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text);
+}
+
+.mx-wiz-side-stats {
+	line-height: 1.5;
+}
+
+/* The provenance list. Not decoration: a proposal the user cannot trace is one
+   they have to take on faith, and they won't. */
+.mx-wiz-prov {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding-top: 8px;
+	border-top: 1px solid var(--border);
+	word-break: break-word;
+}
+
+.mx-wiz-prov-title {
+	font-weight: 600;
+	color: var(--text);
+}
+
+.mx-wiz-lints {
+	margin-top: auto;
+	padding-top: 8px;
+	border-top: 1px solid var(--border);
+}
+
+.mx-wiz-lints-bad {
+	color: var(--danger, #e5534b);
+}
+
+.mx-wiz-lint {
+	opacity: 0.8;
+}
+
+.mx-wiz-seed {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+}
