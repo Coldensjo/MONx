@@ -227,8 +227,9 @@ one. A monster with only melee is a monster, so the step is happy with none.
 The card is **the editor's own `SpellCard`**, with the re-enactment open by
 default rather than folded behind its eye, and laid out around it: **the
 visualiser in the middle**, what the spell costs down the left (interval,
-chance, then the area shape), what it does down the right (range, min, max, then
-the projectile and the magic effect). Both columns are describing the thing
+chance, then the area shape), what it does down the right (range, min and max —
+or the melee pair, or a status's duration and speed, whichever that family has —
+then the projectile and the magic effect). Both columns are describing the thing
 between them. The step is the one that widens the wizard, because three columns
 need the room and the other five steps read better narrow.
 

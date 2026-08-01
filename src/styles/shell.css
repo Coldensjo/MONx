@@ -1831,7 +1831,11 @@
 	grid-row: 3;
 }
 
-.mx-wiz-designer .ss-ed-card > .ss-ed-card-damage {
+/* What the spell does, whichever shape that takes: a damage grid for a direct
+   or condition spell, the melee pair for melee, the duration and speed for a
+   status. Only ever one of them, since the family that has one has no other. */
+.mx-wiz-designer .ss-ed-card > .ss-ed-card-damage,
+.mx-wiz-designer .ss-ed-card > .ss-ed-damagegroup {
 	grid-column: 3;
 	grid-row: 2;
 }

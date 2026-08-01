@@ -271,6 +271,7 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 			{family === 'melee' && block.melee && (
 				<SubGroup
 					title={t('Melee damage')}
+					className="ss-ed-damagegroup"
 					note={t('Skill and attack replace min/max: max = ceil(skill × attack × 0.05 + attack × 0.5).')}
 				>
 					<div className="ss-ed-card-grid">
@@ -462,7 +463,7 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 			)}
 
 			{family === 'status' && block.status && (
-				<SubGroup title={t('Status')}>
+				<SubGroup title={t('Status')} className="ss-ed-damagegroup">
 					<Field label={t('Duration')} hint={t('ms')}>
 						<NumberField
 							value={block.status.duration}
