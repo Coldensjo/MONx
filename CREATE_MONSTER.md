@@ -256,6 +256,17 @@ the cadence, on the grounds that how far a spell reaches is a fact about the hit
 and not about how often it fires. Where a family has no damage grid at all it
 stays where it was.
 
+**Every explanation is on a ⓘ.** The card runs in *compact mode*: a context the
+`Field`, `SubGroup` and `Banner` primitives read, which folds each note onto a
+hover beside its label and takes the editor's reading-column spacing back down
+to a form's. Nothing is dropped — every word is still there, on the icon — but
+the paragraphs that make the editor worth reading are a wall when what you came
+to do is fill in six numbers. Compact is why the whole ability fits one page,
+and it is a mode on the primitives rather than a second set of them, because a
+second set is how a second spell editor gets born. The stage's own read-out of
+the two effects it is drawing is hidden here too: their fields are one column
+away, and it is the only thing on the page said twice.
+
 Picking the spell reshapes the card to the fields that family actually reads —
 damage for a direct spell, `tick`/`start` or `cycle` or `count` for a condition
 as that engine requires, duration and speed for a status — and the geometry the

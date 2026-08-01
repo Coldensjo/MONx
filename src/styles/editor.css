@@ -1182,6 +1182,28 @@
 	color: var(--accent);
 }
 
+/* A folded-away note. Quiet until it is looked for — the point of compact mode
+   is that the words are available, not that they are in the way. */
+.ss-ed-tip {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-muted);
+	opacity: 0.6;
+	cursor: help;
+}
+
+.ss-ed-tip:hover {
+	opacity: 1;
+	color: var(--accent);
+}
+
+/* A banner with its paragraph on the hover instead of on the page. */
+.ss-ed-banner-chip {
+	display: inline-flex;
+	padding: 3px 6px;
+	cursor: help;
+}
+
 /* The effect trigger the create wizard uses in place of the popover grid: the
    current effect, its name, and a way to take it off again. The choosing itself
    happens in the effects or missiles browser. */

@@ -40,6 +40,7 @@ import {
 	type SpellName
 } from './monster';
 import { engineInfo, type EngineInfo } from './engine';
+import { CompactProvider } from './fields/Field';
 import { useItemInfo } from './fields/ItemPicker';
 import { useCustomEffects } from './fields/customctx';
 import { mergeEffects } from './customeffects';
@@ -822,7 +823,10 @@ export default function CreateWizard({
 													setMelee(setMeleeField(melee, 'attack', Number(e.target.value)));
 												}}
 											/>
-											<span className="mx-wiz-mini">
+											<span
+												className="mx-wiz-mini"
+												title={t('Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.')}
+											>
 												{t('max {{damage}}', { damage: meleeBlockMax(melee.block) ?? '—' })}
 											</span>
 										</>
@@ -830,7 +834,12 @@ export default function CreateWizard({
 									{melee && !meleeOn && <span className="mx-wiz-item-from">{t('from {{name}}', { name: melee.from })}</span>}
 								</div>
 								{melee === null && (
-									<div className="ss-modal-desc">{t('No donor in this band fights in melee, so there is no block to copy.')}</div>
+									<span
+										className="mx-wiz-mini"
+										title={t('A melee block is copied off a donor rather than composed, and nothing in this band has one to lend.')}
+									>
+										{t('no melee available')}
+									</span>
 								)}
 
 								{/* The ability designer. One ability on screen, the rail above it
@@ -842,8 +851,8 @@ export default function CreateWizard({
 								    engines and would be wrong first. */}
 								<div className="mx-wiz-sub">{t('Abilities')}</div>
 								{abilities.length === 0 ? (
-									<div className="ss-modal-desc">
-										{t('No abilities yet. Design one, or leave it — a monster with only melee is a monster.')}
+									<div className="ss-modal-desc" title={t('A monster with only melee is a monster — this step is happy with none.')}>
+										{t('No abilities yet.')}
 									</div>
 								) : (
 									<>
@@ -860,6 +869,10 @@ export default function CreateWizard({
 										</div>
 										{open && (
 											<div className="mx-wiz-designer">
+												{/* Every explanation the card carries folds onto a ⓘ in
+												    compact mode. The words are all still there; the wall
+												    of them between the user and six numbers is not. */}
+												<CompactProvider>
 												<SpellCard
 													block={open}
 													file={file || 'new'}
@@ -873,6 +886,7 @@ export default function CreateWizard({
 													onBrowseEffect={kind => onBrowse(kind === 'area' ? 'effect' : 'missile')}
 													defaultStaged
 												/>
+												</CompactProvider>
 											</div>
 										)}
 									</>

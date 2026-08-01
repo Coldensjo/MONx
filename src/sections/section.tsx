@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { ChevronDown, ChevronRight, ClipboardPaste, ClipboardPlus, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardPaste, ClipboardPlus, Copy, Info } from 'lucide-react';
 import type { ItemIndex, MonsterDoc, SpellName } from '../monster';
-import type { LintAt } from '../fields/Field';
+import { asTitle, NoteTip, useCompact, type LintAt } from '../fields/Field';
 import { BLOCK_LABEL, isBlockKind, useBlocks } from '../blocks';
 
 export const SECTION_IDS = [
@@ -197,15 +197,33 @@ export function SubGroup({
 	className?: string;
 	children: ReactNode;
 }) {
+	// Compact folds the note onto the title, the same bargain Field makes.
+	const compact = useCompact();
+	const tip = compact ? asTitle(note) : null;
 	return (
 		<div className={className ? `ss-ed-subgroup ${className}` : 'ss-ed-subgroup'}>
-			<div className="ss-ed-subgroup-title">{title}</div>
-			{note && <div className="ss-ed-field-note">{note}</div>}
+			<div className="ss-ed-subgroup-title">
+				{title}
+				{tip && <NoteTip note={tip} />}
+			</div>
+			{note && !tip && <div className="ss-ed-field-note">{note}</div>}
 			{children}
 		</div>
 	);
 }
 
 export function Banner({ kind, children }: { kind: 'info' | 'warn' | 'error'; children: ReactNode }) {
+	// A banner is a paragraph, and compact has no room for one. It becomes a chip
+	// of the same colour carrying the same words on hover — still visible, since
+	// what a banner says is usually "this spell is not what you think".
+	const compact = useCompact();
+	const tip = compact ? asTitle(children) : null;
+	if (tip) {
+		return (
+			<div className={`ss-ed-banner ss-ed-banner-${kind} ss-ed-banner-chip`} title={tip}>
+				<Info size={12} />
+			</div>
+		);
+	}
 	return <div className={`ss-ed-banner ss-ed-banner-${kind}`}>{children}</div>;
 }

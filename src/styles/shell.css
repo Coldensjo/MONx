@@ -1879,7 +1879,7 @@
    as it always has and now vertically too: a thirteen-row spell must not push
    the fields it is being described by off the page. */
 .mx-wiz-designer .mx-stage-viewport {
-	max-height: 232px;
+	max-height: 200px;
 	overflow-y: auto;
 }
 
@@ -1888,6 +1888,65 @@
 .mx-wiz-designer .ss-ed-card-grid > .ss-ed-field {
 	flex: 1 1 120px;
 	max-width: 240px;
+}
+
+/* ---- Compact: everything below is height, taken back ----
+   The editor's spacing is built for a column you scroll through and read. The
+   designer is one page you fill in, so the gaps close, the controls come down a
+   size, and the notes are on the ⓘ. Nothing is hidden that cannot be hovered. */
+
+.mx-wiz-designer .ss-ed-card {
+	row-gap: 8px;
+}
+
+.mx-wiz-designer .ss-ed-card-grid {
+	gap: 8px;
+}
+
+.mx-wiz-designer .ss-ed-field {
+	gap: 2px;
+}
+
+.mx-wiz-designer .ss-ed-field-label {
+	font-size: 11px;
+}
+
+.mx-wiz-designer .ss-ed-input {
+	min-height: 26px;
+	padding: 2px 7px;
+	font-size: 12px;
+}
+
+.mx-wiz-designer .ss-ed-input-num {
+	width: 88px;
+}
+
+/* A sub-group here is a row of the same card, not a section of a document: the
+   rule above it and the space under it are what made it read as one. */
+.mx-wiz-designer .ss-ed-subgroup {
+	border-top: 0;
+	padding-top: 0;
+	gap: 6px;
+}
+
+.mx-wiz-designer .ss-ed-subgroup-title {
+	font-size: 10px;
+}
+
+.mx-wiz-designer .ss-ed-seg {
+	padding: 3px 8px;
+	font-size: 11px;
+}
+
+/* The stage names the two effects it is drawing, which is the one thing on this
+   page that is said twice — the fields for both are a column away. */
+.mx-wiz-designer .mx-stage-fx {
+	display: none;
+}
+
+.mx-wiz-designer .mx-stage {
+	padding: 8px;
+	gap: 6px;
 }
 
 /* The step's own actions, bottom right, clear of the wizard's footer. */
