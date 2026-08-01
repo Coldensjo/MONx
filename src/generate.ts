@@ -30,105 +30,6 @@ export const KINDS: { key: Kind; label: string; blurb: string }[] = [
 
 // ---------- Small helpers ----------
 
-/** Words that appear in monster names without saying what the monster is. */
-const NOISE = new Set(['the', 'of', 'and', 'a', 'an', 'de', 'la', 'le', 'von', 'del']);
-
-/** Tokens too short to name a kind of thing. */
-const MIN_TOKEN = 3;
-
-/**
- * A family of monsters the corpus already has: every orc, every minotaur, every
- * dragon.
- *
- * This is the wizard's first question, and like every other default it is read
- * out of the corpus rather than declared. A hard-coded list of creature types
- * would be a list of *Tibia's* creature types, which is exactly wrong on the
- * themed server the feature is most useful on — a corpus of frost creatures has
- * no orcs in it and every card offering one is a card that leads nowhere.
- *
- * Families come from the names themselves: the shared word is what a family is.
- * `orc`, `orc warrior`, `orc shaman` and `orc berserker` are a family because
- * they say so.
- */
-export interface Family {
-	/** The shared token, lower case — also the key. */
-	key: string;
-	/** Title case, for the card. */
-	label: string;
-	/** Every monster carrying the token, which is the pool everything downstream
-	 *  is drawn from once this family is chosen. */
-	members: MonsterSummary[];
-}
-
-/**
- * The families in a corpus, thickest first.
- *
- * A token has to name at least two monsters to be a family — one monster called
- * *hydra* is not a kind of thing, it is a monster. Races are folded in behind
- * the name tokens for the corpus whose names share nothing, where `undead` and
- * `blood` are still a real division and the only one on offer.
- */
-export function families(monsters: MonsterSummary[], limit = 14): Family[] {
-	const byToken = new Map<string, MonsterSummary[]>();
-	for (const m of monsters) {
-		// Once per monster per token: `orc orc` must not count twice.
-		const seen = new Set<string>();
-		for (const raw of m.name.toLowerCase().split(/[^a-zà-ÿ]+/)) {
-			const token = raw.trim();
-			if (token.length < MIN_TOKEN || NOISE.has(token) || seen.has(token)) continue;
-			seen.add(token);
-			const list = byToken.get(token);
-			if (list) list.push(m);
-			else byToken.set(token, [m]);
-		}
-	}
-	const out: Family[] = [];
-	for (const [key, members] of byToken) {
-		if (members.length < 2) continue;
-		out.push({ key, label: title(key), members });
-	}
-	out.sort((a, b) => b.members.length - a.members.length || a.key.localeCompare(b.key));
-
-	if (out.length < 4) {
-		const byRace = new Map<string, MonsterSummary[]>();
-		for (const m of monsters) {
-			if (!m.race) continue;
-			const list = byRace.get(m.race);
-			if (list) list.push(m);
-			else byRace.set(m.race, [m]);
-		}
-		for (const [race, members] of byRace) {
-			if (members.length < 2 || out.some(f => f.key === race)) continue;
-			out.push({ key: race, label: title(race), members });
-		}
-	}
-	return out.slice(0, limit);
-}
-
-function title(s: string): string {
-	return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/** The member whose look stands for the family on its card: the commonest
- *  looktype among them, so a family of orcs shows an orc and not its one
- *  outlier. */
-export function familyFace(family: Family): MonsterSummary | null {
-	const counts = new Map<number, number>();
-	for (const m of family.members) {
-		const type = m.look.type ?? 0;
-		if (type > 0) counts.set(type, (counts.get(type) ?? 0) + 1);
-	}
-	let best = 0;
-	let bestCount = 0;
-	for (const [type, count] of counts) {
-		if (count > bestCount) {
-			best = type;
-			bestCount = count;
-		}
-	}
-	return family.members.find(m => (m.look.type ?? 0) === best) ?? family.members[0] ?? null;
-}
-
 export function randomInt(rng: Rng, min: number, max: number): number {
 	return Math.floor(rng() * (max - min)) + min;
 }
@@ -228,23 +129,13 @@ export function sampleStats(rng: Rng, band: BalanceBand): Stats {
 /**
  * The monsters everything after the stats is sampled from.
  *
- * The family comes first and the band second, because the family is the answer
- * the user gave and the band is one the wizard proposed: an orc drawn from the
- * wrong band is still an orc, and a perfectly banded thing that is not an orc is
- * not what was asked for. Falls back to the family alone, then the band, then
- * the corpus, rather than returning nothing — a corpus with two bosses in it
- * still has to be able to make a third.
+ * Drawn from the chosen band and filtered by kind, which is what makes a run
+ * read as one family rather than as a shuffle of the whole corpus. Falls back
+ * to the band alone, then to the corpus, rather than returning nothing: a
+ * corpus with two bosses in it still has to be able to make a third.
  */
-export function pickDonors(
-	rng: Rng,
-	monsters: MonsterSummary[],
-	band: BalanceBand | null,
-	kind: Kind,
-	n = 3,
-	family: Family | null = null
-): MonsterSummary[] {
-	const inFamily = family && family.members.length > 0 ? family.members : monsters;
-	const inBand = band ? inFamily.filter(m => m.experience >= band.min && m.experience <= band.max) : inFamily;
+export function pickDonors(rng: Rng, monsters: MonsterSummary[], band: BalanceBand | null, kind: Kind, n = 3): MonsterSummary[] {
+	const inBand = band ? monsters.filter(m => m.experience >= band.min && m.experience <= band.max) : monsters;
 	const matches = (m: MonsterSummary) => {
 		if (kind === 'boss') return m.boss;
 		if (kind === 'minion') return m.summonable;
@@ -252,7 +143,7 @@ export function pickDonors(
 		return !m.boss;
 	};
 	const first = inBand.filter(matches);
-	const pool = first.length >= 2 ? first : inBand.length >= 2 ? inBand : inFamily.length > 0 ? inFamily : monsters;
+	const pool = first.length >= 2 ? first : inBand.length >= 2 ? inBand : monsters;
 	return pickSome(rng, pool, n);
 }
 
@@ -305,38 +196,12 @@ export function flagsFor(engine: EngineInfo, kind: Kind): Record<string, boolean
  * default available — the first thing the user would change, every time. With
  * every outfit already spoken for it gives up and draws freely rather than
  * failing: a duplicate look is worse than nothing, not invalid.
- *
- * With a family chosen it draws from the free ids *nearest that family's own*,
- * and dresses the result in a member's colours. A client numbers an outfit and
- * its variants together — the orcs are neighbours in the file because they were
- * added together — so the ids beside a family's are the likeliest to look like
- * it. That is a fact about how these files are built, not a claim about any
- * particular id, which is why the outfit grid sits right beside it: the wizard
- * is proposing, and the eye decides.
  */
-export function sampleLook(
-	rng: Rng,
-	outfitIds: number[],
-	monsters: MonsterSummary[],
-	family: Family | null = null
-): { type: number; head: number; body: number; legs: number; feet: number } {
+export function sampleLook(rng: Rng, outfitIds: number[], monsters: MonsterSummary[]): { type: number; head: number; body: number; legs: number; feet: number } {
 	const used = new Set(monsters.map(m => m.look.type ?? 0));
 	const free = outfitIds.filter(id => id > 0 && !used.has(id));
-	const pool = free.length ? free : outfitIds.filter(id => id > 0);
-
-	const anchor = family ? pick(rng, family.members) : null;
-	const anchorType = anchor?.look.type ?? 0;
-	// The twelve free ids closest to the family's own, then one of those — near,
-	// but not so deterministic that ⟳ has nothing left to draw.
-	const near =
-		anchorType > 0 ? [...pool].sort((a, b) => Math.abs(a - anchorType) - Math.abs(b - anchorType)).slice(0, 12) : pool;
-	const type = pick(rng, near.length ? near : pool) ?? 0;
-
+	const type = pick(rng, free.length ? free : outfitIds.filter(id => id > 0)) ?? 0;
 	const colour = () => randomInt(rng, 0, 133);
-	if (anchor && anchor.look.type) {
-		const { head, body, legs, feet } = anchor.look;
-		return { type, head, body, legs, feet };
-	}
 	return { type, head: colour(), body: colour(), legs: colour(), feet: colour() };
 }
 

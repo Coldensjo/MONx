@@ -5,7 +5,8 @@ with an answer already filled in, and takes Enter to accept it. Six presses of
 Enter produce a complete, lint-clean monster; stopping to change an answer is
 always optional and never required.
 
-**Status:** built in 0.1.57, reordered around the family question in 0.1.62.
+**Status:** built in 0.1.57, reordered in 0.1.63 to ask what and how it looks
+before what it is called.
 Everything below is implemented bar the two items listed under "Not built yet".
 
 ## Why a wizard, and where the randomness went
@@ -110,54 +111,29 @@ They are asked in the order a monster is imagined, not the order the file is
 written: **what kind of thing it is, what it looks like, what it is called**, and
 only then the numbers. Asking for a name first is asking the user to name
 something they have not pictured yet, which is why the first version of this
-flow opened on a text field nobody had an answer for. The family answers itself
-in one click, the outfit in a second, and by the time the name is asked for the
-generator can propose one that fits what is already on screen.
+flow opened on a text field nobody had an answer for. The kind is one click, the
+outfit is a second, and the name is easier to accept once there is something on
+screen to name.
 
-### 1 — What kind of monster is it?
+### 1 — What kind of thing is it?
 
-A grid of the **families the corpus already has**, each a sprite and a word —
-*Orc*, *Minotaur*, *Dragon*, *Demon* — plus **Anything**, and under it the four
-role cards: **ordinary monster**, **boss**, **summoned minion**, **harmless
-critter**.
+Four cards: **ordinary monster**, **boss**, **summoned minion**, **harmless
+critter**. This is the only question with no sampled default — it is the one the
+user genuinely has an opinion about before they start, and guessing it wrong
+poisons every step after.
 
-The families are read out of the corpus, not declared. `families()` counts the
-words the monster names share: `orc`, `orc warrior`, `orc shaman` and `orc
-berserker` are a family because they say so, and a token has to name at least
-two monsters to be one — a single *hydra* is a monster, not a kind of thing. On
-a corpus whose names share nothing, races fall in behind them, because `undead`
-against `blood` is still a real division and the only one on offer. A
-hard-coded table of Tibia creature types would be exactly wrong on the themed
-server this feature is most useful on: a corpus of frost creatures has no orcs
-in it, and every card offering one is a card that leads nowhere.
-
-That answers the design's own open question — the theme filter beats the four
-roles, and it does not need `species`, which only Ironcore has.
-
-The family is the pool every later default is drawn from: the outfit, the name,
-the spells, the corpse and the loot all arrive orcish. The role sets
-`isboss`/`boss`, `hostile`, `attackable`, `summonable`, `convinceable`,
-`pushable` and the static-attack/target-distance numerics, and narrows that pool
-again — a boss draws from the family's bosses.
-
-Neither has a sampled default. They are the two things the user has an opinion
-about before they start, and guessing either wrong poisons every step after.
-Where the two disagree — a family with no bosses in it — the **family wins**:
-`pickDonors` falls back family, then band, then corpus, because the family is
-the answer the user gave and the band is one the wizard proposed.
+It sets `isboss`/`boss`, `hostile`, `attackable`, `summonable`, `convinceable`,
+`pushable` and the static-attack/target-distance numerics, and it picks the pool
+of donors every later step samples from. A boss draws from bosses.
 
 ### 2 — What does it look like?
 
 The `OutfitPicker`, prefilled with a looktype **no monster in the corpus already
 uses** — a new monster that looks exactly like an existing one is the least
-useful default available. With a family chosen the draw comes from the free ids
-*nearest that family's own*, in a member's colours. A client numbers an outfit
-and its variants together, because they were added together, so the ids beside
-the orcs are the likeliest to look orcish. That is a fact about how these files
-are built rather than a claim about any particular id, which is why the whole
-grid sits directly beneath it: the wizard proposes and the eye decides, in one
-click either way. Addons and mount appear only where `lookAddons` / `lookMount`
-are true for the engine.
+useful default available; colours are drawn freely. The whole grid sits directly
+beneath it, because the wizard proposes and the eye decides — an id is not
+something anyone should have to picture. Addons and mount appear only where
+`lookAddons` / `lookMount` are true for the engine.
 
 Beside it: race, corpse, and the immunity/element block. The corpse is *copied
 from a donor*, never drawn — a corpse id has to exist in the item database and
@@ -169,19 +145,17 @@ right without asserting it.
 ### 3 — What is it called?
 
 ```
-Name   [ Orc Warden            ]  ⟳     (•) corpus style  ( ) classic
-File   orcwarden.xml     Group [ orcs ▾ ]          ← collapsed, prefilled
+Name   [ Frost Warden          ]  ⟳     ( ) corpus style  (•) classic
+File   frostwarden.xml   Group [ bosses ▾ ]        ← collapsed, prefilled
                                     [ Create blank ]  [ Next → ]
 ```
 
 The name arrives already generated. **Classic** is the vendored TibiaNameGen;
-**corpus style** draws two tokens from monster names the corpus already has —
-and from **the family's own** names when one is chosen, which is what turns
-"orc" into *orc warden* rather than *frost widow*. Picking a family switches the
-style to corpus for that reason; **Anything** switches it back. Either is
-rejected and redrawn if `registry.has_name` already owns it — the check `create`
-performs anyway, moved forward so it fails at the keystroke rather than at the
-end of the wizard.
+**corpus style** draws two tokens from the corpus's own monster names (`frost` +
+`warden` out of *frost dragon* and *shadow warden*), which is what keeps a
+themed server on-theme. Either is rejected and redrawn if `registry.has_name`
+already owns it — the check `create` performs anyway, moved forward so it fails
+at the keystroke rather than at the end of the wizard.
 
 File and group are the existing fields, collapsed behind a disclosure and
 prefilled by `suggestFile()`. They are the only two things today's dialog asks
@@ -404,10 +378,12 @@ Version bump per AGENTS.md: `package.json`, `src-tauri/tauri.conf.json` and
 
 ## Open questions
 
-- ~~**Is step 2 four cards or a free-text theme?**~~ Answered in 0.1.62: both,
-  on one screen, and the theme is neither free text nor a declared table. It is
-  the families the corpus's own names fall into, which needs no mapping and
-  works on the engines that have no `species`.
+- **Is step 1 four cards or a theme as well?** 0.1.62 tried both on one screen —
+  the four roles under a grid of the families the corpus's own names fall into
+  (*Orc*, *Minotaur*, *Dragon*), each filtering the donor pool. It was removed
+  the same day: two questions on the first screen is not one question, and the
+  wizard's whole shape is one question per step. The sampler is in
+  `git show 5492d98:src/generate.ts` if it is ever wanted as a step of its own.
 - **Should a seed reproduce across corpora?** Currently no — seeds index into
   corpus-derived arrays. Making it portable means sampling by rank rather than
   index, which is more machinery than the payoff justifies.

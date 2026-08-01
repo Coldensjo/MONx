@@ -2,9 +2,8 @@
 //
 // They are asked in the order a monster is imagined rather than the order the
 // file is written: what kind of thing it is, what it looks like, what it is
-// called, and only then the numbers. The first answer picks the family every
-// later default is drawn from, so choosing "orc" once makes the outfit, the
-// name, the spells and the loot all arrive orcish.
+// called, and only then the numbers. Naming comes third because a name is
+// easier to accept once there is something on screen to name.
 //
 // The generator supplies the default answer to every question and the user
 // supplies the ones they care about. Accept them all and you get what a
@@ -44,8 +43,6 @@ import { generateName, type NameStyle } from './namegen';
 import {
 	KINDS,
 	defaultBand,
-	families,
-	familyFace,
 	flagsFor,
 	newSeed,
 	pickDonors,
@@ -109,7 +106,6 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 	const [nonce, setNonce] = useState<Record<Field, number>>({ name: 0, stats: 0, look: 0, race: 0, corpse: 0, spells: 0, loot: 0 });
 
 	// ---- Answers ----
-	const [familyKey, setFamilyKey] = useState<string | null>(null);
 	const [name, setName] = useState('');
 	const [nameStyle, setNameStyle] = useState<NameStyle>('classic');
 	const [file, setFile] = useState('');
@@ -134,15 +130,7 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 	const [lints, setLints] = useState<Lint[]>([]);
 
 	const takenNames = useMemo(() => new Set(monsters.map(m => m.name.toLowerCase())), [monsters]);
-
-	// The families are the corpus's own, not a table of Tibia creature types — a
-	// themed server has no orcs in it, and a card offering one leads nowhere.
-	const pool = useMemo(() => families(monsters), [monsters]);
-	const family = useMemo(() => pool.find(f => f.key === familyKey) ?? null, [pool, familyKey]);
-
-	// Corpus-style names draw on the family when there is one, which is what makes
-	// the answer to "orc" read as *orc warden* and not as *frost widow*.
-	const corpusNames = useMemo(() => (family ?? { members: monsters }).members.map(m => m.name), [family, monsters]);
+	const corpusNames = useMemo(() => monsters.map(m => m.name), [monsters]);
 	const band = useMemo(() => bands.find(b => b.label === bandLabel) ?? null, [bands, bandLabel]);
 
 	// The item database is optional — Canary and BlackTek ship none — and without
@@ -216,14 +204,14 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 	useEffect(() => {
 		if (monsters.length === 0) return;
 		let live = true;
-		const chosen = pickDonors(makeRng(seed ^ 0x5f3a), monsters, band, kind, 3, family);
+		const chosen = pickDonors(makeRng(seed ^ 0x5f3a), monsters, band, kind, 3);
 		void Promise.all(chosen.map(m => getMonster(m.file).catch(() => null)))
 			.then(docs => live && setDonors(docs.filter((d): d is MonsterDoc => d !== null)))
 			.catch(() => undefined);
 		return () => {
 			live = false;
 		};
-	}, [monsters, band, kind, seed, family]);
+	}, [monsters, band, kind, seed]);
 
 	// ---- Resolve the items the proposals will need ----
 	useEffect(() => {
@@ -258,8 +246,8 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 
 	useEffect(() => {
 		if (touched.has('look') || outfitIds.length === 0) return;
-		setLook(sampleLook(makeRng((seed ^ 0xa17f) + nonce.look), outfitIds, monsters, family));
-	}, [outfitIds, monsters, family, seed, nonce.look, touched]);
+		setLook(sampleLook(makeRng((seed ^ 0xa17f) + nonce.look), outfitIds, monsters));
+	}, [outfitIds, monsters, seed, nonce.look, touched]);
 
 	useEffect(() => {
 		if (donors.length === 0) return;
@@ -438,49 +426,7 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 					<div className="mx-wiz-main">
 						{step === 0 && (
 							<Step question={t('What kind of monster is it?')}>
-								<div className="mx-wiz-families">
-									<button
-										className={familyKey === null ? 'mx-wiz-family mx-wiz-family-on' : 'mx-wiz-family'}
-										onClick={() => {
-											setFamilyKey(null);
-											setNameStyle('classic');
-										}}
-									>
-										<span className="mx-wiz-family-any">
-											<Dices size={18} />
-										</span>
-										<span className="mx-wiz-family-label">{t('Anything')}</span>
-										<span className="mx-wiz-family-count">{t('the whole corpus')}</span>
-									</button>
-									{pool.map(f => {
-										const face = familyFace(f);
-										return (
-											<button
-												key={f.key}
-												className={familyKey === f.key ? 'mx-wiz-family mx-wiz-family-on' : 'mx-wiz-family'}
-												onClick={() => {
-													setFamilyKey(f.key);
-													setNameStyle('corpus');
-												}}
-											>
-												{face ? (
-													<img className="mx-wiz-family-face" src={lookUrl(face.look, { cell: 32 })} alt="" />
-												) : (
-													<span className="mx-wiz-family-any" />
-												)}
-												<span className="mx-wiz-family-label">{f.label}</span>
-												<span className="mx-wiz-family-count">{fmt(f.members.length)}</span>
-											</button>
-										);
-									})}
-								</div>
-								{pool.length === 0 && (
-									<div className="ss-modal-desc">
-										{t('This corpus is too small for its names to fall into families — everything is drawn from all of it.')}
-									</div>
-								)}
-
-								<div className="mx-wiz-kinds mx-wiz-kinds-inline">
+								<div className="mx-wiz-kinds">
 									{KINDS.map(k => (
 										<button
 											key={k.key}
@@ -565,11 +511,7 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 								<div className="ss-modal-desc">
 									{outfitIds.length === 0
 										? t('No client is open, so there is nothing to draw — the outfit is an id, and the server will resolve it.')
-										: family
-											? t('An outfit no monster wears, from beside {{family}}’s own. The corpse is a donor’s, so the item database can resolve it.', {
-													family: family.label
-												})
-											: t('The outfit is one no monster in this corpus wears. The corpse is a donor’s, so the item database can resolve it.')}
+										: t('The outfit is one no monster in this corpus wears. The corpse is a donor’s, so the item database can resolve it.')}
 								</div>
 							</Step>
 						)}
@@ -782,11 +724,6 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 						)}
 						<div className="mx-wiz-prov">
 							<div className="mx-wiz-prov-title">{t('Drawn from')}</div>
-							{family && (
-								<div>
-									{t('family')}: {family.label} ({fmt(family.members.length)})
-								</div>
-							)}
 							{band && (
 								<div>
 									{t('stats')}: {band.label} ({fmt(band.count)})
