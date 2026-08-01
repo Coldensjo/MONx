@@ -655,6 +655,7 @@ const pl: Record<string, string> = {
 	Favourites: 'Ulubione',
 	Pickupable: 'Podnoszalne',
 	'Show corpses': 'Pokaż zwłoki',
+	'Show corpses with decay': 'Pokaż zwłoki z rozkładem',
 	'Not dropped by any monster': 'Nie wypada z żadnego potwora',
 	Stackable: 'Stakowalne',
 	Container: 'Pojemnik',

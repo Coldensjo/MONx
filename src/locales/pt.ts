@@ -578,6 +578,7 @@ const pt: Record<string, string> = {
 	Favourites: 'Favoritos',
 	Pickupable: 'Coletável',
 	'Show corpses': 'Mostrar corpos',
+	'Show corpses with decay': 'Mostrar corpos que se decompõem',
 	'Not dropped by any monster': 'Não dropado por nenhum monstro',
 	Stackable: 'Empilhável',
 	Container: 'Contêiner',

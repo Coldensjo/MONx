@@ -1300,6 +1300,19 @@ export default function Workspace({
 	const itemFilters = useMemo(() => {
 		const attr = (key: string) => (i: ItemInfo) => key in i.attributes;
 		const attrIs = (key: string, value: string) => (i: ItemInfo) => i.attributes[key] === value;
+		// Attribute keys are stored as the database spells them, and the databases
+		// disagree: Ironcore and BlackTek write `corpseType`/`decayTo`, TVP writes
+		// both entirely in lower case. Only `items.srv` is renamed on the way in
+		// (`items.rs` `srv_attr`), so an exact-key test is blind to a whole engine —
+		// which for the corpse filters means the picker they open would come up
+		// empty on TVP.
+		const attrCI = (...keys: string[]) => {
+			const want = keys.map(k => k.toLowerCase());
+			return (i: ItemInfo) => {
+				const have = Object.keys(i.attributes).map(k => k.toLowerCase());
+				return want.every(k => have.includes(k));
+			};
+		};
 		const special = 'Special';
 		const kind = 'Kind';
 		const weapons = 'Weapons';
@@ -1313,7 +1326,20 @@ export default function Workspace({
 				test: (i: ItemInfo) => favourites.has(i.serverId)
 			},
 			{ key: 'pickupable', label: 'Pickupable', section: special, test: (i: ItemInfo) => i.pickupable },
-			{ key: 'corpses', label: 'Show corpses', section: special, test: attr('corpseType') },
+			{ key: 'corpses', label: 'Show corpses', section: special, test: attrCI('corpseType') },
+			{
+				// The corpses that actually rot, which is what a monster's <look
+				// corpse=""> almost always wants: `decayTo` is the link to the next
+				// stage, and DecayChain reads a corpse without one as terminal — it
+				// stays on the ground forever. `duration` alone is not enough, since
+				// there is nothing for it to count down to. This is the filter the
+				// corpse pickers open on; the plain one above is still there for the
+				// static corpses, which do exist and are occasionally what you want.
+				key: 'corpses-decay',
+				label: 'Show corpses with decay',
+				section: special,
+				test: attrCI('corpseType', 'decayTo')
+			},
 			{
 				// Loot only — an item used as a corpse or worn as a typeex look still
 				// counts as undropped, which is the question being asked.
@@ -1476,8 +1502,12 @@ export default function Workspace({
 		];
 	}, []);
 
+	// Opened from the look section's corpse field, so the question is which corpse
+	// this monster leaves — and one that never rots is the rare answer. The filter
+	// is a filter, not a restriction: it is switchable in the popover like any
+	// other, so the static corpses are one click away.
 	const browseCorpses = useCallback(() => {
-		setItemsInitialFilters(['corpses']);
+		setItemsInitialFilters(['corpses-decay']);
 		setView('items');
 	}, []);
 
@@ -1495,7 +1525,7 @@ export default function Workspace({
 	const startWizardPick = useCallback(
 		(kind: WizardPickKind) => {
 			setWizardPick({ kind, from: view });
-			if (kind === 'corpse') setItemsInitialFilters(['corpses']);
+			if (kind === 'corpse') setItemsInitialFilters(['corpses-decay']);
 			else if (kind === 'loot') setItemsInitialFilters(['pickupable']);
 			setView(PICK_VIEW[kind]);
 		},
