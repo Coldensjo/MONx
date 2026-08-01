@@ -170,10 +170,18 @@ export function SpellCard({
 	};
 
 	const showDamage = family === 'damage' || family === 'condition' || family === 'melee';
-	/** Whether the card has a second grid for what the spell does. Range belongs
-	 *  with min and max where there is one — how far it reaches is a fact about
-	 *  the hit, not about the cadence — and with the cadence where there is not. */
+	/** Whether the card has a second grid for what the spell does. */
 	const damageGrid = showDamage && family !== 'melee';
+	/** Everything the spell picker knows about the chosen name, as one string so
+	 *  compact can fold it onto the ⓘ beside the label rather than spending two
+	 *  lines of the card on it. */
+	const spellNote =
+		[
+			builtin?.note,
+			builtin?.aliasOf && t('Identical to {{spell}} — two spellings of one spell.', { spell: builtin.aliasOf })
+		]
+			.filter(Boolean)
+			.join(' ') || undefined;
 	const rangeField = (
 		<Field
 			label={t('Range')}
@@ -210,7 +218,7 @@ export function SpellCard({
 						/>
 					</Field>
 				) : (
-					<Field label={t('Spell')} lints={lintAt('name')}>
+					<Field label={t('Spell')} lints={lintAt('name')} note={spellNote}>
 						<EnumSelect
 							value={block.name ?? ''}
 							onChange={pickName}
@@ -235,13 +243,6 @@ export function SpellCard({
 
 			{staged && <SpellStage block={block} look={look} parent={parent} />}
 
-			{builtin?.note &&<div className="ss-ed-field-note">{builtin.note}</div>}
-			{builtin?.aliasOf && (
-				<div className="ss-ed-field-note">
-					{t('Identical to {{spell}} — two spellings of one spell.', { spell: builtin.aliasOf })}
-				</div>
-			)}
-
 			{registered && (
 				<Banner kind="info">
 					{t('Registered spell — the loader takes it from {{file}} and ignores geometry and effects. Only interval, chance, range, min and max still apply.', {
@@ -257,6 +258,15 @@ export function SpellCard({
 				</Banner>
 			)}
 
+			{/* The two halves of a spell, each in its own element so a caller can lay
+			    them out as columns: what the cast costs and where it lands, then what
+			    lands. Both are `display: contents` in the editor — the card reads as
+			    one column there and nothing about this grouping shows — and become the
+			    two sides of the create wizard's designer, which needs each half to own
+			    its own height. Without the wrappers the two are siblings in one grid
+			    and share its row tracks, so the shorter side grows a hole in the
+			    middle wherever the taller one has a tall field. */}
+			<div className="ss-ed-card-cast">
 			<div className="ss-ed-card-grid ss-ed-card-cadence">
 				{/* Nostalrius spells carry no cadence attribute at all — chance
 				    alone gates a cast — so an interval box there would be a field
@@ -282,8 +292,99 @@ export function SpellCard({
 				>
 					<NumberField value={block.chance} onChange={v => set({ chance: v })} min={0} max={100} width={100} disabled={readOnly} />
 				</Field>
-				{!damageGrid && rangeField}
 			</div>
+
+			{showGeometry && (
+				<SubGroup
+					title={t('Area')}
+					className="ss-ed-area"
+					note={t('One shape only — if several are present the last one silently wins.')}
+				>
+					<ToggleGroup
+						value={block.area?.shape ?? 'none'}
+						onChange={v => set({ area: v === 'none' ? null : emptyArea(v as AreaShape) })}
+						options={[
+							{ value: 'none', label: t('Single target') },
+							{ value: 'beam', label: t('Beam'), title: t('Fires along the monster’s facing') },
+							{ value: 'radius', label: t('Radius'), title: t('Filled circle') },
+							// The 7.x loaders never read `ring`; offering it would
+							// produce a spell that quietly hits one tile.
+							...(info.geometryRing
+								? [{ value: 'ring', label: t('Ring'), title: t('Hollow ring') }]
+								: [])
+						]}
+						disabled={readOnly}
+					/>
+					{block.area?.shape === 'beam' && (
+						<div className="ss-ed-card-grid">
+							<Field label={t('Length')} hint={t('tiles')} note={t('A beam forces the spell to fire in the facing direction.')}>
+								<NumberField
+									value={block.area.length}
+									onChange={v => set({ area: { ...block.area!, length: v } })}
+									min={1}
+									width={100}
+									disabled={readOnly}
+								/>
+							</Field>
+							<Field label={t('Spread')} note={t('0 is a straight beam, 3 the classic wave.')}>
+								<NumberField
+									value={block.area.spread}
+									onChange={v => set({ area: { ...block.area!, spread: v } })}
+									min={0}
+									width={100}
+									disabled={readOnly}
+								/>
+							</Field>
+						</div>
+					)}
+					{block.area?.shape === 'radius' && (
+						<Field label={t('Radius')} hint={t('tiles')}>
+							<NumberField
+								value={block.area.radius}
+								onChange={v => set({ area: { ...block.area!, radius: v } })}
+								min={1}
+								width={100}
+								disabled={readOnly}
+							/>
+						</Field>
+					)}
+					{block.area?.shape === 'ring' && (
+						<Field label={t('Ring')} hint={t('tiles')}>
+							<NumberField
+								value={block.area.ring}
+								onChange={v => set({ area: { ...block.area!, ring: v } })}
+								min={1}
+								width={100}
+								disabled={readOnly}
+							/>
+						</Field>
+					)}
+					{block.area && (block.area.shape === 'radius' || block.area.shape === 'ring') && (
+						<Toggle
+							label={t('Centre on the target')}
+							checked={block.target}
+							disabled={readOnly}
+							onChange={v => set({ target: v })}
+						/>
+					)}
+				</SubGroup>
+			)}
+
+			{scripted && (
+				<Toggle
+					label={t('Cast in the facing direction')}
+					checked={block.direction}
+					disabled={readOnly}
+					onChange={v => set({ direction: v })}
+				/>
+			)}
+			</div>
+
+			<div className="ss-ed-card-hit">
+			{/* Range is a fact about the hit, not about the cadence, so it heads this
+			    half whichever family the spell is — with min and max where there are
+			    any, and on its own line where there are not. */}
+			{!damageGrid && <div className="ss-ed-card-grid">{rangeField}</div>}
 
 			{family === 'melee' && block.melee && (
 				<SubGroup
@@ -480,7 +581,7 @@ export function SpellCard({
 			)}
 
 			{family === 'status' && block.status && (
-				<SubGroup title={t('Status')} className="ss-ed-damagegroup">
+				<SubGroup title={t('Status')} className="ss-ed-statusgroup">
 					<Field label={t('Duration')} hint={t('ms')}>
 						<NumberField
 							value={block.status.duration}
@@ -598,82 +699,6 @@ export function SpellCard({
 				</SubGroup>
 			)}
 
-			{showGeometry && (
-				<SubGroup
-					title={t('Area')}
-					className="ss-ed-area"
-					note={t('One shape only — if several are present the last one silently wins.')}
-				>
-					<ToggleGroup
-						value={block.area?.shape ?? 'none'}
-						onChange={v => set({ area: v === 'none' ? null : emptyArea(v as AreaShape) })}
-						options={[
-							{ value: 'none', label: t('Single target') },
-							{ value: 'beam', label: t('Beam'), title: t('Fires along the monster’s facing') },
-							{ value: 'radius', label: t('Radius'), title: t('Filled circle') },
-							// The 7.x loaders never read `ring`; offering it would
-							// produce a spell that quietly hits one tile.
-							...(info.geometryRing
-								? [{ value: 'ring', label: t('Ring'), title: t('Hollow ring') }]
-								: [])
-						]}
-						disabled={readOnly}
-					/>
-					{block.area?.shape === 'beam' && (
-						<div className="ss-ed-card-grid">
-							<Field label={t('Length')} hint={t('tiles')} note={t('A beam forces the spell to fire in the facing direction.')}>
-								<NumberField
-									value={block.area.length}
-									onChange={v => set({ area: { ...block.area!, length: v } })}
-									min={1}
-									width={100}
-									disabled={readOnly}
-								/>
-							</Field>
-							<Field label={t('Spread')} note={t('0 is a straight beam, 3 the classic wave.')}>
-								<NumberField
-									value={block.area.spread}
-									onChange={v => set({ area: { ...block.area!, spread: v } })}
-									min={0}
-									width={100}
-									disabled={readOnly}
-								/>
-							</Field>
-						</div>
-					)}
-					{block.area?.shape === 'radius' && (
-						<Field label={t('Radius')} hint={t('tiles')}>
-							<NumberField
-								value={block.area.radius}
-								onChange={v => set({ area: { ...block.area!, radius: v } })}
-								min={1}
-								width={100}
-								disabled={readOnly}
-							/>
-						</Field>
-					)}
-					{block.area?.shape === 'ring' && (
-						<Field label={t('Ring')} hint={t('tiles')}>
-							<NumberField
-								value={block.area.ring}
-								onChange={v => set({ area: { ...block.area!, ring: v } })}
-								min={1}
-								width={100}
-								disabled={readOnly}
-							/>
-						</Field>
-					)}
-					{block.area && (block.area.shape === 'radius' || block.area.shape === 'ring') && (
-						<Toggle
-							label={t('Centre on the target')}
-							checked={block.target}
-							disabled={readOnly}
-							onChange={v => set({ target: v })}
-						/>
-					)}
-				</SubGroup>
-			)}
-
 			{showEffects && (
 				<SubGroup title={t('Effects')} className="ss-ed-effects">
 					<div className="ss-ed-card-grid">
@@ -728,15 +753,7 @@ export function SpellCard({
 					)}
 				</SubGroup>
 			)}
-
-			{scripted && (
-				<Toggle
-					label={t('Cast in the facing direction')}
-					checked={block.direction}
-					disabled={readOnly}
-					onChange={v => set({ direction: v })}
-				/>
-			)}
+			</div>
 		</div>
 	);
 }

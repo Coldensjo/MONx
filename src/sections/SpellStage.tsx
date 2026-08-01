@@ -20,6 +20,7 @@ import {
 	type Tile
 } from '../spellsim';
 import { frameMs, usePreviewUrl, useThingAnim } from '../fields/preview';
+import { useCompact } from '../fields/Field';
 
 // A live re-enactment of one spell block: the caster waits out its cooldown,
 // rolls `chance`, throws its projectile and lights up every tile the area
@@ -78,6 +79,7 @@ const ImpactSprite = memo(function ImpactSprite({ id, frame }: { id: number; fra
 
 export function SpellStage({ block, look, parent }: Props) {
 	const { t } = useTranslation();
+	const compact = useCompact();
 	const [playing, setPlaying] = useState(true);
 	const [speed, setSpeed] = useState<Speed>(1);
 	const [realCooldown, setRealCooldown] = useState(false);
@@ -242,11 +244,16 @@ export function SpellStage({ block, look, parent }: Props) {
 	const viewportRef = useRef<HTMLDivElement>(null);
 
 	// Keep the caster in view when the grid outgrows the column: the interesting
-	// half of a long beam is the half next to the monster.
+	// half of a long beam is the half next to the monster. Both axes, because a
+	// caller that bounds the stage's height — the create wizard, fitting the
+	// whole card on one page — would otherwise show the top of a nova and cut
+	// the monster casting it. An `overflow: hidden` box still scrolls
+	// programmatically, so this is what pans it there.
 	useEffect(() => {
 		const vp = viewportRef.current;
 		if (!vp) return;
 		vp.scrollLeft = Math.max(0, (bounds.cx + 0.5) * TILE - vp.clientWidth / 2);
+		vp.scrollTop = Math.max(0, (bounds.cy + 0.5) * TILE - vp.clientHeight / 2);
 	}, [bounds]);
 
 	const moveTarget = useCallback(
@@ -488,7 +495,10 @@ export function SpellStage({ block, look, parent }: Props) {
 				</span>
 			</div>
 
-			<div className="mx-stage-legend">
+			{/* The caveat about the shapes is a property of the whole re-enactment,
+			    so compact hangs it off the legend rather than spending two lines of
+			    a one-page card on it. */}
+			<div className="mx-stage-legend" title={compact ? SHAPE_CAVEAT : undefined}>
 				{selfCast ? (
 					<span>{t('on itself')}</span>
 				) : (
@@ -539,10 +549,10 @@ export function SpellStage({ block, look, parent }: Props) {
 						: t('Scripted spell — the Lua decides the shape and effects, so only the cadence is re-enacted.')}
 				</div>
 			)}
-			<div className="ss-ed-field-note">
-				Area shapes follow the engine's standard 13×13 distance table and wave build; the reference does not print them,
-				so treat the outline as indicative.
-			</div>
+			{!compact && <div className="ss-ed-field-note">{SHAPE_CAVEAT}</div>}
 		</div>
 	);
 }
+
+const SHAPE_CAVEAT =
+	"Area shapes follow the engine's standard 13×13 distance table and wave build; the reference does not print them, so treat the outline as indicative.";

@@ -27,9 +27,19 @@ export function useCompact(): boolean {
 }
 
 /** A note as a tooltip, when it is plain enough to be one. Anything richer than
- *  a string keeps its own line — a JSX note has structure worth seeing. */
+ *  a string keeps its own line — a JSX note has structure worth seeing.
+ *
+ *  A note assembled from a sentence and a conditional second sentence arrives as
+ *  an array, and is still just as foldable while every part that renders is a
+ *  string. The moment one of them is an element it goes back to being a
+ *  paragraph, which is what the caveat tacked onto a banner usually is. */
 export function asTitle(note: ReactNode): string | null {
-	return typeof note === 'string' ? note : null;
+	if (typeof note === 'string') return note;
+	if (Array.isArray(note)) {
+		const parts = note.filter(n => n !== null && n !== undefined && n !== false && n !== '');
+		if (parts.length > 0 && parts.every(n => typeof n === 'string')) return parts.join('');
+	}
+	return null;
 }
 
 /** The ⓘ that carries a folded-away note. */

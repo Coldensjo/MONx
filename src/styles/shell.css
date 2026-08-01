@@ -1474,12 +1474,20 @@
 
 .mx-wiz {
 	width: min(760px, 92vw);
+	/* The backdrop centres the dialog and does not scroll, so a dialog taller
+	   than the window loses its footer off both ends rather than growing a bar.
+	   The fight step is laid out to fit a window as short as ~800 px without one;
+	   this is what happens under that, and losing the Next button is worse than
+	   a scrollbar nobody at a normal size will see. */
+	max-height: 94vh;
 }
 
-/* The fight step only: the visualiser sits between two columns of fields, which
-   needs the room. The other five steps read better without it. */
+/* The fight step only: the visualiser sits between two columns of fields, and
+   the visualiser is nineteen tiles of fixed 32 px when a wave is being designed.
+   That is what sets this number — narrower and the re-enactment pans instead of
+   showing the spell. The other five steps read better without it. */
 .mx-wiz-wide {
-	width: min(1180px, 96vw);
+	width: min(1420px, 96vw);
 }
 
 /* One dot per step, filled at the current one. A progress bar would imply the
@@ -1506,6 +1514,9 @@
 	display: flex;
 	gap: 16px;
 	min-height: 260px;
+	/* The one part of the dialog that may give way when the window cannot hold
+	   it — the question, the buttons and the seed stay put. */
+	overflow-y: auto;
 }
 
 .mx-wiz-main {
@@ -1779,65 +1790,87 @@
 }
 
 /* The designer is the editor's own card, laid out around the re-enactment: what
-   the spell costs on the left, what it does on the right, and the thing itself
-   in the middle where both columns are describing it.
- 
-   The card's own markup is untouched but for the names — it labels its two grids
-   and its two sub-groups, and these rules place them, which is why the same card
-   still reads as one column in the editor. Grid placement ignores document
-   order, so nothing had to move in the JSX to sit either side of the stage. */
+   the spell costs and where it lands on the left, what actually lands on the
+   right, and the thing itself in the middle where both columns are describing
+   it.
+
+   Nothing here scrolls. A dialog that answers a question with a scrollbar is a
+   dialog that does not fit its answer, so every rule below is about height:
+   the card is three columns and one row, the two side columns own their own
+   heights, and the stage is the only thing that can grow — bounded by the
+   viewport and panned to the caster rather than cut or scrolled. */
 .mx-wiz-designer {
-	max-height: 56vh;
-	overflow-y: auto;
-	padding-right: 4px;
+	min-width: 0;
 }
 
 .mx-wiz-designer .ss-ed-card {
 	display: grid;
-	/* `fit-content` rather than a fixed middle: with the re-enactment folded away
-	   the column collapses and the two field columns take the card, instead of
-	   leaving a hole where the stage was. */
-	grid-template-columns: minmax(160px, 1fr) fit-content(460px) minmax(160px, 1fr);
-	column-gap: 16px;
+	/* The middle is the only track that asks for a particular size: 19 tiles of
+	   32 px is a length-8 wave, the widest shape anyone designs, and 624 is that
+	   plus the stage's own padding. It is a `minmax` rather than a fixed width so
+	   a narrow window takes it back, and rather than `fit-content` because the
+	   viewport clips its grid — a clipping box reports no intrinsic width, so
+	   `fit-content` would size the column to the play bar. The side columns take
+	   what is left; the right is the wider of the two, carrying the damage, the
+	   melee or status group and both effect pickers where the left carries three
+	   numbers and a shape. */
+	grid-template-columns: minmax(230px, 1fr) minmax(260px, 624px) minmax(260px, 1.2fr);
+	column-gap: 18px;
 	row-gap: 10px;
 	align-items: start;
 }
 
-/* Anything not placed below — the banners, the notes, and the sub-groups a
-   melee, condition or status spell brings with it — runs full width underneath,
-   where a long note has the whole card to wrap in. */
+/* One row, so neither side column can be stretched by a tall field in the
+   other. Anything unplaced — there should be nothing — runs full width
+   underneath rather than landing in a column it was not written for. */
 .mx-wiz-designer .ss-ed-card > * {
 	grid-column: 1 / -1;
 	min-width: 0;
 }
 
+/* The head keeps the two field columns' width and stops at the stage, so the
+   Visualize toggle sits directly over the thing it opens. */
 .mx-wiz-designer .ss-ed-card > .ss-ed-card-head {
-	grid-column: 1 / -1;
+	grid-column: 1 / 3;
 	grid-row: 1;
 }
 
-.mx-wiz-designer .ss-ed-card > .mx-stage {
-	grid-column: 2;
-	grid-row: 2 / span 2;
+/* A banner is a chip in compact mode — one icon carrying its paragraph on
+   hover — so it rides the head line instead of opening a row of its own. */
+.mx-wiz-designer .ss-ed-card > .ss-ed-banner {
+	grid-column: 3;
+	grid-row: 1;
+	align-self: end;
+	justify-self: end;
 }
 
-.mx-wiz-designer .ss-ed-card > .ss-ed-card-cadence {
+.mx-wiz-designer .ss-ed-card > .ss-ed-card-cast {
 	grid-column: 1;
 	grid-row: 2;
 }
 
-/* The shape sits under the cadence, in the left column — what the spell costs
-   to cast and where it lands, read down one side.
- 
-   It was full width for a version, because four segments and a beam's two
-   numbers did not fit a column narrower than the segments themselves. Compact
-   turns those segments into a select, which is one control instead of four, and
-   the numbers pair off beside each other underneath. The card stops growing a
-   scrollbar the moment a shape is chosen, which is what the full-width row was
-   really working around. */
-.mx-wiz-designer .ss-ed-card > .ss-ed-area {
-	grid-column: 1;
-	grid-row: 3;
+.mx-wiz-designer .ss-ed-card > .mx-stage {
+	grid-column: 2;
+	grid-row: 2;
+}
+
+.mx-wiz-designer .ss-ed-card > .ss-ed-card-hit {
+	grid-column: 3;
+	grid-row: 2;
+}
+
+/* Each half is a plain column of fields, not a panel. They were boxed for a
+   version, to make the space under the shorter one read as deliberate — but a
+   melee spell puts two numbers on the left and eight on the right, and a
+   bordered box three-quarters empty is louder about the emptiness than no box
+   at all. The stage between them is the only thing here that owns a border,
+   which is right: it is the only thing that is a viewport. */
+.mx-wiz-designer .ss-ed-card-cast,
+.mx-wiz-designer .ss-ed-card-hit {
+	display: flex;
+	flex-direction: column;
+	align-content: start;
+	gap: 10px;
 }
 
 /* Length and spread, radius, ring: narrow enough to pair off rather than stack,
@@ -1845,10 +1878,6 @@
 .mx-wiz-designer .ss-ed-area .ss-ed-card-grid > .ss-ed-field {
 	flex: 1 1 76px;
 	max-width: 120px;
-}
-
-.mx-wiz-designer .ss-ed-area .ss-ed-input-num {
-	width: 100%;
 }
 
 /* The shape select takes the column rather than its own text width — it is the
@@ -1862,33 +1891,22 @@
 	font-size: 11px;
 }
 
-/* What the spell does, whichever shape that takes: a damage grid for a direct
-   or condition spell, the melee pair for melee, the duration and speed for a
-   status. Only ever one of them, since the family that has one has no other. */
-.mx-wiz-designer .ss-ed-card > .ss-ed-card-damage,
-.mx-wiz-designer .ss-ed-card > .ss-ed-damagegroup {
-	grid-column: 3;
-	grid-row: 2;
-}
-
-.mx-wiz-designer .ss-ed-card > .ss-ed-effects {
-	grid-column: 3;
-	grid-row: 3;
-}
-
-/* The re-enactment keeps its own width and scrolls inside its column, sideways
-   as it always has and now vertically too: a thirteen-row spell must not push
-   the fields it is being described by off the page. */
-.mx-wiz-designer .mx-stage-viewport {
-	max-height: 200px;
-	overflow-y: auto;
-}
-
-/* A column here is half the width of the editor's, so its fields stack rather
-   than being squeezed side by side. */
+/* A column here is a third of the editor's width, so its fields pair off two to
+   a line rather than taking one each — pairing is what buys the height that
+   keeps the card on one page. */
 .mx-wiz-designer .ss-ed-card-grid > .ss-ed-field {
-	flex: 1 1 120px;
-	max-width: 240px;
+	flex: 1 1 calc(50% - 4px);
+	max-width: none;
+}
+
+/* Range heads the column on a line of its own, so the pairs below it are the
+   ones that belong together: min with max, and a condition's tick with its
+   first tick. Left to fall where it lands it takes half of the first line and
+   pushes min away from max. The status group's delta is the same shape — one
+   figure, then the pair that can replace it. */
+.mx-wiz-designer .ss-ed-card-damage > .ss-ed-field:first-child,
+.mx-wiz-designer .ss-ed-statusgroup .ss-ed-card-grid > .ss-ed-field:first-child {
+	flex-basis: 100%;
 }
 
 /* ---- Compact: everything below is height, taken back ----
@@ -1918,8 +1936,25 @@
 	font-size: 12px;
 }
 
+/* A number box here is as wide as the column it sits in, not as wide as the
+   editor's. NumberField writes that width inline for the editor's benefit, and
+   an inline declaration is the one thing a stylesheet cannot outrank without
+   this — the alternative is threading a width down to every call site to serve
+   one caller. The unit beside it keeps its place on the line, which is why the
+   control stops wrapping. */
+.mx-wiz-designer .ss-ed-field-control {
+	flex-wrap: nowrap;
+}
+
+.mx-wiz-designer .ss-ed-number {
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
 .mx-wiz-designer .ss-ed-input-num {
-	width: 88px;
+	width: 100% !important;
+	min-width: 0;
 }
 
 /* A sub-group here is a row of the same card, not a section of a document: the
@@ -1948,6 +1983,19 @@
 .mx-wiz-designer .mx-stage {
 	padding: 8px;
 	gap: 6px;
+}
+
+/* The re-enactment is the one thing on the page whose size is not up to it: a
+   nova is thirteen tiles across and a wave is nineteen, both at a fixed 32 px.
+   So the viewport takes what the dialog has left and the grid pans inside it —
+   `hidden` rather than `auto`, because the stage centres itself on the caster
+   (see the scroll in SpellStage) and a bar would only be offering what the
+   drag already does. The subtraction is everything above and below it that
+   cannot shrink: the modal's own furniture, the step's question, the melee
+   line, the ability rail and the stage's bar, meter and legend. */
+.mx-wiz-designer .mx-stage-viewport {
+	overflow: hidden;
+	max-height: max(224px, calc(100vh - 610px));
 }
 
 /* The step's own actions, bottom right, clear of the wizard's footer. */

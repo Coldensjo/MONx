@@ -852,6 +852,15 @@
 	gap: 10px;
 }
 
+/* The card's two halves — the cast and what it lands. Structural only: they
+   exist so a caller laying the card out in columns can give each half its own
+   height (the create wizard's designer). Here the card is one column and the
+   wrappers stand aside entirely. */
+.ss-ed-card-cast,
+.ss-ed-card-hit {
+	display: contents;
+}
+
 /* The spell picker and the Visualize toggle share the card's top line; the
    button's own `margin-left: auto` takes it to the far edge. */
 .ss-ed-card-head {
@@ -1200,6 +1209,7 @@
 /* A banner with its paragraph on the hover instead of on the page. */
 .ss-ed-banner-chip {
 	display: inline-flex;
+	align-self: flex-start;
 	padding: 3px 6px;
 	cursor: help;
 }
