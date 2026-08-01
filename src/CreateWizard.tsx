@@ -568,7 +568,7 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 						)}
 
 						{step === 3 && (
-							<Step question={t('What does it look like?')}>
+							<Step question={t('Choose an outfit')}>
 								<div className="mx-wiz-look">
 									<img className="mx-wiz-sprite" src={lookUrl({ ...blankLook, ...look, mode: 'type' }, { cell: 64 })} alt="" />
 									<div className="mx-wiz-fields">
@@ -618,8 +618,20 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 										<Dices size={14} />
 									</button>
 								</div>
+								{outfitIds.length > 0 && (
+									<OutfitPicker
+										ids={outfitIds}
+										look={look}
+										onPick={id => {
+											mark('look');
+											setLook({ ...look, type: id });
+										}}
+									/>
+								)}
 								<div className="ss-modal-desc">
-									{t('The outfit is one no monster in this corpus wears. The corpse is a donor’s, so the item database can resolve it.')}
+									{outfitIds.length === 0
+										? t('No client is open, so there is nothing to draw — the outfit is an id, and the server will resolve it.')
+										: t('The outfit is one no monster in this corpus wears. The corpse is a donor’s, so the item database can resolve it.')}
 								</div>
 							</Step>
 						)}
@@ -759,6 +771,97 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 						{t('Draw everything again')}
 					</button>
 				</div>
+			</div>
+		</div>
+	);
+}
+
+const OUTFIT_CELL = 40;
+const OUTFIT_COLS = 10;
+const OUTFIT_VIEW = 176;
+
+/**
+ * Every outfit the client has, drawn in the colours the wizard drew — the
+ * generator picks an id no monster in the corpus wears, and this is where that
+ * proposal is either accepted or overruled by eye. Typing an id still works;
+ * the grid is for the far commoner case of not knowing which number is the
+ * thing you can picture.
+ *
+ * Windowed on whole rows: a client ships thousands of outfits and each cell is
+ * its own `/look.png` request, so only what is on screen is asked for.
+ */
+function OutfitPicker({
+	ids,
+	look,
+	onPick
+}: {
+	ids: number[];
+	look: { type: number; head: number; body: number; legs: number; feet: number };
+	onPick: (id: number) => void;
+}) {
+	const { t } = useTranslation();
+	const [search, setSearch] = useState('');
+	const [scrollTop, setScrollTop] = useState(0);
+	const scrollRef = useRef<HTMLDivElement>(null);
+
+	const shown = useMemo(() => {
+		const needle = search.trim();
+		return needle ? ids.filter(id => String(id).includes(needle)) : ids;
+	}, [ids, search]);
+
+	const rows = Math.ceil(shown.length / OUTFIT_COLS);
+	const first = Math.max(0, Math.floor(scrollTop / OUTFIT_CELL) - 2);
+	const last = Math.min(rows - 1, Math.ceil((scrollTop + OUTFIT_VIEW) / OUTFIT_CELL) + 2);
+
+	// Bring the current outfit into view — on arrival at the step, and again
+	// whenever ⟳ draws a different one, or the grid shows a screenful of
+	// outfits with the chosen one nowhere among them.
+	useEffect(() => {
+		const el = scrollRef.current;
+		if (!el) return;
+		const idx = shown.indexOf(look.type);
+		if (idx < 0) return;
+		const top = Math.floor(idx / OUTFIT_COLS) * OUTFIT_CELL;
+		if (top < el.scrollTop || top + OUTFIT_CELL > el.scrollTop + el.clientHeight) {
+			el.scrollTop = Math.max(0, top - (el.clientHeight - OUTFIT_CELL) / 2);
+		}
+	}, [shown, look.type]);
+
+	const cells: React.ReactNode[] = [];
+	for (let row = first; row <= last; row++) {
+		for (let col = 0; col < OUTFIT_COLS; col++) {
+			const id = shown[row * OUTFIT_COLS + col];
+			if (id === undefined) break;
+			cells.push(
+				<button
+					key={id}
+					type="button"
+					className={id === look.type ? 'mx-wiz-outfit mx-wiz-outfit-on' : 'mx-wiz-outfit'}
+					style={{ top: row * OUTFIT_CELL, left: col * OUTFIT_CELL }}
+					title={String(id)}
+					onClick={() => onPick(id)}
+				>
+					<img src={lookUrl({ ...blankLook, ...look, mode: 'type', type: id }, { cell: 32 })} alt="" />
+				</button>
+			);
+		}
+	}
+
+	return (
+		<div className="mx-wiz-outfits">
+			<input
+				className="mx-wiz-input mx-wiz-outfit-search"
+				value={search}
+				placeholder={t('Filter by outfit id')}
+				onChange={e => setSearch(e.target.value)}
+			/>
+			<div
+				className="mx-wiz-outfit-grid"
+				ref={scrollRef}
+				style={{ height: OUTFIT_VIEW }}
+				onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
+			>
+				<div style={{ height: rows * OUTFIT_CELL, width: OUTFIT_COLS * OUTFIT_CELL, position: 'relative' }}>{cells}</div>
 			</div>
 		</div>
 	);
