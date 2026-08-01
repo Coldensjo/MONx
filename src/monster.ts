@@ -684,6 +684,30 @@ export function droppedItemIds(): Promise<number[]> {
 	return invoke<number[]>('dropped_item_ids');
 }
 
+/** One monster's loot resolved to server ids, in document order, `null` where
+ *  the entry names an item the database cannot resolve to exactly one id.
+ *
+ *  The create wizard's draw needs this because roughly half of every corpus
+ *  writes loot by name rather than by id, and a donor entry with no `id=` is
+ *  one the draw would otherwise skip. */
+export function resolveLootIds(file: string): Promise<(number | null)[]> {
+	return invoke<(number | null)[]>('resolve_loot_ids', { file });
+}
+
+export interface SummonPoolEntry {
+	name: string;
+	/** How many monsters summon it. */
+	count: number;
+	/** Median experience of the monsters that summon it. */
+	summonerExperience: number;
+}
+
+/** Every monster name something in the corpus already summons. The wizard's
+ *  summon picker offers this and nothing else — `summon.unknown` is silent. */
+export function summonPool(): Promise<SummonPoolEntry[]> {
+	return invoke<SummonPoolEntry[]>('summon_pool');
+}
+
 /** Corpus-wide loot chance scaling; `apply: false` is the preview. */
 export function scaleLootChances(opts: ScaleOptions, apply: boolean): Promise<ScaleReport> {
 	return invoke<ScaleReport>('scale_loot_chances', { opts, apply });

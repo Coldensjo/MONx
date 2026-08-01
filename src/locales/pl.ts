@@ -576,6 +576,89 @@ const pl: Record<string, string> = {
 	'unused outfit {{id}}': 'nieużywany wygląd {{id}}',
 	'No lint findings': 'Brak uwag',
 
+	// The lead donor, the inference and the two steps that came out of them.
+	'Nothing named, so nothing is drawn from a family — the wizard falls back to the whole {{kind}} pool.':
+		'Nic nie wskazano, więc nic nie pochodzi z rodziny — kreator wraca do całej puli rodzaju „{{kind}}”.',
+	'The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}._one':
+		'Wszystko pochodzi od: {{lead}}.',
+	'The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}._few':
+		'Przedział, odporności, walka wręcz i łupy pochodzą od wszystkich {{count}}; wygląd, zwłoki i rasa od: {{lead}}.',
+	'The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}._many':
+		'Przedział, odporności, walka wręcz i łupy pochodzą od wszystkich {{count}}; wygląd, zwłoki i rasa od: {{lead}}.',
+	'Most like this one': 'Najbardziej podobny do tego',
+	'Make this the one it is most like': 'Ustaw jako najbardziej podobnego',
+	'The monsters you named have changed since you edited {{what}}.':
+		'Wskazane potwory zmieniły się od czasu, gdy edytowałeś {{what}}.',
+	'Use theirs': 'Weź od nich',
+	'Keep mine': 'Zostaw moje',
+	'the outfit': 'wygląd',
+	'the corpse': 'zwłoki',
+	'the melee': 'walkę wręcz',
+	'the resistances': 'odporności',
+	'the voices': 'głosy',
+	'the summons': 'przywołania',
+
+	'Draw another colouring': 'Wylosuj inne kolory',
+	'{{name}}’s, recoloured': 'jak {{name}}, przefarbowany',
+	'{{name}}’s': 'jak {{name}}',
+	'drawn, recoloured': 'wylosowany, przefarbowany',
+	'The outfit, the corpse and the race all come off {{lead}}, because a body from one monster over another’s corpse is a pair this corpus never writes.':
+		'Wygląd, zwłoki i rasa pochodzą od: {{lead}} — ciało jednego potwora nad zwłokami innego to para, której ten korpus nigdy nie zapisuje.',
+	'Nothing named to copy from, so the outfit is one no monster in this corpus wears.':
+		'Nie wskazano nikogo do skopiowania, więc wygląd jest taki, jakiego nie nosi żaden potwór w korpusie.',
+
+	'No attacks yet.': 'Jeszcze żadnych ataków.',
+	'Remove this attack': 'Usuń ten atak',
+	'Add an attack': 'Dodaj atak',
+	'Calls for help': 'Wzywa pomoc',
+	'Nothing in this corpus summons anything.': 'Nic w tym korpusie niczego nie przywołuje.',
+	'Summons other monsters': 'Przywołuje inne potwory',
+	'{{count}} monster summons it_one': 'przywołuje go {{count}} potwór',
+	'{{count}} monster summons it_few': 'przywołują go {{count}} potwory',
+	'{{count}} monster summons it_many': 'przywołuje go {{count}} potworów',
+
+	'How does it defend itself?': 'Jak się broni?',
+	'Name a monster or two on the second step and this fills itself in.':
+		'Wskaż potwora lub dwóch w drugim kroku, a to wypełni się samo.',
+	'100 resists everything — an immunity. Negative takes extra damage.':
+		'100 odbija wszystko — to odporność. Wartość ujemna oznacza dodatkowe obrażenia.',
+	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._one':
+		'To, przed czym broni się {{count}} wskazany potwór. 100 to odporność, wartość ujemna to słabość.',
+	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._few':
+		'Środek tego, przed czym bronią się {{count}} wskazane potwory. 100 to odporność, wartość ujemna to słabość.',
+	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._many':
+		'Środek tego, przed czym broni się {{count}} wskazanych potworów. 100 to odporność, wartość ujemna to słabość.',
+	'Read them again': 'Odczytaj ponownie',
+	'Healing, haste, invisibility — what it does to stay alive. None is a valid answer.':
+		'Leczenie, przyspieszenie, niewidzialność — to, czym utrzymuje się przy życiu. Brak jest poprawną odpowiedzią.',
+	'No defenses yet.': 'Jeszcze żadnych obron.',
+	'Remove this defense': 'Usuń tę obronę',
+	'Add a defense': 'Dodaj obronę',
+
+	'Does it have anything to say?': 'Czy ma coś do powiedzenia?',
+	'None of the monsters you named says anything.': 'Żaden ze wskazanych potworów nic nie mówi.',
+	'It speaks': 'Mówi',
+	yelled: 'krzyczane',
+	'{{count}} of them say it_one': 'mówi to {{count}} z nich',
+	'{{count}} of them say it_few': 'mówią to {{count}} z nich',
+	'{{count}} of them say it_many': 'mówi to {{count}} z nich',
+	'Add lines in the editor if it should talk.': 'Dodaj kwestie w edytorze, jeśli ma mówić.',
+	'Lines two of them share arrive ticked. Anything naming its own speaker is left out.':
+		'Kwestie wspólne dla dwóch z nich są od razu zaznaczone. Wszystko, co wymienia własnego mówcę, jest pomijane.',
+	'This engine reads no interval or chance on voices, so there is nothing to set.':
+		'Ten silnik nie odczytuje interwału ani szansy przy głosach, więc nie ma czego ustawiać.',
+
+	'Drops like nothing in particular.': 'Nie wypada jak nic konkretnego.',
+	'Drops like {{names}}': 'Wypada jak u: {{names}}',
+	'Drops like something else…': 'Wypada jak coś innego…',
+	'Same as before': 'Tak jak wcześniej',
+	'How many items a draw proposes — as many as the monsters above drop':
+		'Ile przedmiotów proponuje jedno losowanie — tyle, ile zostawiają potwory powyżej',
+
+	'look, corpse, race': 'wygląd, zwłoki, rasa',
+	'resistances, melee': 'odporności, walka wręcz',
+	drops: 'łupy',
+
 	Back: 'Wstecz',
 	'Create blank': 'Utwórz pusty',
 	Next: 'Dalej',

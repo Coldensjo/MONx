@@ -153,7 +153,19 @@ const en: Record<string, string> = {
 	'{{count}} monsters — too few to draw a norm from_one':
 		'{{count}} monster — too few to draw a norm from',
 	'{{count}} monsters — too few to draw a norm from_other':
-		'{{count}} monsters — too few to draw a norm from'
+		'{{count}} monsters — too few to draw a norm from',
+	'The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}._one':
+		'Everything comes off {{lead}}.',
+	'The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}._other':
+		'The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}.',
+	'{{count}} monster summons it_one': '{{count}} monster summons it',
+	'{{count}} monster summons it_other': '{{count}} monsters summon it',
+	'{{count}} of them say it_one': '{{count}} of them says it',
+	'{{count}} of them say it_other': '{{count}} of them say it',
+	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._one':
+		'What {{count}} named monster resists. 100 is immunity; negative takes extra.',
+	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._other':
+		'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra.'
 };
 
 export default en;

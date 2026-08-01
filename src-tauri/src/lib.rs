@@ -1223,6 +1223,90 @@ fn dropped_item_ids(state: State<WorkspaceState>) -> Result<Vec<u32>, String> {
     Ok(ids)
 }
 
+/// Resolves a monster's loot to server ids the same way `dropped_item_ids`
+/// does, in document order and with the duplicates kept.
+///
+/// The create wizard's draw copies entries off a donor document, and roughly
+/// half of every corpus writes its loot by name rather than by id — 46% on
+/// Ironcore, 62% on Canary — so a draw that can only use `id=` entries is
+/// drawing from half the table. The resolution has to happen here because the
+/// name→id map is the item index, which lives on this side.
+///
+/// A name resolving to more than one id stays `None`: the loader drops an
+/// ambiguous entry (§13), so guessing which one was meant would be inventing
+/// an item id, which MONx does not do.
+#[tauri::command]
+fn resolve_loot_ids(state: State<WorkspaceState>, file: String) -> Result<Vec<Option<u32>>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    let doc = ws
+        .docs
+        .iter()
+        .find(|d| d.file == file)
+        .ok_or_else(|| format!("no such monster: {file}"))?;
+    Ok(doc
+        .loot
+        .iter()
+        .map(|e| match e.id {
+            Some(id) if id > 0 => Some(id as u32),
+            _ => match e.name.as_deref() {
+                Some(name) => match ws.items.ids_for_name(name)[..] {
+                    [sid] => Some(sid),
+                    _ => None,
+                },
+                None => None,
+            },
+        })
+        .collect())
+}
+
+/// Every monster name some monster in the corpus already summons, with how
+/// many summon it.
+///
+/// The wizard's summon picker offers this and nothing else. `summon.unknown`
+/// is a *silent* lint — the loader drops a summon naming a monster it cannot
+/// find without saying a word — so a name that is not already summoned by
+/// something is a name the wizard has no business proposing.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SummonPoolEntry {
+    name: String,
+    /// How many monsters summon it, so the picker can lead with the commonest.
+    count: u32,
+    /// The summoner's own experience, medianed — a rough sense of what tier
+    /// summons this, for ordering against the monster being made.
+    summoner_experience: i64,
+}
+
+#[tauri::command]
+fn summon_pool(state: State<WorkspaceState>) -> Result<Vec<SummonPoolEntry>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    let mut seen: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+    for doc in &ws.docs {
+        // Per document, not per entry: a monster listing the same summon twice
+        // is one monster that summons it, not two.
+        let mut names: Vec<&str> = doc.summons.entries.iter().map(|s| s.name.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
+        for name in names {
+            seen.entry(name.to_string()).or_default().push(doc.experience);
+        }
+    }
+    let mut out: Vec<SummonPoolEntry> = seen
+        .into_iter()
+        .map(|(name, mut exps)| {
+            exps.sort_unstable();
+            let summoner_experience = exps[exps.len() / 2];
+            SummonPoolEntry {
+                name,
+                count: exps.len() as u32,
+                summoner_experience,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.name.cmp(&b.name)));
+    Ok(out)
+}
+
 // ---------- Patch notes ----------
 
 #[derive(Serialize, Clone)]
@@ -1494,6 +1578,8 @@ pub fn run() {
             pin_loot_ids,
             item_usage,
             dropped_item_ids,
+            resolve_loot_ids,
+            summon_pool,
             scale_loot_chances,
             batch_edit,
             patch_marks,

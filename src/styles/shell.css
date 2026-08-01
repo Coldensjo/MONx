@@ -1482,18 +1482,20 @@
 	max-height: 94vh;
 }
 
-/* The fight step only: the visualiser sits between two columns of fields, and
-   the visualiser is nineteen tiles of fixed 32 px when a wave is being designed.
-   That is what sets this number — narrower and the re-enactment pans instead of
-   showing the spell. The other five steps read better without it. */
+/* The two designer steps, and only once there is something to design: the
+   visualiser sits between two columns of fields, and it is nineteen tiles of
+   fixed 32 px when a wave is being designed. That is what sets this number —
+   narrower and the re-enactment pans instead of showing the spell. The steps
+   that are one question read better without it. */
 .mx-wiz-wide {
 	width: min(1420px, 96vw);
 }
 
-/* Two steps that are browsing rather than answering: a grid of the corpus, and
-   a table of drops. Both want more columns than a question does — at the
-   dialog's ordinary width the drop table's name column is what the three fixed
-   ones leave over, which is not enough for "dragon scale mail". */
+/* The steps that are browsing or reviewing rather than answering: a grid of the
+   corpus, a table of drops, a resistance table, a list of lines. All want more
+   columns than a question does — at the dialog's ordinary width the drop
+   table's name column is what the three fixed ones leave over, which is not
+   enough for "dragon scale mail". */
 .mx-wiz-mid {
 	width: min(920px, 94vw);
 }
@@ -1520,9 +1522,9 @@
 	color: var(--accent);
 }
 
-/* What has been named. A chip is a remove button that shows what it would
-   remove — there is no other control, because there is nothing else to do to a
-   pick. */
+/* What has been named. Two controls per chip, because a pick now carries two
+   answers: the crown makes it the one the monster is *most* like — the outfit,
+   the corpse and the race all come off that one — and the cross removes it. */
 .mx-wiz-similar-picked {
 	display: flex;
 	flex-wrap: wrap;
@@ -1532,14 +1534,40 @@
 .mx-wiz-similar-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 2px 8px 2px 2px;
+	gap: 5px;
+	padding: 2px 6px 2px 2px;
 	border: 1px solid var(--accent);
 	border-radius: 999px;
 	background: var(--accent-dim);
 	color: var(--text);
 	font-size: 11px;
+}
+
+/* The lead reads as the answer it is: filled rather than outlined, and its
+   crown lit while the others' sit at the weight of an affordance. */
+.mx-wiz-similar-chip-lead {
+	border-color: var(--accent);
+	box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.mx-wiz-similar-chip-lead .mx-wiz-lead-btn:first-child {
+	color: var(--accent);
+	opacity: 1;
+}
+
+.mx-wiz-lead-btn {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px;
+	border: 0;
+	background: none;
+	color: inherit;
+	opacity: 0.45;
 	cursor: pointer;
+}
+
+.mx-wiz-lead-btn:hover {
+	opacity: 1;
 }
 
 .mx-wiz-similar-chip img {
@@ -1613,7 +1641,10 @@
 }
 
 /* One dot per step, filled at the current one. A progress bar would imply the
-   six are the same size; they are not, and the dots only claim position. */
+   nine are the same size; they are not, and the dots only claim position.
+   Nine dots that always mean nine — no step is skipped on an answer, because a
+   row that means a different number of questions depending on something the
+   dots cannot show is worse than a step that explains why it is empty. */
 .mx-wiz-steps {
 	display: inline-flex;
 	gap: 5px;
@@ -2393,4 +2424,102 @@
 	align-items: center;
 	gap: 8px;
 	margin-top: 10px;
+}
+
+/* ---- The defend step ---- */
+
+/* Ten or eleven rows depending on the engine, so a grid rather than a column:
+   the whole resistance profile has to be readable in one look, because what it
+   is *for* is noticing the one row that is wrong. */
+.mx-wiz-resists {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+	gap: 4px 12px;
+}
+
+.mx-wiz-resist {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+}
+
+/* The damage type's own colour, the same one the editor's resistance section
+   and the effective-health readout use. Six pixels is enough to match against
+   those without competing with the name. */
+.mx-wiz-resist-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+}
+
+.mx-wiz-resist-name {
+	flex: 1 1 auto;
+	color: var(--text-muted);
+}
+
+/* ---- The say step ---- */
+
+.mx-wiz-voices,
+.mx-wiz-summons {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: min(42vh, 380px);
+	overflow-y: auto;
+	margin: 8px 0;
+}
+
+.mx-wiz-voice,
+.mx-wiz-summon {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 6px;
+	border-radius: var(--radius);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.mx-wiz-voice:hover,
+.mx-wiz-summon:hover {
+	background: var(--bg-alt, var(--bg));
+}
+
+/* A line is prose and wants to read as prose — the provenance beside it is not,
+   and must not push it around as the list scrolls. */
+.mx-wiz-voice-text {
+	flex: 1 1 auto;
+	font-style: italic;
+}
+
+/* ---- The drop step's donor row ---- */
+
+.mx-wiz-lootfrom {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-bottom: 8px;
+}
+
+/* ---- Stale ----
+
+   Neither a warning nor an error: the answer is still the user's, it is just
+   no longer derived from the monsters on screen. It sits on the step that owns
+   the field and states both ways out, because there is no rule that is honest
+   in both directions — redrawing eats the edit, keeping it leaves a value the
+   picks no longer justify. So it asks. */
+.mx-wiz-stale {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 8px 0;
+	padding: 6px 8px;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+	background: var(--accent-dim);
+	font-size: 11px;
 }

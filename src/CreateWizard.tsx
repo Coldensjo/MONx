@@ -1,29 +1,46 @@
-// The create wizard: seven questions, each arriving with an answer already in it.
+// The create wizard: nine questions, each arriving with an answer already in it.
 //
 // They are asked in the order a monster is imagined rather than the order the
 // file is written: what kind of thing it is, what it is like, what it looks
 // like, what it is called, and only then the numbers. Naming comes fourth
 // because a name is easier to accept once there is something on screen to name.
 //
-// The second question is the one that makes the rest worth answering. "Similar
-// to a bandit, a wild warrior and a hunter" narrows the corpus to a family, and
-// every proposal after it — the immunities, the melee block, the loot table,
-// the band the stats are read off — is lifted off those monsters rather than
-// off whatever the kind's whole pool happened to hold.
+// The second question is the one that makes the rest worth answering, and it
+// asks for two things. The *set* — "similar to a bandit, a wild warrior and a
+// hunter" — narrows the corpus to a family, and everything that averages is
+// read off it: the band, the resistances, the melee numbers, the loot pool. The
+// *lead* — "most like the bandit" — is one monster, and everything that is a
+// single decision comes off it whole: the outfit, the corpse, the race.
+//
+// Splitting them is not tidiness. Mixing donors for the outfit and the corpse
+// produces a (looktype, corpse) pair that occurs nowhere in the corpus 94-99%
+// of the time on every engine, and a shared looktype implies a single corpse in
+// 81-100% of the corpus's own clusters — so a body drawn from one monster over
+// a corpse drawn from another reads as a bug rather than as a draw, on the one
+// step where the user is looking at pictures. The lead also replaces what used
+// to decide those fields, which was `donors[0]` — whichever monster the user
+// happened to click first.
+//
+// What the set decides, it decides by the lower median across the picks, never
+// by a fixed threshold: see `inferResistances`.
 //
 // The generator supplies the default answer to every question and the user
 // supplies the ones they care about. Accept them all and you get what a
 // dice-roll would have given you, except you watched it being made and know
-// what is in it; override three and the other three fill themselves in around
+// what is in it; override three and the other six fill themselves in around
 // your choices.
 //
+// A field the user has edited is never redrawn under them — and never silently
+// kept, either, once the monsters it was derived from have changed. That case
+// is `stale`, and it is the one the wizard asks about rather than deciding.
+//
 // Nothing is written until the last click. The wizard's state is a MonsterDoc
-// in memory and nothing else, so Escape on the last step leaves no scratch file, no
-// registry entry and nothing to clean up.
+// in memory and nothing else, so Escape on the last step leaves no scratch file,
+// no registry entry and nothing to clean up.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dices, ChevronLeft, Plus, Trash2, X } from 'lucide-react';
+import { Dices, ChevronLeft, Crown, Plus, Trash2, X } from 'lucide-react';
 import {
 	balanceBands,
 	corpseDecays,
@@ -36,8 +53,11 @@ import {
 	monstersRowUrl,
 	monsterTemplate,
 	nextFreeRaceid,
+	resolveLootIds,
 	saveMonster,
+	summonPool,
 	MIN_BAND_N,
+	type AttacksStats,
 	type BalanceBand,
 	type ItemIndex,
 	type ItemInfo,
@@ -46,9 +66,11 @@ import {
 	type MonsterDoc,
 	type MonsterSummary,
 	type SpellBlock,
-	type SpellName
+	type SpellName,
+	type SummonPoolEntry
 } from './monster';
 import { engineInfo, type EngineInfo } from './engine';
+import { damageTypes } from './catalog';
 import { CompactProvider } from './fields/Field';
 import { useItemInfo } from './fields/ItemPicker';
 import { useCustomEffects } from './fields/customctx';
@@ -62,21 +84,35 @@ import { makeRng } from './lootsim';
 import { generateName, type NameStyle } from './namegen';
 import {
 	KINDS,
+	applyResistances,
 	bandFor,
 	defaultBand,
+	donorSignature,
+	drawCountFor,
 	flagsFor,
+	inferResistances,
 	matchesKind,
+	maxSummonsFor,
 	median,
 	newSeed,
+	pickAttacksStats,
 	pickDonors,
 	pickMelee,
 	sampleLoot,
 	sampleLook,
 	sampleStats,
+	sampleSummons,
+	sampleVoices,
 	usableBands,
+	voiceCadence,
 	type Kind,
+	type OutfitInfo,
+	type Resistance,
+	type SampledLook,
 	type SampledLoot,
 	type SampledSpell,
+	type SampledSummon,
+	type SampledVoice,
 	type Stats
 } from './generate';
 import { n as fmt } from './i18n';
@@ -97,8 +133,9 @@ interface Props {
 	/** Comment groups in monsters.xml, for the registry entry. */
 	groups: string[];
 	engine: EngineInfo;
-	/** Outfit ids from the client, so the look can avoid one already in use. */
-	outfitIds: number[];
+	/** The client's outfits with their layer count, so a drawn look knows
+	 *  whether its four colours will render or be inert. */
+	outfits: OutfitInfo[];
 	itemIndex: ItemIndex;
 	/** The spell catalogue, so the ability designer offers this server's own
 	 *  registered spells beside the engine's built-ins. */
@@ -113,24 +150,26 @@ interface Props {
  *  of them is a picture, which is why none of them is answered in here. */
 export type PickKind = 'outfit' | 'corpse' | 'effect' | 'missile' | 'loot';
 
-/** A ticked proposal — the shape both the spell and loot lists use. */
+/** A ticked proposal — the shape the spell, voice, summon and loot lists use. */
 interface Ticked<T> {
 	item: T;
 	on: boolean;
 }
 
 /** The questions, in the order a monster is imagined. Named rather than counted
- *  because they are referred to from eight places — the width of the dialog, the
- *  focus, what Enter does, which button is primary — and a step inserted in the
- *  middle used to mean finding every one of them. */
+ *  because they are referred to from a dozen places — the width of the dialog,
+ *  the focus, what Enter does, which button is primary — and a step inserted in
+ *  the middle used to mean finding every one of them. */
 const KIND_STEP = 0;
 const SIMILAR_STEP = 1;
 const LOOK_STEP = 2;
 const NAME_STEP = 3;
 const STATS_STEP = 4;
 const FIGHT_STEP = 5;
-const DROP_STEP = 6;
-const STEP_COUNT = 7;
+const DEFEND_STEP = 6;
+const SAY_STEP = 7;
+const DROP_STEP = 8;
+const STEP_COUNT = 9;
 
 /** As many neighbours as are worth naming. Past this the picks stop describing
  *  one family and start describing the corpus, which is what the drawn default
@@ -147,9 +186,26 @@ const MAX_DRAW = 25;
  *  ceiling on the search rather than on the choice. */
 const MAX_CORPSE_CANDIDATES = 60;
 
-/** Everything the generator can fill in, and therefore everything the `touched`
- *  set has keys for. A field the user has edited is never redrawn under them. */
-type Field = 'name' | 'stats' | 'look' | 'race' | 'corpse' | 'melee' | 'loot';
+/** How many voice lines and summon candidates the proposal shows. Both are
+ *  ranked, so this cuts the tail rather than the answer. */
+const MAX_VOICES = 12;
+const MAX_SUMMON_CANDIDATES = 12;
+
+/** Everything the generator can fill in, and therefore everything `touched` and
+ *  `derivedFrom` have keys for. A field the user has edited is never redrawn
+ *  under them; a field whose donors changed afterwards goes stale. */
+type Field =
+	| 'name'
+	| 'stats'
+	| 'look'
+	| 'race'
+	| 'corpse'
+	| 'melee'
+	| 'resist'
+	| 'defenses'
+	| 'voices'
+	| 'summons'
+	| 'loot';
 
 export default function CreateWizard({
 	hidden,
@@ -159,7 +215,7 @@ export default function CreateWizard({
 	monsters,
 	groups,
 	engine,
-	outfitIds,
+	outfits,
 	itemIndex,
 	spellNames,
 	onCreated,
@@ -183,7 +239,19 @@ export default function CreateWizard({
 	// proposal standing. Bumping the seed instead would redraw every untouched
 	// field at once, which makes "draw another name" quietly replace the outfit
 	// and the loot table the user was already happy with.
-	const [nonce, setNonce] = useState<Record<Field, number>>({ name: 0, stats: 0, look: 0, race: 0, corpse: 0, melee: 0, loot: 0 });
+	const [nonce, setNonce] = useState<Record<Field, number>>({
+		name: 0,
+		stats: 0,
+		look: 0,
+		race: 0,
+		corpse: 0,
+		melee: 0,
+		resist: 0,
+		defenses: 0,
+		voices: 0,
+		summons: 0,
+		loot: 0
+	});
 
 	// ---- Answers ----
 	const [name, setName] = useState('');
@@ -193,32 +261,55 @@ export default function CreateWizard({
 	const [showFile, setShowFile] = useState(false);
 	const [kind, setKind] = useState<Kind>('monster');
 	/** The neighbours the user named. Empty means "draw your own", which is what
-	 *  every run did before the question existed. */
+	 *  every run did before the question existed — and still does, because the
+	 *  drawn donors are shown as picks rather than hidden. */
 	const [similar, setSimilar] = useState<MonsterSummary[]>([]);
+	/** Which of them the monster is *most* like. Null follows the first donor. */
+	const [leadFile, setLeadFile] = useState<string | null>(null);
 	const [bandLabel, setBandLabel] = useState<string | null>(null);
 	const [stats, setStats] = useState<Stats | null>(null);
-	const [look, setLook] = useState({ type: 0, head: 0, body: 0, legs: 0, feet: 0 });
+	const [look, setLook] = useState<SampledLook>({ type: 0, head: 0, body: 0, legs: 0, feet: 0, from: null, colourable: false });
 	const [race, setRace] = useState<string | null>(null);
 	const [corpse, setCorpse] = useState(0);
 	const [melee, setMelee] = useState<SampledSpell | null>(null);
 	const [meleeOn, setMeleeOn] = useState(true);
-	/** The abilities the user designed. Nothing is drawn into this: a monster's
-	 *  kit is the one part of it nobody wants handed to them, and a sampled spell
-	 *  is one you have to read before you can trust it. */
+	/** Nostalrius keeps melee on `<attacks>` itself, so there is no spell block to
+	 *  donate and the melee card has nothing to show. Without this the engine's
+	 *  every wizard monster shipped at the template's attack 20 / skill 20. */
+	const [attacksStats, setAttacksStats] = useState<AttacksStats | null>(null);
+	/** The abilities the user designed, in two families. Nothing is drawn into
+	 *  either: a monster's kit is the one part of it nobody wants handed to them,
+	 *  and a sampled spell is one you have to read before you can trust it. */
 	const [abilities, setAbilities] = useState<SpellBlock[]>([]);
-	/** Which ability the designer has open. One at a time: the rail above it
+	const [defenses, setDefenses] = useState<SpellBlock[]>([]);
+	/** Which ability each designer has open. One at a time: the rail above it
 	 *  carries the whole kit, and five open cards is a page, not a question. */
 	const [active, setActive] = useState(0);
+	const [activeDefense, setActiveDefense] = useState(0);
+	const [resist, setResist] = useState<Resistance[]>([]);
+	const [voicesOn, setVoicesOn] = useState(false);
+	const [voices, setVoices] = useState<Ticked<SampledVoice>[]>([]);
+	const [cadence, setCadence] = useState({ interval: 5000, chance: 10 });
+	const [summonsOn, setSummonsOn] = useState(false);
+	const [summons, setSummons] = useState<Ticked<SampledSummon>[]>([]);
 	const [loot, setLoot] = useState<Ticked<SampledLoot>[]>([]);
-	/** How many drops a draw proposes. Five is what a mid-band monster in this
-	 *  corpus tends to have; a boss wants more and a bat wants one, and the
-	 *  generator has no way to know which without being told. */
+	/** The monsters the drops come off, which need not be the ones the monster is
+	 *  like. Null follows the identity set, which is what almost every run wants;
+	 *  "fights like a demon, drops like a dragon" is the one that does not. */
+	const [lootSimilar, setLootSimilar] = useState<MonsterSummary[] | null>(null);
+	const [showLootDonors, setShowLootDonors] = useState(false);
+	/** How many drops a draw proposes. Seeded from the donors' own tables rather
+	 *  than from a constant — the bands run from a couple of entries to twenty-odd,
+	 *  and any one number is wrong at one end of the corpus. */
 	const [drawCount, setDrawCount] = useState(5);
 
 	// ---- Corpus ----
 	const [bands, setBands] = useState<BalanceBand[]>([]);
 	const [dropped, setDropped] = useState<number[]>([]);
 	const [donors, setDonors] = useState<MonsterDoc[]>([]);
+	const [lootDonors, setLootDonors] = useState<MonsterDoc[]>([]);
+	const [lootIds, setLootIds] = useState<Map<string, (number | null)[]>>(new Map());
+	const [pool, setPool] = useState<SummonPoolEntry[]>([]);
 	const [items, setItems] = useState<Map<number, ItemInfo>>(new Map());
 	const [template, setTemplate] = useState<MonsterDoc | null>(null);
 	const [raceid, setRaceid] = useState<number | null>(null);
@@ -227,6 +318,26 @@ export default function CreateWizard({
 	const takenNames = useMemo(() => new Set(monsters.map(m => m.name.toLowerCase())), [monsters]);
 	const corpusNames = useMemo(() => monsters.map(m => m.name), [monsters]);
 	const band = useMemo(() => bands.find(b => b.label === bandLabel) ?? null, [bands, bandLabel]);
+
+	/** The one monster the single-decision fields come off. Falls to the first
+	 *  donor, which is what the old code used for everything — the difference is
+	 *  that this one is nameable, visible and one click to change. */
+	const lead = useMemo(() => donors.find(d => d.file === leadFile) ?? donors[0] ?? null, [donors, leadFile]);
+
+	// Which monsters each derived answer was read off. Compared against the
+	// current set to tell "the user edited this" from "the user edited this and
+	// then changed the monsters it came from", which need opposite treatment.
+	const sig = useMemo(() => donorSignature(donors), [donors]);
+	const [derivedFrom, setDerivedFrom] = useState<Partial<Record<Field, string>>>({});
+	const noteDerived = useCallback((f: Field, from: string) => {
+		setDerivedFrom(prev => (prev[f] === from ? prev : { ...prev, [f]: from }));
+	}, []);
+
+	/** Touched, and derived from a set of monsters that is no longer the set. */
+	const stale = useMemo(
+		() => new Set([...touched].filter(f => derivedFrom[f] !== undefined && derivedFrom[f] !== sig)),
+		[touched, derivedFrom, sig]
+	);
 
 	const custom = useCustomEffects();
 
@@ -251,6 +362,12 @@ export default function CreateWizard({
 				setHasItems(ids.length > 0);
 			})
 			.catch(() => live && setHasItems(false));
+		// Never a name the corpus does not already summon: `summon.unknown` is a
+		// silent lint on a cross-file pass the wizard's own linting never runs, so
+		// a bad name here is one nothing would ever mention.
+		void summonPool()
+			.then(p => live && setPool(p))
+			.catch(() => undefined);
 		if (engine.raceidAttr) {
 			void nextFreeRaceid()
 				.then(id => live && setRaceid(id))
@@ -300,27 +417,86 @@ export default function CreateWizard({
 		setBandLabel(defaultBand(bands, kind)?.label ?? null);
 	}, [bands, kind, bandLabel]);
 
-	// ---- Donors are the named neighbours, or a draw when there are none ----
+	// ---- The named neighbours, or a draw shown as if they had been named ----
+	//
+	// The drawn set used to be invisible: an empty answer meant three monsters
+	// nobody could see doing all the work. Promoting them to picks costs nothing
+	// and makes the whole step honest — the list is never empty by accident, so
+	// clearing it can legitimately mean "no family", and the lead is a real
+	// choice rather than an artefact of click order.
+	const seeded = useRef(false);
 	useEffect(() => {
-		if (monsters.length === 0) return;
+		if (seeded.current || monsters.length === 0 || bands.length === 0 || similar.length > 0) return;
+		const drawn = pickDonors(makeRng(seed ^ 0x5f3a), monsters, band, kind, 3);
+		if (drawn.length === 0) return;
+		seeded.current = true;
+		setSimilar(drawn);
+	}, [monsters, bands, band, kind, seed, similar.length]);
+
+	useEffect(() => {
+		if (similar.length === 0) {
+			setDonors([]);
+			return;
+		}
 		let live = true;
-		const chosen = similar.length > 0 ? similar : pickDonors(makeRng(seed ^ 0x5f3a), monsters, band, kind, 3);
-		void Promise.all(chosen.map(m => getMonster(m.file).catch(() => null)))
+		void Promise.all(similar.map(m => getMonster(m.file).catch(() => null)))
 			.then(docs => live && setDonors(docs.filter((d): d is MonsterDoc => d !== null)))
 			.catch(() => undefined);
 		return () => {
 			live = false;
 		};
-	}, [monsters, band, kind, seed, similar]);
+	}, [similar]);
 
-	/** Corpse ids the drawn corpse may come from, best first: the donors' own,
-	 *  then the ones worn by monsters of this kind, then the rest of the corpus.
+	// The lead must stay one of the picks. Dropping the monster that was lead
+	// falls back to the first rather than leaving a dangling name.
+	useEffect(() => {
+		if (leadFile && !similar.some(m => m.file === leadFile)) setLeadFile(null);
+	}, [similar, leadFile]);
+
+	// ---- Loot donors: the identity set unless the user said otherwise ----
+	const lootPicks = lootSimilar ?? similar;
+	useEffect(() => {
+		if (lootPicks.length === 0) {
+			setLootDonors([]);
+			return;
+		}
+		let live = true;
+		void Promise.all(lootPicks.map(m => getMonster(m.file).catch(() => null)))
+			.then(docs => live && setLootDonors(docs.filter((d): d is MonsterDoc => d !== null)))
+			.catch(() => undefined);
+		return () => {
+			live = false;
+		};
+	}, [lootPicks]);
+
+	// Loot written by name is loot the draw could not see: 46% of Ironcore's
+	// entries and 62% of Canary's carry a name and no id, and `sampleLoot` skips
+	// what it cannot address. The item index lives on the backend, so the
+	// resolution does too.
+	useEffect(() => {
+		if (lootDonors.length === 0) return;
+		let live = true;
+		void Promise.all(
+			lootDonors.map(d =>
+				resolveLootIds(d.file)
+					.then(ids => [d.file, ids] as [string, (number | null)[]])
+					.catch(() => [d.file, []] as [string, (number | null)[]])
+			)
+		).then(pairs => live && setLootIds(new Map(pairs)));
+		return () => {
+			live = false;
+		};
+	}, [lootDonors]);
+
+	/** Corpse ids the drawn corpse may come from, best first: the lead's own, the
+	 *  other donors', then the ones worn by monsters of this kind, then the rest
+	 *  of the corpus.
 	 *
 	 *  Ordered rather than filtered, because the choice is made by walking this
-	 *  list until one passes `corpseDecays` — so a donor's corpse still wins when
-	 *  it rots, which is the common case and the behaviour this had before.
-	 *  Corpse ids come off the summaries, so the whole corpus is available
-	 *  without loading a single document. */
+	 *  list until one passes `corpseDecays` — so the lead's corpse still wins when
+	 *  it rots, which is the common case and what keeps the body and the corpse
+	 *  belonging to the same monster. Corpse ids come off the summaries, so the
+	 *  whole corpus is available without loading a single document. */
 	const corpseCandidates = useMemo(() => {
 		const seen = new Set<number>();
 		const out: number[] = [];
@@ -330,6 +506,7 @@ export default function CreateWizard({
 				out.push(id);
 			}
 		};
+		if (lead) push(lead.look.corpse);
 		for (const donor of donors) push(donor.look.corpse);
 		for (const m of monsters) if (matchesKind(m, kind)) push(m.look.corpse);
 		for (const m of monsters) push(m.look.corpse);
@@ -337,18 +514,22 @@ export default function CreateWizard({
 		// preference order, so a decaying corpse further down the tail than this
 		// is one the draw was never going to reach anyway.
 		return out.slice(0, MAX_CORPSE_CANDIDATES);
-	}, [donors, monsters, kind]);
+	}, [lead, donors, monsters, kind]);
 
 	// ---- Resolve the items the proposals will need ----
 	useEffect(() => {
 		const ids = new Set<number>();
-		for (const donor of donors) {
+		for (const donor of lootDonors) {
 			for (const entry of donor.loot) if (entry.id !== null) ids.add(entry.id);
+			for (const id of lootIds.get(donor.file) ?? []) if (id !== null) ids.add(id);
 		}
 		for (const id of corpseCandidates) ids.add(id);
-		// A bounded slice of the drop pool, for the top-up. Resolving all of it
-		// would be one request per id on a corpus that drops thousands.
-		for (const id of dropped.slice(0, 200)) ids.add(id);
+		// A slice of the drop pool, for the top-up — resolving all of it would be
+		// one request per id on a corpus that drops thousands. Sampled rather than
+		// taken from the head: `dropped` is sorted by id, so the first 200 are the
+		// lowest ids in the corpus, and a cap meant as a request budget had quietly
+		// become a content filter.
+		for (const id of spread(dropped, 200, seed ^ 0x9e37)) ids.add(id);
 		if (ids.size === 0) return;
 		let live = true;
 		void Promise.all([...ids].map(id => itemIndex.get(id).then(info => [id, info] as const).catch(() => [id, null] as const))).then(
@@ -362,7 +543,7 @@ export default function CreateWizard({
 		return () => {
 			live = false;
 		};
-	}, [donors, dropped, itemIndex, corpseCandidates]);
+	}, [lootDonors, lootIds, dropped, itemIndex, corpseCandidates, seed]);
 
 	// ---- Derive every untouched answer ----
 	useEffect(() => {
@@ -370,35 +551,40 @@ export default function CreateWizard({
 		setStats(sampleStats(makeRng((seed ^ 0x1234) + nonce.stats), band));
 	}, [band, seed, nonce.stats, touched]);
 
+	// The look comes off the lead, colours included — and the colours are only
+	// drawn when the sprite has a layer to put them on.
 	useEffect(() => {
-		if (touched.has('look') || outfitIds.length === 0) return;
-		setLook(sampleLook(makeRng((seed ^ 0xa17f) + nonce.look), outfitIds, monsters));
-	}, [outfitIds, monsters, seed, nonce.look, touched]);
+		if (touched.has('look')) return;
+		setLook(sampleLook(makeRng((seed ^ 0xa17f) + nonce.look), outfits, monsters, lead));
+		noteDerived('look', sig);
+	}, [outfits, monsters, lead, seed, nonce.look, touched, sig, noteDerived]);
 
 	useEffect(() => {
-		if (donors.length === 0) return;
-		const donor = donors[0];
-		if (!touched.has('race')) setRace(donor.race ?? engine.races[0] ?? null);
-		if (touched.has('corpse')) return;
+		if (!lead) return;
+		if (!touched.has('race')) {
+			setRace(lead.race ?? engine.races[0] ?? null);
+			noteDerived('race', sig);
+		}
+	}, [lead, engine.races, touched, sig, noteDerived]);
+
+	useEffect(() => {
+		if (donors.length === 0 || touched.has('corpse')) return;
 		// Never invented: a corpse id has to exist in the item database and
 		// actually be a corpse, and one already in use is known to be both.
 		//
 		// Which of them is drawn obeys `corpseDecays` — the same rule as the "Show
 		// corpses with decay" filter the picker opens on, so the wizard proposes
-		// the kind of corpse it would then show you. A corpse with no `decayTo` is
-		// terminal: it sits on the floor for the rest of the server's uptime, which
-		// is a thing to choose deliberately rather than to be handed.
-		//
-		// The fallback is the donor's own corpse, decaying or not. It fires when
-		// nothing in the candidates rots — which on Canary and CrystalServer is
-		// every time, because their item databases mark no corpses at all — and a
-		// corpse that outstays its welcome still beats no corpse.
+		// the kind of corpse it would then show you. The fallback is the lead's
+		// own, decaying or not: on Canary and CrystalServer nothing rots because
+		// their item databases mark no corpses at all, and a corpse that outstays
+		// its welcome still beats no corpse.
 		const decaying = corpseCandidates.find(id => {
 			const info = items.get(id);
 			return info !== undefined && corpseDecays(info);
 		});
-		setCorpse(decaying ?? donor.look.corpse);
-	}, [donors, engine.races, touched, corpseCandidates, items]);
+		setCorpse(decaying ?? lead?.look.corpse ?? 0);
+		noteDerived('corpse', sig);
+	}, [donors, lead, corpseCandidates, items, touched, sig, noteDerived]);
 
 	// Melee is its own answer, because it is the one attack a monster either has
 	// or does not — the abilities are a handful it might. Taken off the nearest
@@ -407,20 +593,65 @@ export default function CreateWizard({
 	// twice running.
 	useEffect(() => {
 		if (touched.has('melee') || donors.length === 0 || !stats) return;
-		const found = pickMelee(donors, stats.health);
-		setMelee(found);
-		setMeleeOn(found !== null && kind !== 'critter');
-	}, [donors, stats, kind, touched]);
+		if (engine.meleeOnAttacks) {
+			const found = pickAttacksStats(donors, stats.health);
+			setAttacksStats(found?.stats ?? null);
+			setMelee(null);
+			setMeleeOn(found !== null && kind !== 'critter');
+		} else {
+			const found = pickMelee(donors, stats.health);
+			setMelee(found);
+			setAttacksStats(null);
+			setMeleeOn(found !== null && kind !== 'critter');
+		}
+		noteDerived('melee', sig);
+	}, [donors, stats, kind, touched, engine.meleeOnAttacks, sig, noteDerived]);
 
 	useEffect(() => {
-		if (touched.has('loot') || donors.length === 0 || !hasItems) return;
-		if (kind === 'critter') {
+		if (touched.has('resist') || donors.length === 0) return;
+		setResist(inferResistances(donors, engine.key));
+		noteDerived('resist', sig);
+	}, [donors, engine.key, touched, nonce.resist, sig, noteDerived]);
+
+	useEffect(() => {
+		if (touched.has('voices') || donors.length === 0) return;
+		const drawn = sampleVoices(donors).slice(0, MAX_VOICES);
+		// Repetition decides what arrives ticked, not whether the step has
+		// anything to show. Gating on it opens the step 6-43% of the time; ranking
+		// and offering the lot opens it 78-92%.
+		setVoices(drawn.map(item => ({ item, on: item.from.length >= 2 })));
+		setVoicesOn(drawn.some(v => v.from.length >= 2));
+		setCadence(voiceCadence(donors));
+		noteDerived('voices', sig);
+	}, [donors, touched, nonce.voices, sig, noteDerived]);
+
+	useEffect(() => {
+		if (touched.has('summons') || donors.length === 0) return;
+		const drawn = sampleSummons(donors, pool, stats?.experience ?? 0, MAX_SUMMON_CANDIDATES);
+		setSummons(drawn.map(item => ({ item, on: item.from !== null })));
+		setSummonsOn(drawn.some(s => s.from !== null));
+		noteDerived('summons', sig);
+	}, [donors, pool, stats, touched, nonce.summons, sig, noteDerived]);
+
+	// The draw count follows the donors' own tables. It is set rather than
+	// derived so that typing over it stays typed.
+	const countSeeded = useRef('');
+	useEffect(() => {
+		const key = donorSignature(lootDonors);
+		if (lootDonors.length === 0 || countSeeded.current === key || touched.has('loot')) return;
+		countSeeded.current = key;
+		setDrawCount(drawCountFor(lootDonors, MAX_DRAW));
+	}, [lootDonors, touched]);
+
+	useEffect(() => {
+		if (touched.has('loot') || !hasItems) return;
+		if (kind === 'critter' || lootDonors.length === 0) {
 			setLoot([]);
 			return;
 		}
-		const drawn = sampleLoot(makeRng((seed ^ 0xbee5) + nonce.loot), donors, dropped, items, drawCount);
+		const drawn = sampleLoot(makeRng((seed ^ 0xbee5) + nonce.loot), lootDonors, dropped, items, drawCount, lootIds);
 		setLoot(drawn.map(item => ({ item, on: true })));
-	}, [donors, dropped, items, seed, nonce.loot, kind, hasItems, touched, drawCount]);
+	}, [lootDonors, lootIds, dropped, items, seed, nonce.loot, kind, hasItems, touched, drawCount]);
 
 	/** Naming a neighbour is also a statement about power, so the band follows the
 	 *  middle of the picks — set here rather than in an effect so that moving the
@@ -442,11 +673,28 @@ export default function CreateWizard({
 		[bands, kind]
 	);
 
+	/** The loot picks never touch the band. They are a statement about drops, and
+	 *  "drops like a dragon" must not quietly make the monster worth a dragon. */
+	const toggleLootSimilar = useCallback(
+		(m: MonsterSummary) => {
+			setLootSimilar(prev => {
+				const base = prev ?? similar;
+				const on = base.some(x => x.file === m.file);
+				if (!on && base.length >= MAX_SIMILAR) return base;
+				return on ? base.filter(x => x.file !== m.file) : [...base, m];
+			});
+		},
+		[similar]
+	);
+
 	const openIndex = Math.min(active, Math.max(0, abilities.length - 1));
 	const open = abilities[openIndex] ?? null;
+	const openDefenseIndex = Math.min(activeDefense, Math.max(0, defenses.length - 1));
+	const openDefense = defenses[openDefenseIndex] ?? null;
 
 	// Where an ability's lints sit in the document being linted: melee, when it
-	// is on, is `attacks[0]`.
+	// is on, is `attacks[0]`. Defenses have no such offset — melee always lives
+	// in `attacks`, whatever the engine.
 	const abilityOffset = meleeOn && melee ? 1 : 0;
 
 	/** A new ability opens on the commonest direct-damage spell in the engine's
@@ -460,6 +708,16 @@ export default function CreateWizard({
 		});
 	}, []);
 
+	/** A new defense opens on healing, which is what a defense block is for in
+	 *  nine files out of ten. */
+	const addDefense = useCallback(() => {
+		mark('defenses');
+		setDefenses(prev => {
+			setActiveDefense(prev.length);
+			return [...prev, { ...blankSpell('defenses'), name: 'healing', melee: null }];
+		});
+	}, [mark]);
+
 	// A cell clicked in the browser lands here on the way back. Marked touched,
 	// like any other answer the user gave with their own hands: the generator
 	// must not redraw it when they step back and change the band.
@@ -467,7 +725,9 @@ export default function CreateWizard({
 		if (!picked) return;
 		if (picked.kind === 'outfit') {
 			mark('look');
-			setLook(l => ({ ...l, type: picked.ids[0] ?? 0 }));
+			const type = picked.ids[0] ?? 0;
+			const colourable = outfits.find(o => o.id === type)?.layers ?? 0;
+			setLook(l => ({ ...l, type, from: null, colourable: colourable > 1 }));
 		} else if (picked.kind === 'corpse') {
 			mark('corpse');
 			setCorpse(picked.ids[0] ?? 0);
@@ -486,9 +746,7 @@ export default function CreateWizard({
 			void Promise.all(ids.map(id => itemIndex.get(id).catch(() => null))).then(infos =>
 				setLoot(prev => {
 					const have = new Set(prev.map(l => l.item.entry.id));
-					const fresh = ids
-						.map((id, i) => ({ id, name: infos[i]?.name }))
-						.filter(x => !have.has(x.id));
+					const fresh = ids.map((id, i) => ({ id, name: infos[i]?.name })).filter(x => !have.has(x.id));
 					return [
 						...prev,
 						...fresh.map(x => ({ item: { entry: newLootEntry({ serverId: x.id, name: x.name }), from: '' }, on: true }))
@@ -508,26 +766,34 @@ export default function CreateWizard({
 			const found = table.find(e => e.id === id);
 			if (!found) {
 				showToast('error', t('Nothing in this engine’s catalogue names client effect {{id}}.', { id }));
+			} else if (step === DEFEND_STEP) {
+				mark('defenses');
+				setDefenses(prev =>
+					prev.map((b, j) =>
+						j === openDefenseIndex
+							? { ...b, effects: area ? { ...b.effects, areaEffect: found.name } : { ...b.effects, shootEffect: found.name } }
+							: b
+					)
+				);
 			} else {
 				setAbilities(prev =>
 					prev.map((b, j) =>
 						j === openIndex
-							? {
-									...b,
-									effects: area ? { ...b.effects, areaEffect: found.name } : { ...b.effects, shootEffect: found.name }
-								}
+							? { ...b, effects: area ? { ...b.effects, areaEffect: found.name } : { ...b.effects, shootEffect: found.name } }
 							: b
 					)
 				);
 			}
 		}
 		onPickUsed();
-	}, [picked, mark, onPickUsed, engine.key, custom, openIndex, itemIndex, showToast, t]);
+	}, [picked, mark, onPickUsed, engine.key, custom, openIndex, openDefenseIndex, step, itemIndex, outfits, showToast, t]);
 
 	// ---- The document, assembled ----
 	const assemble = useCallback(
 		(base: MonsterDoc): MonsterDoc => {
-			const donor = donors[0];
+			const resistance = applyResistances(resist, donors, lead, engine.key);
+			const onVoices = voicesOn ? voices.filter(v => v.on).map(v => v.item.line) : [];
+			const onSummons = summonsOn ? summons.filter(s => s.on).map(s => s.item.entry) : [];
 			return {
 				...base,
 				name,
@@ -538,18 +804,47 @@ export default function CreateWizard({
 				speed: stats?.speed ?? base.speed,
 				health: { now: stats?.health ?? base.health.max, max: stats?.health ?? base.health.max },
 				defenseStats: { armor: stats?.armor ?? 0, defense: stats?.defense ?? 0 },
-				look: { ...base.look, ...look, corpse },
+				look: { ...base.look, type: look.type, head: look.head, body: look.body, legs: look.legs, feet: look.feet, corpse },
 				flags: { ...base.flags, ...flagsFor(engine, kind) },
-				// Copied from the donor rather than composed: the correlation between
-				// `undead` and death immunity is a fact about this corpus, and copying
-				// it gets it right without asserting it.
-				immunities: donor ? { ...donor.immunities } : base.immunities,
-				elements: donor ? { ...donor.elements } : base.elements,
+				// Inferred across the whole named set rather than copied off one of
+				// them, and written back in whichever of the two spellings the family
+				// itself uses — see `applyResistances`.
+				immunities: resistance.immunities,
+				elements: resistance.elements,
+				attacksStats: engine.meleeOnAttacks && meleeOn ? attacksStats ?? base.attacksStats : base.attacksStats,
 				attacks: [...(meleeOn && melee ? [melee.block] : []), ...abilities],
+				defenses,
+				voices: { ...base.voices, interval: cadence.interval, chance: cadence.chance, lines: onVoices },
+				// Zero maxSummons means the monster never summons however many
+				// entries it carries — a warning, and one the rail used to filter out.
+				summons: { maxSummons: onSummons.length > 0 ? maxSummonsFor(donors) : base.summons.maxSummons, entries: onSummons },
 				loot: loot.filter(l => l.on).map(l => l.item.entry)
 			};
 		},
-		[donors, name, race, raceid, engine, stats, look, corpse, kind, melee, meleeOn, abilities, loot]
+		[
+			donors,
+			lead,
+			name,
+			race,
+			raceid,
+			engine,
+			stats,
+			look,
+			corpse,
+			kind,
+			melee,
+			meleeOn,
+			attacksStats,
+			abilities,
+			defenses,
+			resist,
+			voicesOn,
+			voices,
+			cadence,
+			summonsOn,
+			summons,
+			loot
+		]
 	);
 
 	const draft = useMemo(() => (template ? assemble(template) : null), [template, assemble]);
@@ -569,18 +864,28 @@ export default function CreateWizard({
 		};
 	}, [draft]);
 
-	const loud = lints.filter(l => l.severity === 'error' || l.severity === 'silent');
+	// Every finding, not just the loud ones. The rail used to show errors and
+	// silent findings only — but everything these steps can newly get wrong is a
+	// *warning*: an element declared against an immunity, a summon list with
+	// maxSummons still zero, a voice chance over 100. Filtering warnings out made
+	// the rail quietest exactly where the wizard had most to say.
+	const findings = useMemo(
+		() => [...lints].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)),
+		[lints]
+	);
+	const loud = findings.filter(l => l.severity !== 'warning');
 
 	// ---- Navigation ----
 	const lootStep = hasItems && kind !== 'critter';
 	const lastStep = STEP_COUNT - 1;
 	const canAdvance = step !== NAME_STEP || name.trim().length > 0;
 
-	// The loot step is always reached, even when it has nothing to offer — it says
-	// why instead of listing ids it cannot vouch for. Skipping it outright would
-	// strand the user on the step before, where the primary button is still "Next".
+	// Every step is reached, even when it has nothing to offer — it says why
+	// instead of listing ids it cannot vouch for. Skipping one outright would
+	// strand the user on the step before, where the primary button is still
+	// "Next", and would make the row of dots mean a different number of questions
+	// depending on answers nobody can see from the dots.
 	const next = useCallback(() => setStep(s => Math.min(lastStep, s + 1)), [lastStep]);
-
 	const back = useCallback(() => setStep(s => Math.max(0, s - 1)), []);
 
 	const commit = useCallback(async () => {
@@ -646,7 +951,7 @@ export default function CreateWizard({
 
 	/** Redraws one answer: out of `touched` so the generator owns it again, and on
 	 *  to the next nonce so it draws something different. */
-	const redraw = (f: Field) => {
+	const redraw = useCallback((f: Field) => {
 		setTouched(prev => {
 			if (!prev.has(f)) return prev;
 			const nextSet = new Set(prev);
@@ -654,32 +959,46 @@ export default function CreateWizard({
 			return nextSet;
 		});
 		setNonce(prev => ({ ...prev, [f]: prev[f] + 1 }));
-	};
+	}, []);
+
+	/** Keeps the user's edit and stops calling it stale — the picks are now what
+	 *  this answer was derived from, by decree rather than by derivation. */
+	const keepMine = useCallback((f: Field) => noteDerived(f, sig), [noteDerived, sig]);
+
+	const staleNotice = (f: Field, what: string) =>
+		stale.has(f) ? (
+			<div className="mx-wiz-stale">
+				{t('The monsters you named have changed since you edited {{what}}.', { what })}
+				<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => redraw(f)}>
+					{t('Use theirs')}
+				</button>
+				<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => keepMine(f)}>
+					{t('Keep mine')}
+				</button>
+			</div>
+		) : null;
 
 	const usable = usableBands(bands);
 	const bandIndex = band ? bands.indexOf(band) : 0;
+	const types = useMemo(() => damageTypes(engine.key), [engine.key]);
+
+	// Width follows the question, and only while the question needs it: the two
+	// designers are a card around a visualiser but not until there is something
+	// to design, and the picker steps are grids whose names need somewhere to be.
+	// Everything else is one thing to answer and reads better narrow.
+	const width =
+		(step === FIGHT_STEP && abilities.length > 0) || (step === DEFEND_STEP && defenses.length > 0)
+			? ' mx-wiz-wide'
+			: step === SIMILAR_STEP || step === DEFEND_STEP || step === SAY_STEP || (step === DROP_STEP && lootStep)
+				? ' mx-wiz-mid'
+				: '';
 
 	return (
 		// Hidden rather than unmounted while a browser answers a question: the
 		// wizard's state *is* the monster, and losing it to fetch one id would make
 		// the trip cost more than it saves.
 		<div className={hidden ? 'ss-backdrop mx-wiz-away' : 'ss-backdrop'} onMouseDown={onClose}>
-			{/* Width follows the question, and only while the question needs it: the
-			    fight step is a designer around a visualiser, but not until there is
-			    an ability to design, and the drop step is a table whose names need
-			    somewhere to be, but not when it has nothing to list. Everything else
-			    is one thing to answer and reads better narrow. */}
-			<div
-				className={`ss-modal mx-wiz${
-					step === FIGHT_STEP && abilities.length > 0
-						? ' mx-wiz-wide'
-						: step === SIMILAR_STEP || (step === DROP_STEP && lootStep)
-							? ' mx-wiz-mid'
-							: ''
-				}`}
-				onMouseDown={e => e.stopPropagation()}
-				onKeyDown={onKeyDown}
-			>
+			<div className={`ss-modal mx-wiz${width}`} onMouseDown={e => e.stopPropagation()} onKeyDown={onKeyDown}>
 				<div className="ss-modal-title">
 					{t('New monster')}
 					<span className="mx-wiz-steps">
@@ -716,29 +1035,29 @@ export default function CreateWizard({
 
 						{step === SIMILAR_STEP && (
 							// The kind narrowed the corpus to a pool; this narrows it to a
-							// family. Everything the wizard proposes from here on — the
-							// immunities, the melee block, the loot table, the band the stats
-							// are read off — is lifted off the monsters named here, so naming
-							// six humanoids is the difference between a monster that belongs
-							// in that camp and one drawn from the whole server.
-							//
-							// Answering nothing is a real answer: the pool the kind chose is
-							// what the wizard drew from before this question existed, and it
-							// still is.
+							// family, and then to one monster. Everything that averages —
+							// the band, the resistances, the melee numbers, the drops — is
+							// read off the set; everything that is a single decision — the
+							// outfit, the corpse, the race — comes off the lead.
 							<Step question={t('Is it similar to anything else?')}>
 								<MonsterPicker
 									monsters={monsters}
 									kind={kind}
 									band={band}
 									picked={similar}
+									lead={lead?.file ?? null}
 									onToggle={toggleSimilar}
+									onLead={setLeadFile}
 								/>
 								<div className="ss-modal-desc">
 									{similar.length === 0
-										? t('Optional. Name a few and the immunities, the melee, the drops and the power level all come off them; name none and the wizard draws from every {{kind}} in the corpus.', {
+										? t('Nothing named, so nothing is drawn from a family — the wizard falls back to the whole {{kind}} pool.', {
 												kind: t(KINDS.find(k => k.key === kind)?.label ?? 'monster').toLowerCase()
 											})
-										: t('Everything from here is drawn from these {{count}}.', { count: similar.length })}
+										: t('The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}.', {
+												count: similar.length,
+												lead: lead?.name ?? '—'
+											})}
 								</div>
 							</Step>
 						)}
@@ -750,28 +1069,23 @@ export default function CreateWizard({
 								    like should not be answered off a 64 px thumbnail. Both
 								    answers are pictures, and the app already has the two places
 								    those pictures live — sending the user there beats a second
-								    grid in here that is worse than the real one (no animation,
-								    no filters, no name search, and a separate thing to keep
-								    working). Each card's button is that hand-off; the wizard
-								    steps aside and takes the answer back. */}
+								    grid in here that is worse than the real one. Each card's
+								    button is that hand-off; the wizard steps aside and takes the
+								    answer back. */}
 								<div className="mx-wiz-look">
 									<div className="mx-wiz-look-card">
 										<div className="mx-wiz-look-title">
 											{t('Outfit')}
 											<button
 												className="ss-btn ss-btn-ghost ss-ed-mini"
-												title={t('Draw another')}
+												title={look.colourable ? t('Draw another colouring') : t('Draw another')}
 												onClick={() => redraw('look')}
 											>
 												<Dices size={13} />
 											</button>
 										</div>
 										<div className="mx-wiz-look-stage">
-											<img
-												className="mx-wiz-look-sprite"
-												src={lookUrl({ ...blankLook, ...look, mode: 'type' }, { cell: 128 })}
-												alt=""
-											/>
+											<img className="mx-wiz-look-sprite" src={lookUrl({ ...blankLook, ...look, mode: 'type' }, { cell: 128 })} alt="" />
 										</div>
 										<div className="mx-wiz-look-foot">
 											<input
@@ -781,12 +1095,22 @@ export default function CreateWizard({
 												value={look.type}
 												onChange={e => {
 													mark('look');
-													setLook({ ...look, type: Number(e.target.value) });
+													const type = Number(e.target.value);
+													setLook({ ...look, type, from: null, colourable: (outfits.find(o => o.id === type)?.layers ?? 0) > 1 });
 												}}
 											/>
 											<button className="ss-btn" onClick={() => onBrowse('outfit')}>
 												{t('Pick an outfit…')}
 											</button>
+										</div>
+										<div className="mx-wiz-pick-name">
+											{look.from
+												? look.colourable
+													? t('{{name}}’s, recoloured', { name: look.from })
+													: t('{{name}}’s', { name: look.from })
+												: look.colourable
+													? t('drawn, recoloured')
+													: ''}
 										</div>
 									</div>
 
@@ -822,6 +1146,9 @@ export default function CreateWizard({
 									</div>
 								</div>
 
+								{staleNotice('look', t('the outfit'))}
+								{staleNotice('corpse', t('the corpse'))}
+
 								{/* Race is not a picture, so it does not get a card — it is the
 								    one field on this step that is typed rather than looked at. */}
 								<label className="mx-wiz-field mx-wiz-look-race">
@@ -843,9 +1170,13 @@ export default function CreateWizard({
 								</label>
 
 								<div className="ss-modal-desc">
-									{outfitIds.length === 0
-										? t('No client is open, so there is nothing to draw — the outfit is an id, and the server will resolve it.')
-										: t('The outfit is one no monster in this corpus wears. The corpse is a donor’s, so the item database can resolve it.')}
+									{look.from
+										? t('The outfit, the corpse and the race all come off {{lead}}, because a body from one monster over another’s corpse is a pair this corpus never writes.', {
+												lead: look.from
+											})
+										: outfits.length === 0
+											? t('No client is open, so there is nothing to draw — the outfit is an id, and the server will resolve it.')
+											: t('Nothing named to copy from, so the outfit is one no monster in this corpus wears.')}
 								</div>
 							</Step>
 						)}
@@ -940,15 +1271,15 @@ export default function CreateWizard({
 										</div>
 									</>
 								)}
+								{/* Armour and defence are not here: they are how the monster
+								    survives, and they live on the step that asks that. */}
 								<div className="mx-wiz-stats">
 									{stats &&
 										(
 											[
 												['experience', t('Experience')],
 												['health', t('Health')],
-												['speed', t('Speed')],
-												['armor', t('Armor')],
-												['defense', t('Defense')]
+												['speed', t('Speed')]
 											] as const
 										).map(([key, label]) => (
 											<label key={key} className="mx-wiz-field">
@@ -983,110 +1314,138 @@ export default function CreateWizard({
 								    number you write: the loader derives it from skill and attack, so
 								    those are the two fields and the derived figure is shown beside
 								    them rather than being editable and ignored. */}
-								<div className={melee ? 'mx-wiz-melee' : 'mx-wiz-melee mx-wiz-item-off'}>
-									<label className="mx-wiz-card-tick">
-										<input
-											type="checkbox"
-											checked={meleeOn && melee !== null}
-											disabled={melee === null}
-											onChange={() => {
-												mark('melee');
-												setMeleeOn(v => !v);
-											}}
-										/>
-										{t('Fights in melee')}
-									</label>
-									{melee && meleeOn && (
-										<>
-											<span className="mx-wiz-mini">{t('Skill')}</span>
+								{engine.meleeOnAttacks ? (
+									<div className={attacksStats ? 'mx-wiz-melee' : 'mx-wiz-melee mx-wiz-item-off'}>
+										<label className="mx-wiz-card-tick">
 											<input
-												className="mx-wiz-input mono mx-wiz-num"
-												type="number"
-												min={0}
-												value={melee.block.melee?.skill ?? 0}
-												onChange={e => {
+												type="checkbox"
+												checked={meleeOn && attacksStats !== null}
+												disabled={attacksStats === null}
+												onChange={() => {
 													mark('melee');
-													setMelee(setMeleeField(melee, 'skill', Number(e.target.value)));
+													setMeleeOn(v => !v);
 												}}
 											/>
-											<span className="mx-wiz-mini">{t('Attack')}</span>
+											{t('Fights in melee')}
+										</label>
+										{attacksStats && meleeOn && (
+											<>
+												<span className="mx-wiz-mini">{t('Skill')}</span>
+												<input
+													className="mx-wiz-input mono mx-wiz-num"
+													type="number"
+													min={0}
+													value={attacksStats.skill}
+													onChange={e => {
+														mark('melee');
+														setAttacksStats({ ...attacksStats, skill: Number(e.target.value) });
+													}}
+												/>
+												<span className="mx-wiz-mini">{t('Attack')}</span>
+												<input
+													className="mx-wiz-input mono mx-wiz-num"
+													type="number"
+													min={0}
+													value={attacksStats.attack}
+													onChange={e => {
+														mark('melee');
+														setAttacksStats({ ...attacksStats, attack: Number(e.target.value) });
+													}}
+												/>
+											</>
+										)}
+										{attacksStats === null && <span className="mx-wiz-item-from">{t('no melee available')}</span>}
+									</div>
+								) : (
+									<div className={melee ? 'mx-wiz-melee' : 'mx-wiz-melee mx-wiz-item-off'}>
+										<label className="mx-wiz-card-tick">
 											<input
-												className="mx-wiz-input mono mx-wiz-num"
-												type="number"
-												min={0}
-												value={melee.block.melee?.attack ?? 0}
-												onChange={e => {
+												type="checkbox"
+												checked={meleeOn && melee !== null}
+												disabled={melee === null}
+												onChange={() => {
 													mark('melee');
-													setMelee(setMeleeField(melee, 'attack', Number(e.target.value)));
+													setMeleeOn(v => !v);
 												}}
 											/>
+											{t('Fights in melee')}
+										</label>
+										{melee && meleeOn && (
+											<>
+												<span className="mx-wiz-mini">{t('Skill')}</span>
+												<input
+													className="mx-wiz-input mono mx-wiz-num"
+													type="number"
+													min={0}
+													value={melee.block.melee?.skill ?? 0}
+													onChange={e => {
+														mark('melee');
+														setMelee(setMeleeField(melee, 'skill', Number(e.target.value)));
+													}}
+												/>
+												<span className="mx-wiz-mini">{t('Attack')}</span>
+												<input
+													className="mx-wiz-input mono mx-wiz-num"
+													type="number"
+													min={0}
+													value={melee.block.melee?.attack ?? 0}
+													onChange={e => {
+														mark('melee');
+														setMelee(setMeleeField(melee, 'attack', Number(e.target.value)));
+													}}
+												/>
+												<span
+													className="mx-wiz-mini"
+													title={t('Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.')}
+												>
+													{t('max {{damage}}', { damage: meleeBlockMax(melee.block) ?? '—' })}
+												</span>
+											</>
+										)}
+										{melee && !meleeOn && <span className="mx-wiz-item-from">{t('from {{name}}', { name: melee.from })}</span>}
+										{melee === null && (
 											<span
 												className="mx-wiz-mini"
-												title={t('Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.')}
+												title={t('A melee block is copied off a donor rather than composed, and nothing in this band has one to lend.')}
 											>
-												{t('max {{damage}}', { damage: meleeBlockMax(melee.block) ?? '—' })}
+												{t('no melee available')}
 											</span>
-										</>
-									)}
-									{melee && !meleeOn && <span className="mx-wiz-item-from">{t('from {{name}}', { name: melee.from })}</span>}
-								</div>
-								{melee === null && (
-									<span
-										className="mx-wiz-mini"
-										title={t('A melee block is copied off a donor rather than composed, and nothing in this band has one to lend.')}
-									>
-										{t('no melee available')}
-									</span>
+										)}
+									</div>
 								)}
+								{staleNotice('melee', t('the melee'))}
 
 								{/* The ability designer. One ability on screen, the rail above it
 								    the whole kit — and the card is the editor's own SpellCard, so
 								    the fields offered are the ones the chosen spell family actually
 								    reads, spelled the way this engine spells them, with the same
-								    live re-enactment behind its eye. A second, wizard-shaped copy
-								    of that would be a second thing to keep true across seven
-								    engines and would be wrong first. */}
-								<div className="mx-wiz-sub">{t('Abilities')}</div>
-								{abilities.length === 0 ? (
-									<div className="ss-modal-desc" title={t('A monster with only melee is a monster — this step is happy with none.')}>
-										{t('No abilities yet.')}
+								    live re-enactment behind its eye. */}
+								<div className="mx-wiz-sub">{t('Attacks')}</div>
+								<SpellRail
+									blocks={abilities}
+									openIndex={openIndex}
+									onOpen={setActive}
+									emptyNote={t('A monster with only melee is a monster — this step is happy with none.')}
+									emptyLabel={t('No attacks yet.')}
+								/>
+								{open && (
+									<div className="mx-wiz-designer">
+										<CompactProvider>
+											<SpellCard
+												block={open}
+												file={file || 'new'}
+												onChange={next => setAbilities(abilities.map((b, j) => (j === openIndex ? next : b)))}
+												spells={spellNames}
+												engine={engine.key}
+												lintAt={suffix => lints.filter(l => l.path === `attacks[${openIndex + abilityOffset}].${suffix}`)}
+												readOnly={false}
+												parent="attacks"
+												look={{ ...blankLook, ...look, mode: 'type' }}
+												onBrowseEffect={k => onBrowse(k === 'area' ? 'effect' : 'missile')}
+												defaultStaged
+											/>
+										</CompactProvider>
 									</div>
-								) : (
-									<>
-										<div className="mx-wiz-rail">
-											{abilities.map((b, i) => (
-												<button
-													key={i}
-													className={i === openIndex ? 'mx-wiz-chip mx-wiz-chip-on' : 'mx-wiz-chip'}
-													onClick={() => setActive(i)}
-												>
-													{b.name ?? b.script ?? t('script')}
-												</button>
-											))}
-										</div>
-										{open && (
-											<div className="mx-wiz-designer">
-												{/* Every explanation the card carries folds onto a ⓘ in
-												    compact mode. The words are all still there; the wall
-												    of them between the user and six numbers is not. */}
-												<CompactProvider>
-												<SpellCard
-													block={open}
-													file={file || 'new'}
-													onChange={next => setAbilities(abilities.map((b, j) => (j === openIndex ? next : b)))}
-													spells={spellNames}
-													engine={engine.key}
-													lintAt={suffix => lints.filter(l => l.path === `attacks[${openIndex + abilityOffset}].${suffix}`)}
-													readOnly={false}
-													parent="attacks"
-													look={{ ...blankLook, ...look, mode: 'type' }}
-													onBrowseEffect={kind => onBrowse(kind === 'area' ? 'effect' : 'missile')}
-													defaultStaged
-												/>
-												</CompactProvider>
-											</div>
-										)}
-									</>
 								)}
 								<div className="mx-wiz-rowend">
 									{open && (
@@ -1097,14 +1456,261 @@ export default function CreateWizard({
 												setActive(a => Math.max(0, a - 1));
 											}}
 										>
-											{t('Remove this ability')}
+											{t('Remove this attack')}
 										</button>
 									)}
 									<button className="ss-btn" onClick={addAbility}>
 										<Plus size={14} />
-										{t('Add an ability')}
+										{t('Add an attack')}
 									</button>
 								</div>
+
+								{/* Summoning is not a question of its own: 78-89% of every corpus
+								    answers no, nothing can propose an answer to a yes/no, and 89%
+								    of the monsters that do summon carry exactly one entry. One
+								    name and two numbers is a row, not a step. */}
+								<div className="mx-wiz-sub">{t('Calls for help')}</div>
+								<label className="mx-wiz-card-tick">
+									<input
+										type="checkbox"
+										checked={summonsOn}
+										disabled={summons.length === 0}
+										onChange={() => {
+											mark('summons');
+											setSummonsOn(v => !v);
+										}}
+									/>
+									{summons.length === 0 ? t('Nothing in this corpus summons anything.') : t('Summons other monsters')}
+								</label>
+								{summonsOn && (
+									<div className="mx-wiz-summons">
+										{summons.map((s, i) => (
+											<label key={s.item.entry.name} className={s.on ? 'mx-wiz-summon' : 'mx-wiz-summon mx-wiz-item-off'}>
+												<input
+													type="checkbox"
+													checked={s.on}
+													onChange={() => {
+														mark('summons');
+														setSummons(summons.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
+													}}
+												/>
+												<span className="mx-wiz-item-name">{s.item.entry.name}</span>
+												{s.item.from ? (
+													<span className="mx-wiz-item-from">{t('from {{name}}', { name: s.item.from })}</span>
+												) : (
+													<span className="mx-wiz-item-from">{t('{{count}} monster summons it', { count: s.item.corpusCount })}</span>
+												)}
+											</label>
+										))}
+									</div>
+								)}
+								{staleNotice('summons', t('the summons'))}
+							</Step>
+						)}
+
+						{step === DEFEND_STEP && (
+							// Armour, defence, the defensive spells and the resistance table
+							// are one question — how it survives being hit — and the corpus
+							// agrees: a monster with defensive spells declares immunities
+							// 88-99% of the time against 49-89% for one without.
+							<Step question={t('How does it defend itself?')}>
+								<div className="mx-wiz-stats">
+									{stats &&
+										(
+											[
+												['armor', t('Armor')],
+												['defense', t('Defense')]
+											] as const
+										).map(([key, label]) => (
+											<label key={key} className="mx-wiz-field">
+												<span>{label}</span>
+												<input
+													className="mx-wiz-input mono"
+													type="number"
+													value={stats[key]}
+													onChange={e => {
+														mark('stats');
+														setStats({ ...stats, [key]: Number(e.target.value) });
+													}}
+												/>
+											</label>
+										))}
+								</div>
+
+								<div className="mx-wiz-sub">{t('Resistances')}</div>
+								{resist.length === 0 ? (
+									<div className="ss-modal-desc">{t('Name a monster or two on the second step and this fills itself in.')}</div>
+								) : (
+									<div className="mx-wiz-resists">
+										{resist.map(r => {
+											const row = types.find(x => x.key === r.type);
+											return (
+												<label key={r.type} className="mx-wiz-resist">
+													<span className="mx-wiz-resist-dot" style={{ background: row?.color }} />
+													<span className="mx-wiz-resist-name">{t(row?.label ?? r.type)}</span>
+													<NumberField
+														value={r.percent}
+														onChange={v => {
+															mark('resist');
+															setResist(resist.map(x => (x.type === r.type ? { ...x, percent: v } : x)));
+														}}
+														min={-100}
+														max={100}
+														width={64}
+														title={t('100 resists everything — an immunity. Negative takes extra damage.')}
+													/>
+												</label>
+											);
+										})}
+									</div>
+								)}
+								<div className="ss-modal-desc">
+									{donors.length > 0 &&
+										t('The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra.', {
+											count: donors.length
+										})}{' '}
+									{resist.length > 0 && (
+										<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => redraw('resist')}>
+											{t('Read them again')}
+										</button>
+									)}
+								</div>
+								{staleNotice('resist', t('the resistances'))}
+
+								<div className="mx-wiz-sub">{t('Defenses')}</div>
+								<SpellRail
+									blocks={defenses}
+									openIndex={openDefenseIndex}
+									onOpen={setActiveDefense}
+									emptyNote={t('Healing, haste, invisibility — what it does to stay alive. None is a valid answer.')}
+									emptyLabel={t('No defenses yet.')}
+								/>
+								{openDefense && (
+									<div className="mx-wiz-designer">
+										<CompactProvider>
+											<SpellCard
+												block={openDefense}
+												file={file || 'new'}
+												onChange={next => {
+													mark('defenses');
+													setDefenses(defenses.map((b, j) => (j === openDefenseIndex ? next : b)));
+												}}
+												spells={spellNames}
+												engine={engine.key}
+												lintAt={suffix => lints.filter(l => l.path === `defenses[${openDefenseIndex}].${suffix}`)}
+												readOnly={false}
+												parent="defenses"
+												look={{ ...blankLook, ...look, mode: 'type' }}
+												onBrowseEffect={k => onBrowse(k === 'area' ? 'effect' : 'missile')}
+												defaultStaged
+											/>
+										</CompactProvider>
+									</div>
+								)}
+								<div className="mx-wiz-rowend">
+									{openDefense && (
+										<button
+											className="ss-btn ss-btn-ghost ss-ed-mini"
+											onClick={() => {
+												mark('defenses');
+												setDefenses(defenses.filter((_, j) => j !== openDefenseIndex));
+												setActiveDefense(a => Math.max(0, a - 1));
+											}}
+										>
+											{t('Remove this defense')}
+										</button>
+									)}
+									<button className="ss-btn" onClick={addDefense}>
+										<Plus size={14} />
+										{t('Add a defense')}
+									</button>
+								</div>
+							</Step>
+						)}
+
+						{step === SAY_STEP && (
+							// Not gated on repetition. "A line said by two of them" opens this
+							// step 6-43% of the time, because most families share no line at
+							// all; ranked and offered whole it opens 78-92%, and repetition
+							// still decides what arrives ticked.
+							<Step question={t('Does it have anything to say?')}>
+								<label className="mx-wiz-card-tick">
+									<input
+										type="checkbox"
+										checked={voicesOn}
+										disabled={voices.length === 0}
+										onChange={() => {
+											mark('voices');
+											setVoicesOn(v => !v);
+										}}
+									/>
+									{voices.length === 0 ? t('None of the monsters you named says anything.') : t('It speaks')}
+								</label>
+
+								{voicesOn && (
+									<div className="mx-wiz-voices">
+										{voices.map((v, i) => (
+											<label key={v.item.line.sentence} className={v.on ? 'mx-wiz-voice' : 'mx-wiz-voice mx-wiz-item-off'}>
+												<input
+													type="checkbox"
+													checked={v.on}
+													onChange={() => {
+														mark('voices');
+														setVoices(voices.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
+													}}
+												/>
+												<span className="mx-wiz-voice-text">{v.item.line.sentence}</span>
+												{v.item.line.yell && <span className="mx-wiz-mini">{t('yelled')}</span>}
+												<span className="mx-wiz-item-from">
+													{v.item.from.length > 1
+														? t('{{count}} of them say it', { count: v.item.from.length })
+														: t('from {{name}}', { name: v.item.from[0] })}
+												</span>
+											</label>
+										))}
+									</div>
+								)}
+
+								{/* TVP and Nostalrius read neither attribute, and the writer
+								    drops both without a word — so the wizard does not collect an
+								    answer it knows will vanish. */}
+								{voicesOn && engine.voicesCadence && (
+									<div className="mx-wiz-fields">
+										<label className="mx-wiz-field">
+											<span>{t('Interval')}</span>
+											<input
+												className="mx-wiz-input mono"
+												type="number"
+												value={cadence.interval}
+												onChange={e => {
+													mark('voices');
+													setCadence({ ...cadence, interval: Number(e.target.value) });
+												}}
+											/>
+										</label>
+										<label className="mx-wiz-field">
+											<span>{t('Chance')}</span>
+											<input
+												className="mx-wiz-input mono"
+												type="number"
+												value={cadence.chance}
+												onChange={e => {
+													mark('voices');
+													setCadence({ ...cadence, chance: Number(e.target.value) });
+												}}
+											/>
+										</label>
+									</div>
+								)}
+
+								<div className="ss-modal-desc">
+									{voices.length === 0
+										? t('Add lines in the editor if it should talk.')
+										: engine.voicesCadence
+											? t('Lines two of them share arrive ticked. Anything naming its own speaker is left out.')
+											: t('This engine reads no interval or chance on voices, so there is nothing to set.')}
+								</div>
+								{staleNotice('voices', t('the voices'))}
 							</Step>
 						)}
 
@@ -1112,8 +1718,36 @@ export default function CreateWizard({
 							// Which items drop is a question for the items browser — the real
 							// one, with its filters, its search and its Loot tray — so this
 							// step asks the other half: how often, and how many. The rows are
-							// a proposal off the donors to begin with; the tray adds to them.
+							// a proposal off the loot donors to begin with; the tray adds to
+							// them.
 							<Step question={t('What does it drop, and how often?')}>
+								<div className="mx-wiz-lootfrom">
+									<span className="mx-wiz-mini">
+										{lootPicks.length === 0
+											? t('Drops like nothing in particular.')
+											: t('Drops like {{names}}', { names: lootPicks.map(m => m.name).join(', ') })}
+									</span>
+									<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => setShowLootDonors(v => !v)}>
+										{showLootDonors ? t('Done') : t('Drops like something else…')}
+									</button>
+									{lootSimilar !== null && (
+										<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => setLootSimilar(null)}>
+											{t('Same as before')}
+										</button>
+									)}
+								</div>
+								{showLootDonors && (
+									<MonsterPicker
+										monsters={monsters}
+										kind={kind}
+										band={band}
+										picked={lootPicks}
+										lead={null}
+										onToggle={toggleLootSimilar}
+										onLead={null}
+									/>
+								)}
+
 								<div className="mx-wiz-loot">
 									<div className="mx-wiz-loot-head">
 										<span className="mx-wiz-loot-cell-name">{t('Item')}</span>
@@ -1150,9 +1784,9 @@ export default function CreateWizard({
 										{t('Pick items…')}
 									</button>
 									{/* How many to draw, then the draw: the parameter reads before
-									    the button that uses it. A boss wants twelve drops and a bat
-									    wants one, and five is only ever a guess at which this is —
-									    the one thing the corpus cannot tell the generator. */}
+									    the button that uses it. Seeded from the donors' own tables,
+									    because a boss drops twenty and a bat drops one and no
+									    constant is right at both ends. */}
 									<span className="mx-wiz-loot-draw">
 										<NumberField
 											value={drawCount}
@@ -1161,7 +1795,7 @@ export default function CreateWizard({
 											max={MAX_DRAW}
 											hardMax={MAX_DRAW}
 											width={56}
-											title={t('How many items a draw proposes')}
+											title={t('How many items a draw proposes — as many as the monsters above drop')}
 										/>
 										<span className="mx-wiz-mini">{t('items')}</span>
 									</span>
@@ -1172,9 +1806,7 @@ export default function CreateWizard({
 									>
 										{t('Draw again')}
 									</button>
-									<span className="mx-wiz-mini mx-wiz-loot-total">
-										{t('{{count}} drop', { count: loot.filter(l => l.on).length })}
-									</span>
+									<span className="mx-wiz-mini mx-wiz-loot-total">{t('{{count}} drop', { count: loot.filter(l => l.on).length })}</span>
 								</div>
 							</Step>
 						)}
@@ -1205,6 +1837,7 @@ export default function CreateWizard({
 						)}
 						<div className="mx-wiz-prov">
 							<div className="mx-wiz-prov-title">{t('Drawn from')}</div>
+							{lead && <div>{t('look, corpse, race')}: {lead.name}</div>}
 							{band && (
 								<div>
 									{t('stats')}: {band.label} ({fmt(band.count)})
@@ -1212,15 +1845,19 @@ export default function CreateWizard({
 							)}
 							{donors.length > 0 && (
 								<div>
-									{similar.length > 0 ? t('similar to') : t('donors')}: {donors.map(d => d.name).join(', ')}
+									{t('resistances, melee')}: {donors.map(d => d.name).join(', ')}
 								</div>
 							)}
-							{!touched.has('look') && <div>{t('look')}: {t('unused outfit {{id}}', { id: look.type })}</div>}
+							{lootDonors.length > 0 && loot.length > 0 && (
+								<div>
+									{t('drops')}: {lootDonors.map(d => d.name).join(', ')}
+								</div>
+							)}
 						</div>
 						<div className={loud.length > 0 ? 'mx-wiz-lints mx-wiz-lints-bad' : 'mx-wiz-lints'}>
-							{loud.length === 0 ? t('No lint findings') : t('{{count}} lint', { count: loud.length })}
+							{findings.length === 0 ? t('No lint findings') : t('{{count}} lint', { count: findings.length })}
 						</div>
-						{loud.slice(0, 3).map((l, i) => (
+						{findings.slice(0, 3).map((l, i) => (
 							<div key={i} className="mx-wiz-lint">
 								{l.message}
 							</div>
@@ -1267,11 +1904,47 @@ export default function CreateWizard({
 	);
 }
 
+/** Errors and silent findings first, warnings behind them — the rail shows all
+ *  three now, but the order still says which one to read. */
+const SEVERITY_ORDER = ['error', 'silent', 'warning'];
+
 function Step({ question, children }: { question: string; children: React.ReactNode }) {
 	return (
 		<div className="mx-wiz-step">
 			<h3 className="mx-wiz-q">{question}</h3>
 			{children}
+		</div>
+	);
+}
+
+/** The chip rail above a spell designer: the whole kit, one open at a time. */
+function SpellRail({
+	blocks,
+	openIndex,
+	onOpen,
+	emptyNote,
+	emptyLabel
+}: {
+	blocks: SpellBlock[];
+	openIndex: number;
+	onOpen: (i: number) => void;
+	emptyNote: string;
+	emptyLabel: string;
+}) {
+	const { t } = useTranslation();
+	if (blocks.length === 0)
+		return (
+			<div className="ss-modal-desc" title={emptyNote}>
+				{emptyLabel}
+			</div>
+		);
+	return (
+		<div className="mx-wiz-rail">
+			{blocks.map((b, i) => (
+				<button key={i} className={i === openIndex ? 'mx-wiz-chip mx-wiz-chip-on' : 'mx-wiz-chip'} onClick={() => onOpen(i)}>
+					{b.name ?? b.script ?? t('script')}
+				</button>
+			))}
 		</div>
 	);
 }
@@ -1293,19 +1966,28 @@ const MON_CHUNK = 30;
  * plausible": the kind's own pool, then the band's, then everything else, each
  * alphabetical, so the grid opens on the monsters the sentence "similar to" is
  * likely to end with and the search is for when it does not.
+ *
+ * `onLead` is what makes the picked row more than a list. One of the picks is
+ * the monster this one is *most* like, and it decides the outfit, the corpse
+ * and the race by itself — so it has to be nameable rather than being whichever
+ * cell happened to be clicked first.
  */
 function MonsterPicker({
 	monsters,
 	kind,
 	band,
 	picked,
-	onToggle
+	lead,
+	onToggle,
+	onLead
 }: {
 	monsters: MonsterSummary[];
 	kind: Kind;
 	band: BalanceBand | null;
 	picked: MonsterSummary[];
+	lead: string | null;
 	onToggle: (m: MonsterSummary) => void;
+	onLead: ((file: string) => void) | null;
 }) {
 	const { t } = useTranslation();
 	const [query, setQuery] = useState('');
@@ -1362,15 +2044,28 @@ function MonsterPicker({
 			</div>
 
 			{/* What has been named, always in sight — the grid reorders under a
-			    search and a pick that scrolled away is one nobody can take back. */}
+			    search and a pick that scrolled away is one nobody can take back.
+			    The crown is the lead: one click, and it is what the outfit, the
+			    corpse and the race come off. */}
 			{picked.length > 0 && (
 				<div className="mx-wiz-similar-picked">
 					{picked.map(m => (
-						<button key={m.file} className="mx-wiz-similar-chip" onClick={() => onToggle(m)} title={t('Remove')}>
+						<span key={m.file} className={m.file === lead ? 'mx-wiz-similar-chip mx-wiz-similar-chip-lead' : 'mx-wiz-similar-chip'}>
+							{onLead && (
+								<button
+									className="mx-wiz-lead-btn"
+									title={m.file === lead ? t('Most like this one') : t('Make this the one it is most like')}
+									onClick={() => onLead(m.file)}
+								>
+									<Crown size={12} />
+								</button>
+							)}
 							<img src={lookUrl(m.look, { cell: 24 })} alt="" />
 							{m.name}
-							<X size={12} />
-						</button>
+							<button className="mx-wiz-lead-btn" title={t('Remove')} onClick={() => onToggle(m)}>
+								<X size={12} />
+							</button>
+						</span>
 					))}
 				</div>
 			)}
@@ -1448,7 +2143,13 @@ function LootRow({
 				<NumberField
 					value={Number((entry.chance / 1000).toFixed(3))}
 					onChange={v => setEntry({ chance: Math.max(0, Math.min(MAX_CHANCE, Math.round(v * 1000))) })}
-					onDraft={raw => setDraft(raw === null || raw.trim() === '' || !Number.isFinite(Number(raw)) ? null : Math.max(0, Math.min(MAX_CHANCE, Math.round(Number(raw) * 1000))))}
+					onDraft={raw =>
+						setDraft(
+							raw === null || raw.trim() === '' || !Number.isFinite(Number(raw))
+								? null
+								: Math.max(0, Math.min(MAX_CHANCE, Math.round(Number(raw) * 1000)))
+						)
+					}
 					min={0}
 					max={100}
 					step={0.1}
@@ -1492,6 +2193,20 @@ const blankLook = {
 	corpse: 0,
 	corpseactionid: 0
 };
+
+/** `n` ids spread across the whole list rather than taken from its head.
+ *
+ *  `dropped` arrives sorted by id, so a cap meant as a request budget was
+ *  quietly a content filter: the lowest 200 ids in the corpus, which on Canary
+ *  is 9% of its drop set and all of it from the same corner of items.xml. */
+function spread(ids: number[], n: number, salt: number): number[] {
+	if (ids.length <= n) return ids;
+	const rng = makeRng(salt);
+	const out: number[] = [];
+	const stride = ids.length / n;
+	for (let i = 0; i < n; i++) out.push(ids[Math.min(ids.length - 1, Math.floor(i * stride + rng() * stride))]);
+	return out;
+}
 
 /** One field of a melee block, with the block and its provenance carried
  *  through — the melee sub-object is always present on a block the sampler

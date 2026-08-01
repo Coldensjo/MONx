@@ -543,7 +543,69 @@ fn crud_check(
         return Err("delete left a dangling registry entry".into());
     }
 
-    // 5. The registry survived all of that as valid, parseable XML with only
+    // 5. The path the create wizard actually takes: create a file, then save an
+    //    assembled document over it carrying sections the template left empty.
+    //
+    //    Everything above this either edits a value in place or writes a fresh
+    //    template — neither of which exercises grafting a whole `<defenses>`,
+    //    `<voices>` or `<summons>` onto a file that had none, which is exactly
+    //    what `save_monster` is asked to do the moment the wizard commits. The
+    //    writer appends those at the end of the document rather than splicing,
+    //    so this cannot meet the `--mutate` line budget and does not belong
+    //    there; it belongs here, next to `create`, on both document formats.
+    let registry = Registry::load(&work.join("monsters.xml"));
+    let fresh_key = monster::create(profile, &work, &registry, "Probe Assembled", "probeassembled", "wrecks")?.file;
+    let mut assembled = monster::read_file_keyed(profile, &work.join(&fresh_key), &fresh_key, true)?.doc;
+    // Donated from the corpus rather than composed, exactly as the wizard does:
+    // a block this engine already loads is one it will load again.
+    let donor = files
+        .iter()
+        .filter_map(|p| {
+            let key = monster::file_key(&work, p);
+            monster::read_file_keyed(profile, p, &key, true).ok().map(|r| r.doc)
+        })
+        .find(|d| !d.attacks.is_empty());
+    if let Some(block) = donor.and_then(|d| d.attacks.first().cloned()) {
+        assembled.defenses.push(block);
+    }
+    assembled.voices.lines.push(monster::VoiceLine {
+        sentence: "Probe assembled.".to_string(),
+        yell: false,
+    });
+    assembled.summons.max_summons = 2;
+    assembled.summons.entries.push(monster::SummonEntry {
+        name: "Probe Subject".to_string(),
+        interval: 2000,
+        chance: 25,
+        delay: None,
+        max: 2,
+        force: false,
+        effect: None,
+        master_effect: None,
+    });
+    assembled.elements.insert(
+        profile.elements.first().map(|s| s.to_string()).unwrap_or_else(|| "firePercent".into()),
+        -10,
+    );
+    monster::save(profile, &work, &registry, &assembled)?;
+
+    let back = monster::read_file_keyed(profile, &work.join(&fresh_key), &fresh_key, true)?.doc;
+    if back.voices.lines.len() != assembled.voices.lines.len() {
+        return Err("a voice grafted onto a freshly created file did not survive".into());
+    }
+    if back.summons.entries.len() != assembled.summons.entries.len() || back.summons.max_summons != 2 {
+        return Err("a summon grafted onto a freshly created file did not survive".into());
+    }
+    if back.defenses.len() != assembled.defenses.len() {
+        return Err("a defense grafted onto a freshly created file did not survive".into());
+    }
+    if back.elements != assembled.elements {
+        return Err("an element grafted onto a freshly created file did not survive".into());
+    }
+    let grafted = assembled.defenses.len();
+    monster::delete(&work, &Registry::load(&work.join("monsters.xml")), &fresh_key)?;
+
+    // 6. The registry survived all of that as valid, parseable XML with only
     //    the entries we meant to change.
     let final_registry = Registry::load(&work.join("monsters.xml"));
     if profile.has_registry && final_registry.is_empty() {
@@ -553,7 +615,8 @@ fn crud_check(
     let _ = std::fs::remove_dir_all(&work);
     Ok(format!(
         "{unchanged} unchanged saves byte-identical on disk · {backups} backups written · \
-         create/duplicate/rename/delete consistent with monsters.xml"
+         create/duplicate/rename/delete consistent with monsters.xml · \
+         voices, summons, {grafted} defense and an element grafted onto a created file survive a re-read"
     ))
 }
 

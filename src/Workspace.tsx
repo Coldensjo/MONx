@@ -1495,6 +1495,12 @@ export default function Workspace({
 	// this monster leaves — and one that never rots is the rare answer. The filter
 	// is a filter, not a restriction: it is switchable in the popover like any
 	// other, so the static corpses are one click away.
+	/** The client's outfits as the create wizard needs them: the id to draw, and
+	 *  whether the sprite has a second layer for the four colour fields to mask.
+	 *  Memoised because it feeds a `useEffect` dependency over there — a fresh
+	 *  array every render would redraw the look on every keystroke. */
+	const wizardOutfits = useMemo(() => things.outfit.map(o => ({ id: o.id, layers: o.layers })), [things.outfit]);
+
 	const browseCorpses = useCallback(() => {
 		setItemsInitialFilters(['corpses-decay']);
 		setView('items');
@@ -2777,7 +2783,10 @@ export default function Workspace({
 					monsters={monsters}
 					groups={groups}
 					engine={engineInfo(info.engine)}
-					outfitIds={things.outfit.map(o => o.id)}
+					// With the layer count, not just the id: the four colour fields only
+					// render on an outfit that carries a colour template, and a wizard
+					// that writes them onto a flat sprite is writing four inert numbers.
+					outfits={wizardOutfits}
 					itemIndex={tauriItemIndex}
 					spellNames={spells}
 					onCreated={file => {

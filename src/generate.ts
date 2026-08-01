@@ -11,8 +11,22 @@
 // `fixtures.ts` with no backend — the seam `lootsim.ts` and `compare.ts` use.
 
 import type { EngineInfo } from './engine';
+import { damageTypes, type DamageType as DamageTypeRow } from './catalog';
+import { elementPercent, isImmune, type DamageType } from './derive';
 import { MAX_CHANCE, MAX_COUNTMAX } from './lootsim';
-import { MIN_BAND_N, type BalanceBand, type ItemInfo, type LootEntry, type MonsterDoc, type MonsterSummary, type SpellBlock } from './monster';
+import {
+	MIN_BAND_N,
+	type AttacksStats,
+	type BalanceBand,
+	type ItemInfo,
+	type LootEntry,
+	type MonsterDoc,
+	type MonsterSummary,
+	type SpellBlock,
+	type SummonEntry,
+	type SummonPoolEntry,
+	type VoiceLine
+} from './monster';
 
 export type Rng = () => number;
 
@@ -213,21 +227,195 @@ export function flagsFor(engine: EngineInfo, kind: Kind): Record<string, boolean
 
 // ---------- Look ----------
 
-/**
- * A looktype no monster in the corpus already wears.
- *
- * A new monster that looks exactly like an existing one is the least useful
- * default available — the first thing the user would change, every time. With
- * every outfit already spoken for it gives up and draws freely rather than
- * failing: a duplicate look is worse than nothing, not invalid.
- */
-export function sampleLook(rng: Rng, outfitIds: number[], monsters: MonsterSummary[]): { type: number; head: number; body: number; legs: number; feet: number } {
-	const used = new Set(monsters.map(m => m.look.type ?? 0));
-	const free = outfitIds.filter(id => id > 0 && !used.has(id));
-	const type = pick(rng, free.length ? free : outfitIds.filter(id => id > 0)) ?? 0;
-	const colour = () => randomInt(rng, 0, 133);
-	return { type, head: colour(), body: colour(), legs: colour(), feet: colour() };
+/** An outfit the client can draw, and whether it has a colour template.
+ *  `layers > 1` is the .dat/appearances way of saying the sprite carries a
+ *  second, maskable layer — which is the only thing that makes head/body/legs/
+ *  feet mean anything. */
+export interface OutfitInfo {
+	id: number;
+	layers: number;
 }
+
+export interface SampledLook {
+	type: number;
+	head: number;
+	body: number;
+	legs: number;
+	feet: number;
+	/** The monster it was taken from, or null when it was drawn from the client. */
+	from: string | null;
+	/** Whether the four colours actually render. Written either way — they are
+	 *  legal on any outfit — but a rail that claims a recolour on a flat sprite
+	 *  is claiming something the user cannot see. */
+	colourable: boolean;
+}
+
+/**
+ * The look, taken off the lead donor when there is one.
+ *
+ * This used to draw a looktype *no monster in the corpus wears*, on the theory
+ * that a duplicate is the first thing a user would change. The corpora say
+ * otherwise: 41% of Ironcore and 41–56% of every Lua corpus already share a
+ * full look with another monster, so a shared outfit is what a server actually
+ * looks like, and a monster that looks like the family it belongs to is a
+ * better starting point than one that looks like nothing.
+ *
+ * Copying also fixes the case the draw could never serve. With no client open
+ * `outfits` is empty, and the old sampler simply never ran — the monster was
+ * created with `type=0`. A donor's id needs no client to be right.
+ *
+ * The colours are only drawn when the outfit has a colour template. Writing
+ * four random numbers onto a flat sprite is legal and inert, which is what the
+ * shipped generator has been doing 59–92% of the time depending on engine; the
+ * corpus writes 0/0/0/0 there instead, and so does this now.
+ */
+export function sampleLook(
+	rng: Rng,
+	outfits: OutfitInfo[],
+	monsters: MonsterSummary[],
+	lead: MonsterDoc | null
+): SampledLook {
+	const colourable = new Map(outfits.map(o => [o.id, o.layers > 1]));
+	const dress = (type: number, from: string | null): SampledLook => {
+		// Unknown to the client counts as flat: the wizard must not promise a
+		// recolour it cannot show, and no client at all is the common case on a
+		// monsters-only workspace.
+		const canColour = colourable.get(type) === true;
+		const colour = () => (canColour ? randomInt(rng, 0, MAX_OUTFIT_COLOUR + 1) : 0);
+		return { type, head: colour(), body: colour(), legs: colour(), feet: colour(), from, colourable: canColour };
+	};
+
+	const leadType = lead?.look.type ?? 0;
+	if (leadType > 0) return dress(leadType, lead?.name ?? null);
+
+	// No lead, or a lead wearing an item rather than an outfit (`typeex`). Fall
+	// back to the old behaviour, which at least lands on something unclaimed.
+	const used = new Set(monsters.map(m => m.look.type ?? 0));
+	const usable = outfits.filter(o => o.id > 0);
+	const free = usable.filter(o => !used.has(o.id));
+	// Prefer a colourable one among the free: the four colour fields are the only
+	// thing distinguishing two monsters that share a sprite, so an outfit that
+	// can use them is worth more as a default than one that cannot.
+	const pool = free.length ? free : usable;
+	const tinted = pool.filter(o => o.layers > 1);
+	return dress(pick(rng, tinted.length ? tinted : pool)?.id ?? 0, null);
+}
+
+/** `lookHead` and friends are a byte in the protocol; 0–132 is what the client
+ *  palette holds and anything above it renders as the last entry. */
+export const MAX_OUTFIT_COLOUR = 132;
+
+// ---------- Resistances ----------
+
+/**
+ * One damage type's stance, on the only scale that means the same thing on
+ * every engine: the percent of damage resisted. 100 is immunity, negative is a
+ * weakness, 0 is normal.
+ *
+ * The two spellings are the problem this collapses. Ironcore, TVP and
+ * Nostalrius say `<immunity fire="1"/>`; Canary and CrystalServer say
+ * `firePercent = 100` inside `elements` and carry no damage entry under
+ * `immunities` at all — 1 of Canary's 1,656 monsters does. TVP and Nostalrius
+ * have no `<elements>` block anywhere. So a rule written against either map
+ * alone is a rule that does nothing on two of the six corpora; written against
+ * this number, it does the same thing on all of them.
+ */
+export interface Resistance {
+	type: DamageType;
+	percent: number;
+}
+
+/** What one monster resists, read through whichever spelling it used. */
+function resistanceOf(doc: MonsterDoc, type: DamageType): number {
+	return isImmune(doc, type) ? 100 : elementPercent(doc, type);
+}
+
+/**
+ * The lower median across the named monsters, per damage type.
+ *
+ * The median of a column of 0s and 100s *is* the majority vote, so "two of
+ * three are immune to fire, so it is immune to fire" survives intact — and it
+ * keeps meaning that at ten picks, where a fixed threshold of two does not. A
+ * constant threshold is a minority rule the moment N exceeds four: measured
+ * over same-race, same-band families, 2-of-10 asserts 1.58 damage immunities on
+ * Ironcore and 3.18 on BlackTek where the held-out truth is 0.66 and 1.38, and
+ * manufactures at least one wrong immunity in 66–82% of runs. The same operator
+ * also answers the question a vote cannot: two picks at -10% energy and one at
+ * +20% is -10%, not a tie.
+ *
+ * Even counts take the *lower* middle, so a two-monster disagreement asserts
+ * nothing. Half the picks agreeing is not agreement.
+ */
+export function inferResistances(donors: MonsterDoc[], engineKey: string): Resistance[] {
+	if (donors.length === 0) return [];
+	return damageTypes(engineKey).map(row => {
+		const values = donors.map(d => resistanceOf(d, row.key as DamageType)).sort((a, b) => a - b);
+		return { type: row.key as DamageType, percent: values[Math.ceil(values.length / 2) - 1] };
+	});
+}
+
+/** The spelling this family uses for a type, so the write reads like the files
+ *  it was drawn from. `poisonPercent` corpora stay `poisonPercent`. */
+function elementKeyFor(row: DamageTypeRow, donors: MonsterDoc[]): string {
+	return row.elementKeys.find(k => donors.some(d => k in d.elements)) ?? row.elementKeys[0];
+}
+
+/**
+ * The inferred stances written back as immunities and elements.
+ *
+ * Which map a type lands in follows the donors rather than the engine profile:
+ * if the family expresses immunity as `<immunity fire="1"/>` that is what gets
+ * written, and if it expresses it as `firePercent = 100` that is. The wizard
+ * never has to know which engine it is on.
+ *
+ * The five condition immunities — paralyze, drunk, outfit, invisible, bleed —
+ * are taken from the lead donor whole and never voted. They are a corpus-wide
+ * preset rather than family character (`drunk` agrees across 94.8% of Ironcore
+ * families, `invisible` 58.5%), so voting on them spends the inference on a
+ * constant. Nor are they merged with the template's: paralyze+drunk+outfit+
+ * invisible+bleed all true appears in 1.6% of Ironcore files and 0% of every
+ * other corpus, so a template-first merge would assert a combination the
+ * servers do not write.
+ */
+export function applyResistances(
+	resistances: Resistance[],
+	donors: MonsterDoc[],
+	lead: MonsterDoc | null,
+	engineKey: string
+): { immunities: Record<string, boolean>; elements: Record<string, number> } {
+	const rows = damageTypes(engineKey);
+	const immunities: Record<string, boolean> = {};
+	const elements: Record<string, number> = {};
+
+	if (lead) {
+		for (const [k, v] of Object.entries(lead.immunities)) {
+			if (CONDITION_IMMUNITY_KEYS.includes(k)) immunities[k] = v;
+		}
+	}
+
+	for (const r of resistances) {
+		const row = rows.find(x => x.key === r.type);
+		if (!row) continue;
+		if (r.percent >= 100) {
+			// Immune. Whichever way the family says so — and only one way, because
+			// declaring both is `element.same-as-immunity`, a warning no file in any
+			// of the six fixture corpora earns.
+			const spelledAsImmunity = donors.some(d => row.immunityKeys.some(k => k in d.immunities));
+			if (spelledAsImmunity) immunities[row.immunityKeys[0]] = true;
+			else elements[elementKeyFor(row, donors)] = 100;
+		} else if (r.percent !== 0) {
+			elements[elementKeyFor(row, donors)] = r.percent;
+		}
+		// 0 writes nothing. Authors omit the key rather than zero-filling it, and a
+		// zero element is a line that says nothing and still has to be read.
+	}
+	return { immunities, elements };
+}
+
+/** §10 — the five that are a preset rather than a statement. Mirrors
+ *  `COMMON_IMMUNITY_PRESET` in catalog.ts; kept here so the sampler does not
+ *  depend on the UI's copy of it. */
+const CONDITION_IMMUNITY_KEYS = ['paralyze', 'drunk', 'outfit', 'invisible', 'bleed'];
 
 // ---------- Spells ----------
 
@@ -262,6 +450,28 @@ export function pickMelee(donors: MonsterDoc[], health: number): SampledSpell | 
 		for (const block of donor.attacks) {
 			if (isMelee(block)) return { block: rescale(block, ratio), from: donor.name };
 		}
+	}
+	return null;
+}
+
+/**
+ * Nostalrius keeps the monster's melee on `<attacks>` itself — there is no
+ * `melee` spell in its loader, so `pickMelee` finds nothing in any of its 160
+ * files and the wizard's melee card is permanently disabled there.
+ *
+ * Without this every Nostalrius monster the wizard makes ships at the
+ * template's attack 20 / skill 20, whatever band it was drawn from — the corpus
+ * medians are 22/35 overall and 74/110 above 1500 experience. Taken off a donor
+ * and rescaled, like every other melee number here.
+ */
+export function pickAttacksStats(donors: MonsterDoc[], health: number): { stats: AttacksStats; from: string } | null {
+	for (const donor of donors) {
+		if (!donor.attacksStats) continue;
+		const ratio = donor.health.max > 0 ? health / donor.health.max : 1;
+		return {
+			stats: { ...donor.attacksStats, attack: Math.max(1, Math.round(donor.attacksStats.attack * ratio)) },
+			from: donor.name
+		};
 	}
 	return null;
 }
@@ -308,14 +518,26 @@ export function sampleLoot(
 	donors: MonsterDoc[],
 	droppedIds: number[],
 	items: Map<number, ItemInfo>,
-	count: number
+	count: number,
+	/** Donor file → each top-level loot entry's server id, from
+	 *  `resolveLootIds`. Roughly half of every corpus writes its loot by name
+	 *  (46% of Ironcore entries, 62% of Canary's), and a draw that can only read
+	 *  `id=` is drawing from half the table. Absent, the behaviour is the old
+	 *  one: name-only entries are skipped. */
+	resolved?: Map<string, (number | null)[]>
 ): SampledLoot[] {
 	const fromDonors: SampledLoot[] = [];
 	for (const donor of donors) {
-		for (const entry of donor.loot) {
-			if (entry.id === null) continue;
-			fromDonors.push({ entry: sanitise(entry, items), from: donor.name });
-		}
+		const ids = resolved?.get(donor.file);
+		donor.loot.forEach((entry, i) => {
+			const id = entry.id ?? ids?.[i] ?? null;
+			if (id === null) return;
+			// Carried as an id with the name kept as the trailing comment, which is
+			// how the editor's own tray writes a picked item — and what makes the
+			// row readable once the name is no longer the identifier.
+			const named = entry.id === null ? { ...entry, id, comment: entry.comment ?? entry.name } : entry;
+			fromDonors.push({ entry: sanitise(named, items), from: donor.name });
+		});
 	}
 	const picked = pickSome(rng, dedupe(fromDonors), count);
 	if (picked.length >= count) return picked;
@@ -346,6 +568,20 @@ export function sampleLoot(
 	return picked;
 }
 
+/**
+ * How many drops to propose: as many as the monsters you named actually drop.
+ *
+ * A constant is always wrong at one end of the corpus — the bands run from a
+ * couple of entries at the bottom to twenty-odd at the top, and five is only
+ * ever a guess at which end this monster is. The donors are the answer to that
+ * question and the wizard already holds them.
+ */
+export function drawCountFor(donors: MonsterDoc[], max: number): number {
+	const lengths = donors.map(d => d.loot.length).filter(n => n > 0);
+	if (lengths.length === 0) return Math.min(5, max);
+	return Math.max(1, Math.min(max, median(lengths)));
+}
+
 function dedupe(entries: SampledLoot[]): SampledLoot[] {
 	const seen = new Set<number>();
 	return entries.filter(s => {
@@ -368,6 +604,153 @@ function sanitise(entry: LootEntry, items: Map<number, ItemInfo>): LootEntry {
 	};
 }
 
+// ---------- Voices ----------
+
+export interface SampledVoice {
+	line: VoiceLine;
+	/** The monsters that say it. Length is the whole ranking signal. */
+	from: string[];
+}
+
+/**
+ * Every line the named monsters say, ranked by how many of them say it.
+ *
+ * The tempting rule — "a sentence appearing twice fills a slot" — is a gate,
+ * and measured against the corpora it opens 6–43% of the time: most families
+ * share no line at all, so the step would usually be empty. Ranked and offered
+ * whole it has something to show 78–92% of the time, and repetition still
+ * decides what arrives ticked. That is the same bargain the drop step already
+ * makes, and for the same reason: a proposal argued against is one the user is
+ * still choosing about.
+ *
+ * Lines naming their own speaker are dropped outright. "Annihilon's might will
+ * crush you all!" is not a line about your monster, and inheriting it is the
+ * single most obvious way a generated voice reads as plagiarism.
+ */
+export function sampleVoices(donors: MonsterDoc[]): SampledVoice[] {
+	const byText = new Map<string, SampledVoice>();
+	for (const donor of donors) {
+		const own = nameTokens(donor.name);
+		for (const line of donor.voices.lines) {
+			const text = line.sentence.trim();
+			if (!text) continue;
+			if (own.some(tok => text.toLowerCase().includes(tok))) continue;
+			const key = text.toLowerCase();
+			const found = byText.get(key);
+			if (found) {
+				if (!found.from.includes(donor.name)) found.from.push(donor.name);
+			} else {
+				byText.set(key, { line: { ...line, sentence: text }, from: [donor.name] });
+			}
+		}
+	}
+	// Insertion order is donor order, so ties read as "the first monster you
+	// named said this" rather than as alphabetical noise.
+	return [...byText.values()].sort((a, b) => b.from.length - a.from.length);
+}
+
+/** Words worth treating as a name. Short ones ("of", "the", "sea") match half
+ *  the language and would eat lines that have nothing to do with the speaker. */
+function nameTokens(name: string): string[] {
+	return name
+		.toLowerCase()
+		.split(/[^a-z]+/)
+		.filter(w => w.length >= 4);
+}
+
+/**
+ * The cadence the named monsters actually talk at, as the commonest pair among
+ * those that talk. The engine profile decides whether either number reaches the
+ * file at all — TVP and Nostalrius read neither, and the writer drops them
+ * silently — so the wizard hides the controls there rather than collecting an
+ * answer it knows it will throw away.
+ */
+export function voiceCadence(donors: MonsterDoc[]): { interval: number; chance: number } {
+	const talking = donors.filter(d => d.voices.lines.length > 0 && d.voices.interval > 0);
+	if (talking.length === 0) return { interval: 5000, chance: 10 };
+	return { interval: mode(talking.map(d => d.voices.interval)), chance: mode(talking.map(d => d.voices.chance)) };
+}
+
+function mode(values: number[]): number {
+	const counts = new Map<number, number>();
+	for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+	let best = values[0];
+	let seen = 0;
+	for (const [v, n] of counts) {
+		if (n > seen) {
+			best = v;
+			seen = n;
+		}
+	}
+	return best;
+}
+
+// ---------- Summons ----------
+
+export interface SampledSummon {
+	entry: SummonEntry;
+	/** The donor that summons it, or null when it came off the corpus pool. */
+	from: string | null;
+	/** How many monsters in the corpus summon it. */
+	corpusCount: number;
+}
+
+/**
+ * What this monster might call for help, donors first and the corpus behind
+ * them.
+ *
+ * Never a name the corpus does not already summon. `summon.unknown` is a
+ * *silent* lint — the loader drops a summon naming a monster it cannot find
+ * without a word — and it lives on the cross-file pass, which the wizard's
+ * per-document lint never runs. So a bad name here is one nothing would tell
+ * the user about, at the one moment they could still fix it for free.
+ *
+ * The corpus tail is filtered to summons whose own summoners sit near this
+ * monster's experience: a rat that summons demons is not a proposal, it is a
+ * joke the user has to notice and undo.
+ */
+export function sampleSummons(donors: MonsterDoc[], pool: SummonPoolEntry[], experience: number, limit = 12): SampledSummon[] {
+	const out: SampledSummon[] = [];
+	const seen = new Set<string>();
+	const countOf = new Map(pool.map(p => [p.name.toLowerCase(), p.count]));
+
+	for (const donor of donors) {
+		for (const entry of donor.summons.entries) {
+			const key = entry.name.toLowerCase();
+			if (seen.has(key)) continue;
+			seen.add(key);
+			out.push({ entry: { ...entry }, from: donor.name, corpusCount: countOf.get(key) ?? 1 });
+		}
+	}
+
+	// Within an order of magnitude either way. Wide enough that a thin corpus
+	// still fills the list, narrow enough that the tier reads as deliberate.
+	const near = (p: SummonPoolEntry) =>
+		experience <= 0 || (p.summonerExperience >= experience / 10 && p.summonerExperience <= experience * 10);
+	for (const p of pool) {
+		if (out.length >= limit) break;
+		const key = p.name.toLowerCase();
+		if (seen.has(key) || !near(p)) continue;
+		seen.add(key);
+		out.push({ entry: blankSummon(p.name), from: null, corpusCount: p.count });
+	}
+	return out;
+}
+
+/** A summon nobody donated, at the cadence the corpus writes most often. */
+function blankSummon(name: string): SummonEntry {
+	return { name, interval: 2000, chance: 25, delay: null, max: 2, force: false, effect: null, masterEffect: null };
+}
+
+/** What `maxSummons` should be when anything is summoned at all. Zero is the
+ *  template's value and means the monster never summons however many entries it
+ *  carries — `summons.maxsummons-zero`, a warning the wizard's own rail does not
+ *  show. Taken off the donors, or the corpus mode of 2. */
+export function maxSummonsFor(donors: MonsterDoc[]): number {
+	const known = donors.map(d => d.summons.maxSummons).filter(n => n > 0);
+	return known.length > 0 ? mode(known) : 2;
+}
+
 // ---------- Provenance ----------
 
 /** What each part of the proposal was drawn from. Shown in the wizard, because
@@ -380,3 +763,17 @@ export interface Provenance {
 }
 
 export const emptyProvenance = (): Provenance => ({ stats: null, spells: [], loot: [], look: null });
+
+/**
+ * Which monsters an answer was derived from, as a value that can be compared.
+ *
+ * The wizard's `touched` set says whether the *user* has had a hand in a field.
+ * This says whether the *neighbours* have changed under one they have. Between
+ * them they cover the case neither can: an answer the user edited at a later
+ * step, whose donors were then changed at an earlier one. Redrawing eats their
+ * edit; keeping it silently leaves a value the picks no longer justify. So the
+ * wizard compares signatures and asks.
+ */
+export function donorSignature(donors: MonsterDoc[]): string {
+	return donors.map(d => d.file).sort().join('|');
+}

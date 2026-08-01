@@ -498,6 +498,83 @@ const pt: Record<string, string> = {
 	'unused outfit {{id}}': 'outfit {{id}} não usado',
 	'No lint findings': 'Nenhum apontamento',
 
+	// The lead donor, the inference and the two steps that came out of them.
+	'Nothing named, so nothing is drawn from a family — the wizard falls back to the whole {{kind}} pool.':
+		'Nada indicado, então nada é tirado de uma família — o assistente volta para todo o grupo do tipo “{{kind}}”.',
+	'The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}._one':
+		'Tudo vem de {{lead}}.',
+	'The band, the resistances, the melee and the drops come off all {{count}}; the outfit, corpse and race come off {{lead}}._other':
+		'A faixa, as resistências, o corpo a corpo e os drops vêm dos {{count}}; o outfit, o corpo e a raça vêm de {{lead}}.',
+	'Most like this one': 'Mais parecido com este',
+	'Make this the one it is most like': 'Tornar este o mais parecido',
+	'The monsters you named have changed since you edited {{what}}.':
+		'Os monstros que você indicou mudaram desde que você editou {{what}}.',
+	'Use theirs': 'Usar o deles',
+	'Keep mine': 'Manter o meu',
+	'the outfit': 'o outfit',
+	'the corpse': 'o corpo',
+	'the melee': 'o corpo a corpo',
+	'the resistances': 'as resistências',
+	'the voices': 'as falas',
+	'the summons': 'as invocações',
+
+	'Draw another colouring': 'Sortear outras cores',
+	'{{name}}’s, recoloured': 'de {{name}}, recolorido',
+	'{{name}}’s': 'de {{name}}',
+	'drawn, recoloured': 'sorteado, recolorido',
+	'The outfit, the corpse and the race all come off {{lead}}, because a body from one monster over another’s corpse is a pair this corpus never writes.':
+		'O outfit, o corpo e a raça vêm todos de {{lead}}, porque o corpo de um monstro sobre o cadáver de outro é um par que este corpus nunca escreve.',
+	'Nothing named to copy from, so the outfit is one no monster in this corpus wears.':
+		'Nada indicado para copiar, então o outfit é um que nenhum monstro deste corpus usa.',
+
+	'No attacks yet.': 'Nenhum ataque ainda.',
+	'Remove this attack': 'Remover este ataque',
+	'Add an attack': 'Adicionar um ataque',
+	'Calls for help': 'Chama ajuda',
+	'Nothing in this corpus summons anything.': 'Nada neste corpus invoca nada.',
+	'Summons other monsters': 'Invoca outros monstros',
+	'{{count}} monster summons it_one': '{{count}} monstro o invoca',
+	'{{count}} monster summons it_other': '{{count}} monstros o invocam',
+
+	'How does it defend itself?': 'Como ele se defende?',
+	'Name a monster or two on the second step and this fills itself in.':
+		'Indique um monstro ou dois na segunda etapa e isto se preenche sozinho.',
+	'100 resists everything — an immunity. Negative takes extra damage.':
+		'100 resiste a tudo — é imunidade. Negativo recebe dano extra.',
+	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._one':
+		'O que {{count}} monstro indicado resiste. 100 é imunidade; negativo recebe extra.',
+	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._other':
+		'O meio do que os {{count}} monstros indicados resistem. 100 é imunidade; negativo recebe extra.',
+	'Read them again': 'Ler de novo',
+	'Healing, haste, invisibility — what it does to stay alive. None is a valid answer.':
+		'Cura, haste, invisibilidade — o que ele faz para continuar vivo. Nenhuma é uma resposta válida.',
+	'No defenses yet.': 'Nenhuma defesa ainda.',
+	'Remove this defense': 'Remover esta defesa',
+	'Add a defense': 'Adicionar uma defesa',
+
+	'Does it have anything to say?': 'Ele tem algo a dizer?',
+	'None of the monsters you named says anything.': 'Nenhum dos monstros que você indicou diz nada.',
+	'It speaks': 'Ele fala',
+	yelled: 'gritado',
+	'{{count}} of them say it_one': '{{count}} deles diz isso',
+	'{{count}} of them say it_other': '{{count}} deles dizem isso',
+	'Add lines in the editor if it should talk.': 'Adicione falas no editor se ele deve falar.',
+	'Lines two of them share arrive ticked. Anything naming its own speaker is left out.':
+		'Falas que dois deles compartilham já vêm marcadas. Qualquer uma que cite o próprio falante fica de fora.',
+	'This engine reads no interval or chance on voices, so there is nothing to set.':
+		'Este engine não lê intervalo nem chance nas falas, então não há o que ajustar.',
+
+	'Drops like nothing in particular.': 'Não dropa como nada em particular.',
+	'Drops like {{names}}': 'Dropa como {{names}}',
+	'Drops like something else…': 'Dropa como outra coisa…',
+	'Same as before': 'Igual a antes',
+	'How many items a draw proposes — as many as the monsters above drop':
+		'Quantos itens um sorteio propõe — tantos quantos os monstros acima dropam',
+
+	'look, corpse, race': 'aparência, corpo, raça',
+	'resistances, melee': 'resistências, corpo a corpo',
+	drops: 'drops',
+
 	Back: 'Voltar',
 	'Create blank': 'Criar vazio',
 	Next: 'Avançar',
