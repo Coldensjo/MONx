@@ -192,22 +192,45 @@ to the nearest thick band — the same retreat `bandForHealth` already makes.
 
 ### 5 — How does it fight?
 
-Three to five sampled spell cards, each ticked, each showing where it came from
-("from *ice witch*"). Untick to drop, ⟳ to redraw one, **+** to add from the
-spell catalogue.
+Two questions, in the order they are decided.
 
+**Melee is a yes or no**, on its own line at the top, because it is the one
+attack a monster either has or does not — the spells are a handful it might.
+With it on, `skill` and `attack` are editable and the **derived max damage**
+sits beside them, read-only, because that is what the loader computes from the
+two (`ceil(skill × attack × 0.05 + attack × 0.5)`): a damage field here would be
+a number the server throws away. The block itself is still a donor's — a
+composed melee would be the one place the generator invented a figure that
+means something, and a `skill`/`attack` pair guessed from the health is a pair
+no monster on this server has. With no melee anywhere in the donor pool the line
+says so rather than offering a toggle that would have nothing to write.
+
+**Then the spell cards**, three to five, each ticked and each showing where it
+came from ("from *ice witch*"). Untick to drop, ⟳ to redraw the set. A ticked
+card opens on what is worth changing per monster: **min and max damage**, and
+the **effect** and **shoot effect**, picked through the editor's own
+`EffectSelect` — the sprite grid, so the choice is the swirly red one and not
+`CONST_ME_MORTAREA`. A registered spell shows neither, because the loader
+ignores effects written on one (§8.1) and a control with no consequence is worse
+than no control.
+
+Everything else about a block is donated untouched, and that is the point.
 Blocks are copied **whole** off donors and rescaled only in `min`, `max` and —
-for melee — `skill`/`attack`, by the ratio of the new monster's health to the
-donor's. Whole blocks, because a block is internally consistent in ways the
-generator would otherwise have to re-derive per engine: its effects are spelled
-the way the profile spells them, `ring` appears only where `geometryRing` allows,
-its condition uses `tick`/`start` or `cycle` or `count` as that engine requires,
-and its `interval` is absent on Nostalrius because Nostalrius has none. A block
+for melee — `attack`, by the ratio of the new monster's health to the donor's.
+Whole blocks, because a block is internally consistent in ways the generator
+would otherwise have to re-derive per engine: its effects are spelled the way
+the profile spells them, `ring` appears only where `geometryRing` allows, its
+condition uses `tick`/`start` or `cycle` or `count` as that engine requires, and
+its `interval` is absent on Nostalrius because Nostalrius has none. A block
 lifted off a monster the server already loads is a block the server will load.
-Rescaling only the damage is the narrowest edit that makes it the new monster's.
+The four fields the step exposes are the four that are about *this* monster
+rather than about the engine.
 
-Under Nostalrius the melee card is the `<attacks>` container instead, because
-that engine has no melee spell — the same branch `template()` already takes.
+Under Nostalrius melee is the `<attacks>` container itself rather than a spell,
+which is why the melee test is the block's `melee` sub-object and not its name.
+That engine writes no sub-object at all, so the first edit to skill or attack
+materialises one — both attributes, since the loader only derives damage when
+both are written.
 
 ### 6 — What does it drop?
 

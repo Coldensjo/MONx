@@ -106,7 +106,7 @@ import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
-import { ThingAnimProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { PreviewProvider, ThingAnimProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 
 /** The speed the Outfits grid animates at, having no creature to read one from.
  *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
@@ -2653,6 +2653,10 @@ export default function Workspace({
 			)}
 
 			{wizardOpen && (
+				/* The wizard's spell step picks effects by sprite, and the grid that
+				   draws them reads its client through this context — the editor's own
+				   provider is inside MonsterEditor, which is not mounted here. */
+				<PreviewProvider value={previewUrl}>
 				<CreateWizard
 					monsters={monsters}
 					groups={groups}
@@ -2667,6 +2671,7 @@ export default function Workspace({
 					onClose={() => setWizardOpen(false)}
 					showToast={showToast}
 				/>
+				</PreviewProvider>
 			)}
 
 			{conflicts.length > 0 && (

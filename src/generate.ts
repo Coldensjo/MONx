@@ -230,7 +230,13 @@ export function sampleSpells(rng: Rng, donors: MonsterDoc[], health: number, cou
 	const pool: SampledSpell[] = [];
 	for (const donor of donors) {
 		const ratio = donor.health.max > 0 ? health / donor.health.max : 1;
-		for (const block of donor.attacks) pool.push({ block: rescale(block, ratio), from: donor.name });
+		// Melee is drawn separately and asked about separately — it is the one
+		// attack every monster either has or does not, rather than one of a
+		// handful it might.
+		for (const block of donor.attacks) {
+			if (isMelee(block)) continue;
+			pool.push({ block: rescale(block, ratio), from: donor.name });
+		}
 	}
 	// Two donors that both carry `melee` should contribute one melee, not two —
 	// the loader would read both and the second is dead weight.
@@ -242,6 +248,33 @@ export function sampleSpells(rng: Rng, donors: MonsterDoc[], health: number, cou
 		return true;
 	});
 	return pickSome(rng, unique, count);
+}
+
+/** A melee block, whatever the engine calls it: Nostalrius carries the same
+ *  numbers on `<attacks>` itself, so the `melee` sub-object is the test and the
+ *  name is only the common case. */
+export function isMelee(block: SpellBlock): boolean {
+	return block.melee !== null || block.name === 'melee';
+}
+
+/**
+ * The melee attack, drawn off the donors like everything else.
+ *
+ * Composed melee would be the one place the generator had to invent a number
+ * that means something: `skill` and `attack` multiply into the damage the
+ * loader derives, and a pair guessed from the health is a pair no monster on
+ * this server has. A donor's is a pair the server already fights with, and
+ * rescaling `attack` by the health ratio moves it without inventing it.
+ */
+export function sampleMelee(rng: Rng, donors: MonsterDoc[], health: number): SampledSpell | null {
+	const pool: SampledSpell[] = [];
+	for (const donor of donors) {
+		const ratio = donor.health.max > 0 ? health / donor.health.max : 1;
+		for (const block of donor.attacks) {
+			if (isMelee(block)) pool.push({ block: rescale(block, ratio), from: donor.name });
+		}
+	}
+	return pick(rng, pool);
 }
 
 /** Damage scaled by the health ratio; everything else donated as written. */
