@@ -135,12 +135,19 @@ beneath it, because the wizard proposes and the eye decides — an id is not
 something anyone should have to picture. Addons and mount appear only where
 `lookAddons` / `lookMount` are true for the engine.
 
-Beside it: race, corpse, and the immunity/element block. The corpse is *copied
-from a donor*, never drawn — a corpse id has to exist in the item database and
-actually be a corpse, and a donor's is known to be both. Immunities and elements
-are copied from that same donor rather than composed: the correlation between
-`undead` and death immunity is a fact about the corpus, and copying it gets it
-right without asserting it.
+Beside it, on the same footing and in the same grid, **the corpse** — because
+both answers to "what does it look like" are pictures, and a number field beside
+an outfit you can see asks the user to know that 5972 is a dead orc. It draws on
+`search`'s corpse filter, the one the editor's own `ItemPicker` uses, so every id
+in the grid is one the database resolves; where a database carries no
+`corpseType` at all the filter would empty the grid, so the first empty result
+turns it off rather than showing nothing. The proposed corpse is still *copied
+from a donor*, never drawn — a corpse id has to exist and actually be a corpse,
+and a donor's is known to be both.
+
+Race sits with them, and the immunity/element block is copied from that same
+donor rather than composed: the correlation between `undead` and death immunity
+is a fact about the corpus, and copying it gets it right without asserting it.
 
 ### 3 — What is it called?
 

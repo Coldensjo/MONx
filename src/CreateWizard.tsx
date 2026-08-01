@@ -38,6 +38,7 @@ import {
 	type MonsterSummary
 } from './monster';
 import type { EngineInfo } from './engine';
+import { useItemInfo } from './fields/ItemPicker';
 import { makeRng } from './lootsim';
 import { generateName, type NameStyle } from './namegen';
 import {
@@ -451,6 +452,15 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 							<Step question={t('What does it look like?')}>
 								<div className="mx-wiz-look">
 									<img className="mx-wiz-sprite" src={lookUrl({ ...blankLook, ...look, mode: 'type' }, { cell: 64 })} alt="" />
+									<img
+										className="mx-wiz-sprite"
+										src={itemUrl(corpse, 64)}
+										alt=""
+										// No corpse, or one the database cannot draw: an empty tile
+										// rather than the browser's broken-image glyph.
+										onError={e => (e.currentTarget.style.visibility = 'hidden')}
+										onLoad={e => (e.currentTarget.style.visibility = 'visible')}
+									/>
 									<div className="mx-wiz-fields">
 										<label className="mx-wiz-field">
 											<span>{t('Outfit')}</span>
@@ -498,16 +508,29 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 										<Dices size={14} />
 									</button>
 								</div>
-								{outfitIds.length > 0 && (
-									<OutfitPicker
-										ids={outfitIds}
-										look={look}
+								{/* Two grids, side by side, because both answers are pictures. The
+								    corpse used to be a number field beside an outfit you could see,
+								    which asked the user to know that 5972 is a dead orc. */}
+								<div className="mx-wiz-pickers">
+									{outfitIds.length > 0 && (
+										<OutfitPicker
+											ids={outfitIds}
+											look={look}
+											onPick={id => {
+												mark('look');
+												setLook({ ...look, type: id });
+											}}
+										/>
+									)}
+									<CorpsePicker
+										index={itemIndex}
+										value={corpse}
 										onPick={id => {
-											mark('look');
-											setLook({ ...look, type: id });
+											mark('corpse');
+											setCorpse(id);
 										}}
 									/>
-								)}
+								</div>
 								<div className="ss-modal-desc">
 									{outfitIds.length === 0
 										? t('No client is open, so there is nothing to draw — the outfit is an id, and the server will resolve it.')
@@ -786,9 +809,76 @@ export default function CreateWizard({ monsters, groups, engine, outfitIds, item
 	);
 }
 
-const OUTFIT_CELL = 40;
-const OUTFIT_COLS = 10;
-const OUTFIT_VIEW = 176;
+const CELL = 40;
+const GRID_COLS = 6;
+const GRID_VIEW = 176;
+
+/** One cell of a sprite grid: what to draw, what to call it, and what picking
+ *  it means. */
+interface Cell {
+	id: number;
+	title: string;
+	src: string;
+}
+
+/**
+ * A windowed grid of sprite cells, shared by the outfit and corpse pickers.
+ *
+ * Windowed on whole rows because every cell is its own protocol request: a
+ * client ships thousands of outfits and a server's database thousands of items,
+ * and asking for all of them to fill a 176-pixel box would be thousands of PNG
+ * renders for the twenty-four that are on screen.
+ */
+function SpriteGrid({ cells, active, onPick }: { cells: Cell[]; active: number; onPick: (id: number) => void }) {
+	const [scrollTop, setScrollTop] = useState(0);
+	const scrollRef = useRef<HTMLDivElement>(null);
+
+	const rows = Math.ceil(cells.length / GRID_COLS);
+	const first = Math.max(0, Math.floor(scrollTop / CELL) - 2);
+	const last = Math.min(rows - 1, Math.ceil((scrollTop + GRID_VIEW) / CELL) + 2);
+
+	// Bring the current cell into view — on arrival at the step, and again
+	// whenever ⟳ draws a different one, or the grid shows a screenful with the
+	// chosen one nowhere among them.
+	useEffect(() => {
+		const el = scrollRef.current;
+		if (!el) return;
+		const idx = cells.findIndex(c => c.id === active);
+		if (idx < 0) return;
+		const top = Math.floor(idx / GRID_COLS) * CELL;
+		if (top < el.scrollTop || top + CELL > el.scrollTop + el.clientHeight) {
+			el.scrollTop = Math.max(0, top - (el.clientHeight - CELL) / 2);
+		}
+	}, [cells, active]);
+
+	const drawn: React.ReactNode[] = [];
+	for (let row = first; row <= last; row++) {
+		for (let col = 0; col < GRID_COLS; col++) {
+			const cell = cells[row * GRID_COLS + col];
+			if (!cell) break;
+			drawn.push(
+				<button
+					key={cell.id}
+					type="button"
+					className={cell.id === active ? 'mx-wiz-outfit mx-wiz-outfit-on' : 'mx-wiz-outfit'}
+					style={{ top: row * CELL, left: col * CELL }}
+					title={cell.title}
+					onClick={() => onPick(cell.id)}
+				>
+					{/* An id the client or the database cannot draw reads as an empty
+					    tile rather than as the browser's broken-image glyph. */}
+					<img src={cell.src} alt="" onError={e => (e.currentTarget.style.visibility = 'hidden')} />
+				</button>
+			);
+		}
+	}
+
+	return (
+		<div className="mx-wiz-outfit-grid" ref={scrollRef} style={{ height: GRID_VIEW }} onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
+			<div style={{ height: rows * CELL, width: GRID_COLS * CELL, position: 'relative' }}>{drawn}</div>
+		</div>
+	);
+}
 
 /**
  * Every outfit the client has, drawn in the colours the wizard drew — the
@@ -796,9 +886,6 @@ const OUTFIT_VIEW = 176;
  * proposal is either accepted or overruled by eye. Typing an id still works;
  * the grid is for the far commoner case of not knowing which number is the
  * thing you can picture.
- *
- * Windowed on whole rows: a client ships thousands of outfits and each cell is
- * its own `/look.png` request, so only what is on screen is asked for.
  */
 function OutfitPicker({
 	ids,
@@ -811,68 +898,98 @@ function OutfitPicker({
 }) {
 	const { t } = useTranslation();
 	const [search, setSearch] = useState('');
-	const [scrollTop, setScrollTop] = useState(0);
-	const scrollRef = useRef<HTMLDivElement>(null);
 
-	const shown = useMemo(() => {
+	const cells = useMemo(() => {
 		const needle = search.trim();
-		return needle ? ids.filter(id => String(id).includes(needle)) : ids;
-	}, [ids, search]);
-
-	const rows = Math.ceil(shown.length / OUTFIT_COLS);
-	const first = Math.max(0, Math.floor(scrollTop / OUTFIT_CELL) - 2);
-	const last = Math.min(rows - 1, Math.ceil((scrollTop + OUTFIT_VIEW) / OUTFIT_CELL) + 2);
-
-	// Bring the current outfit into view — on arrival at the step, and again
-	// whenever ⟳ draws a different one, or the grid shows a screenful of
-	// outfits with the chosen one nowhere among them.
-	useEffect(() => {
-		const el = scrollRef.current;
-		if (!el) return;
-		const idx = shown.indexOf(look.type);
-		if (idx < 0) return;
-		const top = Math.floor(idx / OUTFIT_COLS) * OUTFIT_CELL;
-		if (top < el.scrollTop || top + OUTFIT_CELL > el.scrollTop + el.clientHeight) {
-			el.scrollTop = Math.max(0, top - (el.clientHeight - OUTFIT_CELL) / 2);
-		}
-	}, [shown, look.type]);
-
-	const cells: React.ReactNode[] = [];
-	for (let row = first; row <= last; row++) {
-		for (let col = 0; col < OUTFIT_COLS; col++) {
-			const id = shown[row * OUTFIT_COLS + col];
-			if (id === undefined) break;
-			cells.push(
-				<button
-					key={id}
-					type="button"
-					className={id === look.type ? 'mx-wiz-outfit mx-wiz-outfit-on' : 'mx-wiz-outfit'}
-					style={{ top: row * OUTFIT_CELL, left: col * OUTFIT_CELL }}
-					title={String(id)}
-					onClick={() => onPick(id)}
-				>
-					<img src={lookUrl({ ...blankLook, ...look, mode: 'type', type: id }, { cell: 32 })} alt="" />
-				</button>
-			);
-		}
-	}
+		const shown = needle ? ids.filter(id => String(id).includes(needle)) : ids;
+		return shown.map(id => ({
+			id,
+			title: String(id),
+			src: lookUrl({ ...blankLook, ...look, mode: 'type', type: id }, { cell: 32 })
+		}));
+	}, [ids, search, look]);
 
 	return (
 		<div className="mx-wiz-outfits">
+			<div className="mx-wiz-pick-head">{t('Outfit')}</div>
 			<input
 				className="mx-wiz-input mx-wiz-outfit-search"
 				value={search}
 				placeholder={t('Filter by outfit id')}
 				onChange={e => setSearch(e.target.value)}
 			/>
-			<div
-				className="mx-wiz-outfit-grid"
-				ref={scrollRef}
-				style={{ height: OUTFIT_VIEW }}
-				onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
-			>
-				<div style={{ height: rows * OUTFIT_CELL, width: OUTFIT_COLS * OUTFIT_CELL, position: 'relative' }}>{cells}</div>
+			<SpriteGrid cells={cells} active={look.type} onPick={onPick} />
+		</div>
+	);
+}
+
+/** How many corpses one search fills the grid with. Above what anyone scrolls
+ *  through, and the search box is how you get past it. */
+const CORPSE_LIMIT = 300;
+
+/**
+ * The same grid, over the item database's corpses.
+ *
+ * The corpse was the one answer on this step that was still a number field
+ * beside an outfit you could see, which asked the user to know that 5972 is a
+ * dead orc. It is an item like any other, so it is picked like one: `search`
+ * already takes the corpse filter the editor's own `ItemPicker` uses, and every
+ * id it returns is one the database resolves — which is what keeps the rule
+ * that MONx never invents an item id.
+ *
+ * The filter asks for `corpseType`, an attribute only some item databases carry.
+ * Where none do it would filter every item away, so an empty result on the first
+ * search turns the filter off rather than showing an empty grid: an unfiltered
+ * database is a worse picker, but a blank one is a broken picker.
+ */
+function CorpsePicker({ index, value, onPick }: { index: ItemIndex; value: number; onPick: (id: number) => void }) {
+	const { t } = useTranslation();
+	const [query, setQuery] = useState('');
+	const [corpsesOnly, setCorpsesOnly] = useState(true);
+	const [rows, setRows] = useState<ItemInfo[]>([]);
+	const [searched, setSearched] = useState(false);
+	const current = useItemInfo(index, value || null, null);
+
+	useEffect(() => {
+		let live = true;
+		const timer = setTimeout(() => {
+			void index
+				.search(query, CORPSE_LIMIT, corpsesOnly)
+				.then(found => {
+					if (!live) return;
+					if (found.length === 0 && corpsesOnly && !query.trim()) {
+						setCorpsesOnly(false);
+						return;
+					}
+					setRows(found);
+					setSearched(true);
+				})
+				.catch(() => undefined);
+		}, 120);
+		return () => {
+			live = false;
+			clearTimeout(timer);
+		};
+	}, [index, query, corpsesOnly]);
+
+	const cells = useMemo(
+		() => rows.map(item => ({ id: item.serverId, title: `${item.name} · ${item.serverId}`, src: itemUrl(item.serverId, 32) })),
+		[rows]
+	);
+
+	return (
+		<div className="mx-wiz-outfits">
+			<div className="mx-wiz-pick-head">
+				{t('Corpse')}
+				{current && <span className="mx-wiz-pick-name">{current.name}</span>}
 			</div>
+			<input
+				className="mx-wiz-input mx-wiz-outfit-search"
+				value={query}
+				placeholder={corpsesOnly ? t('Search corpses…') : t('Search items…')}
+				onChange={e => setQuery(e.target.value)}
+			/>
+			{cells.length === 0 && searched ? <div className="mx-wiz-pick-empty">{t('No match')}</div> : <SpriteGrid cells={cells} active={value} onPick={onPick} />}
 		</div>
 	);
 }

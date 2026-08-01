@@ -1641,6 +1641,14 @@
 	flex: 0 0 auto;
 }
 
+/* The outfit and the corpse side by side: both answers to "what does it look
+   like" are pictures, and neither is worth more of the step than the other. */
+.mx-wiz-pickers {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+}
+
 .mx-wiz-outfits {
 	display: flex;
 	flex-direction: column;
@@ -1648,8 +1656,40 @@
 	margin-top: 10px;
 }
 
+.mx-wiz-pick-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+/* The chosen corpse by name, because an id is not something anyone reads. */
+.mx-wiz-pick-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 400;
+	color: var(--text-muted);
+}
+
+.mx-wiz-pick-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 176px;
+	width: 244px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
 .mx-wiz-outfit-search {
-	width: 160px;
+	width: 244px;
+	max-width: 100%;
 }
 
 .mx-wiz-outfit-grid {
