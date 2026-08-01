@@ -120,20 +120,24 @@ type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
 /** What the create wizard can ask a browser to answer, and which browser
  *  answers it. Every one of them is a picture, which is the whole reason the
  *  wizard hands them over rather than drawing a grid of its own. */
-type WizardPickKind = 'outfit' | 'corpse' | 'effect' | 'missile';
+type WizardPickKind = 'outfit' | 'corpse' | 'effect' | 'missile' | 'loot';
 
 const PICK_VIEW: Record<WizardPickKind, View> = {
 	outfit: 'outfits',
 	corpse: 'items',
 	effect: 'effects',
-	missile: 'missiles'
+	missile: 'missiles',
+	loot: 'items'
 };
 
 const PICK_PROMPT: Record<WizardPickKind, string> = {
 	outfit: 'Double-click an outfit to give it to the new monster',
 	corpse: 'Double-click an item to make it the new monster’s corpse',
 	effect: 'Double-click a magic effect to give it to the ability being designed',
-	missile: 'Double-click a projectile to give it to the ability being designed'
+	missile: 'Double-click a projectile to give it to the ability being designed',
+	// The only pick that is a collection rather than a cell, so it ends on the
+	// tray's own button rather than on a double-click.
+	loot: 'Collect the drops in the Loot tray below, then add them to the new monster'
 };
 
 /** The three nav entries backed by a dat category, and that category's own name. */
@@ -1484,32 +1488,28 @@ export default function Workspace({
 	// is what that round trip is made of: which answer is outstanding, and which
 	// view to put back when it arrives.
 	const [wizardPick, setWizardPick] = useState<{ kind: WizardPickKind; from: View } | null>(null);
-	const [wizardPicked, setWizardPicked] = useState<{ kind: WizardPickKind; id: number } | null>(null);
+	// A list rather than one id, because loot is the one answer that is a
+	// collection: the tray is filled a few items at a time and comes back whole.
+	const [wizardPicked, setWizardPicked] = useState<{ kind: WizardPickKind; ids: number[] } | null>(null);
 
 	const startWizardPick = useCallback(
 		(kind: WizardPickKind) => {
 			setWizardPick({ kind, from: view });
-			if (kind === 'corpse') {
-				setItemsInitialFilters(['corpses']);
-				setView('items');
-			} else {
-				setView(PICK_VIEW[kind]);
-			}
+			if (kind === 'corpse') setItemsInitialFilters(['corpses']);
+			else if (kind === 'loot') setItemsInitialFilters(['pickupable']);
+			setView(PICK_VIEW[kind]);
 		},
 		[view]
 	);
 
-	const finishWizardPick = useCallback(
-		(id: number) => {
-			setWizardPick(pick => {
-				if (!pick) return null;
-				setWizardPicked({ kind: pick.kind, id });
-				setView(pick.from);
-				return null;
-			});
-		},
-		[]
-	);
+	const finishWizardPick = useCallback((ids: number[]) => {
+		setWizardPick(pick => {
+			if (!pick) return null;
+			setWizardPicked({ kind: pick.kind, ids });
+			setView(pick.from);
+			return null;
+		});
+	}, []);
 
 	const cancelWizardPick = useCallback(() => {
 		setWizardPick(pick => {
@@ -2217,8 +2217,12 @@ export default function Workspace({
 									name: i.name,
 									container: i.container
 								})}
-								onContextMenu={wizardPick ? undefined : itemContextMenu}
-								onPick={i => (wizardPick?.kind === 'corpse' ? finishWizardPick(i.serverId) : addToTray([i]))}
+								// Off while a single cell is the answer — a menu offering to make
+								// this the corpse of the monster behind the wizard is a trap.
+								// A loot pick keeps it: "Add N item to Loot" on a multi-selection
+								// is how the tray is meant to be filled.
+								onContextMenu={wizardPick && wizardPick.kind !== 'loot' ? undefined : itemContextMenu}
+								onPick={i => (wizardPick?.kind === 'corpse' ? finishWizardPick([i.serverId]) : addToTray([i]))}
 								searchPlaceholder={t('Search server id or name')}
 							/>
 							<div className="ss-loot-tray">
@@ -2244,14 +2248,27 @@ export default function Workspace({
 									)}
 								</div>
 								<div className="ss-loot-tray-actions">
-									<button
-										className="ss-btn ss-btn-primary"
-										disabled={!doc || lootTray.length === 0}
-										onClick={addTrayToMonster}
-									>
-										<Plus size={14} />
-										{doc ? t('Add loot to {{monster}}', { monster: doc.name }) : t('Add loot')}
-									</button>
+									{/* The same button, aimed at whoever asked for the tray: the open
+									    monster ordinarily, the wizard while it is waiting for one. */}
+									{wizardPick?.kind === 'loot' ? (
+										<button
+											className="ss-btn ss-btn-primary"
+											disabled={lootTray.length === 0}
+											onClick={() => finishWizardPick(lootTray.map(i => i.serverId))}
+										>
+											<Plus size={14} />
+											{t('Add {{count}} item to the new monster', { count: lootTray.length })}
+										</button>
+									) : (
+										<button
+											className="ss-btn ss-btn-primary"
+											disabled={!doc || lootTray.length === 0}
+											onClick={addTrayToMonster}
+										>
+											<Plus size={14} />
+											{doc ? t('Add loot to {{monster}}', { monster: doc.name }) : t('Add loot')}
+										</button>
+									)}
 									<button
 										className="ss-btn"
 										disabled={lootTray.length === 0}
@@ -2450,7 +2467,7 @@ export default function Workspace({
 							filters={view === 'outfits' ? outfitFilters : undefined}
 							selectionMode="single"
 							view={view}
-							onPick={wizardPick && view === PICK_VIEW[wizardPick.kind] ? t => finishWizardPick(t.id) : undefined}
+							onPick={wizardPick && view === PICK_VIEW[wizardPick.kind] ? t => finishWizardPick([t.id]) : undefined}
 							draggable={view === 'outfits'}
 							dragPayload={t => (view === 'outfits' ? { kind: 'outfit', type: t.id } : null)}
 							onContextMenu={

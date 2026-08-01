@@ -1490,6 +1490,14 @@
 	width: min(1420px, 96vw);
 }
 
+/* The drop step: four columns of table, of which the item's name is the one
+   that has to be legible. At the dialog's ordinary width the name column is
+   what the three fixed ones leave over, which is not enough for "dragon scale
+   mail". */
+.mx-wiz-mid {
+	width: min(920px, 94vw);
+}
+
 /* One dot per step, filled at the current one. A progress bar would imply the
    six are the same size; they are not, and the dots only claim position. */
 .mx-wiz-steps {
@@ -1656,12 +1664,85 @@
 	gap: 8px;
 }
 
+/* The look step: two cards side by side, one per answer, each holding the thing
+   it is about at a size worth looking at. The step's whole subject is what the
+   monster looks like, and the version that answered it off two 64 px thumbnails
+   with the fields wrapping around them spent a third of the dialog on a
+   question nobody could see the answer to. */
 .mx-wiz-look {
-	display: flex;
-	gap: 12px;
-	align-items: flex-start;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px;
 }
 
+.mx-wiz-look-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+	min-width: 0;
+}
+
+/* A fixed line whether or not the card carries an action, so the two stages
+   start at the same height and the feet under them line up. */
+.mx-wiz-look-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 24px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+/* Fixed height rather than the sprite's own, so the two cards stay level
+   whatever a corpse happens to be: an outfit is two tiles tall and a gold coin
+   is one, and a card that resized around them would see-saw on every pick. */
+.mx-wiz-look-stage {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 168px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--sprite-bg);
+}
+
+.mx-wiz-look-sprite {
+	max-width: 100%;
+	max-height: 100%;
+	image-rendering: pixelated;
+}
+
+.mx-wiz-look-foot {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.mx-wiz-look-id {
+	flex: 0 0 88px;
+	height: 30px;
+}
+
+.mx-wiz-look-foot .ss-btn {
+	flex: 1 1 auto;
+	justify-content: center;
+}
+
+/* One field, so it takes a field's width rather than the dialog's. */
+.mx-wiz-look-race {
+	max-width: 220px;
+	margin-top: 14px;
+}
+
+/* The old 64 px tile, still the review rail's. */
 .mx-wiz-sprite {
 	width: 64px;
 	height: 64px;
@@ -1670,13 +1751,6 @@
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	flex: 0 0 auto;
-}
-
-/* The two hand-offs to the workspace's own browsers. */
-.mx-wiz-browse {
-	display: flex;
-	gap: 8px;
-	margin-top: 12px;
 }
 
 /* Off screen while a browser answers a question, but still mounted: the state
@@ -1692,6 +1766,7 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: var(--text-muted);
+	font-size: 11px;
 }
 
 /* The melee question: one line, because it is one yes or no — and its two
@@ -2007,27 +2082,105 @@
 	margin-top: 10px;
 }
 
-.mx-wiz-list {
+/* The drop table. Which items drop is answered in the items browser, so what is
+   left here is the half that is numbers: four columns on a shared grid, so the
+   chances read down a line instead of trailing each name at whatever width it
+   happened to be. */
+.mx-wiz-loot {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	max-height: 220px;
-	overflow-y: auto;
-	margin-bottom: 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+	overflow: hidden;
 }
 
-.mx-wiz-item {
+.mx-wiz-loot-head,
+.mx-wiz-loot-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 172px 92px 150px;
+	align-items: center;
+	gap: 10px;
+	padding: 3px 10px;
+}
+
+.mx-wiz-loot-head {
+	padding-top: 7px;
+	padding-bottom: 7px;
+	border-bottom: 1px solid var(--border);
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+/* Sized in rows rather than pixels: nine is more than the generator proposes
+   and more than anyone hand-picks in one trip, and the tenth is what the drawer
+   is for. */
+.mx-wiz-loot-rows {
+	display: flex;
+	flex-direction: column;
+	max-height: calc(9 * 38px);
+	overflow-y: auto;
+	padding: 4px 0;
+}
+
+.mx-wiz-loot-row {
+	font-size: 12px;
+}
+
+.mx-wiz-loot-row:hover {
+	background: var(--surface-2);
+}
+
+.mx-wiz-loot-cell-name {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 4px 6px;
-	border-radius: var(--radius);
-	font-size: 12px;
+	min-width: 0;
 	cursor: pointer;
 }
 
-.mx-wiz-item:hover {
-	background: var(--bg);
+.mx-wiz-loot-cell-chance,
+.mx-wiz-loot-cell-count {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--text-muted);
+}
+
+/* Reads the draft, so "1 in 250" follows the keystrokes rather than the commit.
+   Fixed width: the text swings between "always" and "1 in 100 000", and a
+   column that resized around it would jog the whole table on every digit. */
+.mx-wiz-loot-odds {
+	flex: 0 0 84px;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+.mx-wiz-loot-cell-from {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	min-width: 0;
+}
+
+.mx-wiz-loot-empty {
+	padding: 10px;
+}
+
+.mx-wiz-loot-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 10px;
+}
+
+/* Pushed to the far end: it is the table's total, not another action. */
+.mx-wiz-loot-total {
+	margin-left: auto;
 }
 
 /* Unticked rows stay listed rather than disappearing: the user is choosing

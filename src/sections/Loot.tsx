@@ -18,9 +18,9 @@ interface Props extends SectionProps {
 	onToggle: (id: SectionId) => void;
 }
 
-const MAX_CHANCE = 100000;
+export const MAX_CHANCE = 100000;
 /** §13 — above this the server drops the whole entry, so input is blocked. */
-const MAX_COUNTMAX = 100;
+export const MAX_COUNTMAX = 100;
 
 /**
  * Entries are written by id, which says nothing to anyone reading the file, so

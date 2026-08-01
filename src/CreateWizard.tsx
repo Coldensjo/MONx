@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dices, ChevronLeft, Plus } from 'lucide-react';
+import { Dices, ChevronLeft, Plus, Trash2 } from 'lucide-react';
 import {
 	balanceBands,
 	createMonster,
@@ -34,6 +34,7 @@ import {
 	type ItemIndex,
 	type ItemInfo,
 	type Lint,
+	type LootEntry,
 	type MonsterDoc,
 	type MonsterSummary,
 	type SpellBlock,
@@ -44,8 +45,10 @@ import { CompactProvider } from './fields/Field';
 import { useItemInfo } from './fields/ItemPicker';
 import { useCustomEffects } from './fields/customctx';
 import { mergeEffects } from './customeffects';
+import { NumberField } from './fields/NumberField';
 import { SpellCard } from './sections/SpellCard';
 import { blankSpell } from './sections/Spells';
+import { MAX_CHANCE, MAX_COUNTMAX, newLootEntry, oddsText } from './sections/Loot';
 import { meleeBlockMax } from './derive';
 import { makeRng } from './lootsim';
 import { generateName, type NameStyle } from './namegen';
@@ -75,8 +78,9 @@ interface Props {
 	hidden?: boolean;
 	/** Hands the question to the browser the sidebar opens. */
 	onBrowse: (kind: PickKind) => void;
-	/** The cell the user clicked over there, on its way back. */
-	picked: { kind: PickKind; id: number } | null;
+	/** What was clicked over there, on its way back — one cell for every question
+	 *  but loot, which comes back as the whole tray. */
+	picked: { kind: PickKind; ids: number[] } | null;
 	onPickUsed: () => void;
 	monsters: MonsterSummary[];
 	/** Comment groups in monsters.xml, for the registry entry. */
@@ -96,7 +100,7 @@ interface Props {
 
 /** The questions this wizard hands to the workspace's own browsers. Every one
  *  of them is a picture, which is why none of them is answered in here. */
-export type PickKind = 'outfit' | 'corpse' | 'effect' | 'missile';
+export type PickKind = 'outfit' | 'corpse' | 'effect' | 'missile' | 'loot';
 
 /** A ticked proposal — the shape both the spell and loot lists use. */
 interface Ticked<T> {
@@ -357,10 +361,34 @@ export default function CreateWizard({
 		if (!picked) return;
 		if (picked.kind === 'outfit') {
 			mark('look');
-			setLook(l => ({ ...l, type: picked.id }));
+			setLook(l => ({ ...l, type: picked.ids[0] ?? 0 }));
 		} else if (picked.kind === 'corpse') {
 			mark('corpse');
-			setCorpse(picked.id);
+			setCorpse(picked.ids[0] ?? 0);
+		} else if (picked.kind === 'loot') {
+			// The tray comes back whole and is added to what is already listed, so
+			// two trips collect rather than replace. An id already in the table is
+			// skipped rather than doubled — the tray does not clear itself, and a
+			// second visit to add one more item must not duplicate the first five.
+			//
+			// The names are looked up rather than carried back, because the entry
+			// wants them anyway: an item added by id says nothing to anyone reading
+			// the file, so the name rides along as the trailing comment, exactly as
+			// the editor's own tray writes it.
+			mark('loot');
+			const ids = picked.ids;
+			void Promise.all(ids.map(id => itemIndex.get(id).catch(() => null))).then(infos =>
+				setLoot(prev => {
+					const have = new Set(prev.map(l => l.item.entry.id));
+					const fresh = ids
+						.map((id, i) => ({ id, name: infos[i]?.name }))
+						.filter(x => !have.has(x.id));
+					return [
+						...prev,
+						...fresh.map(x => ({ item: { entry: newLootEntry({ serverId: x.id, name: x.name }), from: '' }, on: true }))
+					];
+				})
+			);
 		} else {
 			// An effect is written by name, not by id — `CONST_ME_FIREAREA` under
 			// Ironcore, `firearea` under TFS — so a cell the catalogue cannot name
@@ -370,9 +398,10 @@ export default function CreateWizard({
 			const table = area
 				? mergeEffects(engineInfo(engine.key).magicEffects, custom.magic)
 				: mergeEffects(engineInfo(engine.key).shootEffects, custom.shoot);
-			const found = table.find(e => e.id === picked.id);
+			const id = picked.ids[0] ?? 0;
+			const found = table.find(e => e.id === id);
 			if (!found) {
-				showToast('error', t('Nothing in this engine’s catalogue names client effect {{id}}.', { id: picked.id }));
+				showToast('error', t('Nothing in this engine’s catalogue names client effect {{id}}.', { id }));
 			} else {
 				setAbilities(prev =>
 					prev.map((b, j) =>
@@ -387,7 +416,7 @@ export default function CreateWizard({
 			}
 		}
 		onPickUsed();
-	}, [picked, mark, onPickUsed, engine.key, custom, openIndex, showToast, t]);
+	}, [picked, mark, onPickUsed, engine.key, custom, openIndex, itemIndex, showToast, t]);
 
 	// ---- The document, assembled ----
 	const assemble = useCallback(
@@ -530,10 +559,15 @@ export default function CreateWizard({
 		// wizard's state *is* the monster, and losing it to fetch one id would make
 		// the trip cost more than it saves.
 		<div className={hidden ? 'ss-backdrop mx-wiz-away' : 'ss-backdrop'} onMouseDown={onClose}>
-			{/* The designer needs two columns and the visualiser needs room, so the
-			    fight step is the one that widens. Everything else reads better narrow. */}
+			{/* Width follows the question, and only while the question needs it: the
+			    fight step is a designer around a visualiser, but not until there is
+			    an ability to design, and the drop step is a table whose names need
+			    somewhere to be, but not when it has nothing to list. Everything else
+			    is one thing to answer and reads better narrow. */}
 			<div
-				className={step === 4 ? 'ss-modal mx-wiz mx-wiz-wide' : 'ss-modal mx-wiz'}
+				className={`ss-modal mx-wiz${
+					step === 4 && abilities.length > 0 ? ' mx-wiz-wide' : step === 5 && lootStep ? ' mx-wiz-mid' : ''
+				}`}
 				onMouseDown={e => e.stopPropagation()}
 				onKeyDown={onKeyDown}
 			>
@@ -573,78 +607,103 @@ export default function CreateWizard({
 
 						{step === 1 && (
 							<Step question={t('What does it look like?')}>
+								{/* Two answers, two cards, each the size of the thing it is
+								    about: a step whose whole subject is what the monster looks
+								    like should not be answered off a 64 px thumbnail. Both
+								    answers are pictures, and the app already has the two places
+								    those pictures live — sending the user there beats a second
+								    grid in here that is worse than the real one (no animation,
+								    no filters, no name search, and a separate thing to keep
+								    working). Each card's button is that hand-off; the wizard
+								    steps aside and takes the answer back. */}
 								<div className="mx-wiz-look">
-									<img className="mx-wiz-sprite" src={lookUrl({ ...blankLook, ...look, mode: 'type' }, { cell: 64 })} alt="" />
-									<img
-										className="mx-wiz-sprite"
-										src={itemUrl(corpse, 64)}
-										alt=""
-										// No corpse, or one the database cannot draw: an empty tile
-										// rather than the browser's broken-image glyph.
-										onError={e => (e.currentTarget.style.visibility = 'hidden')}
-										onLoad={e => (e.currentTarget.style.visibility = 'visible')}
-									/>
-									<div className="mx-wiz-fields">
-										<label className="mx-wiz-field">
-											<span>{t('Outfit')}</span>
+									<div className="mx-wiz-look-card">
+										<div className="mx-wiz-look-title">
+											{t('Outfit')}
+											<button
+												className="ss-btn ss-btn-ghost ss-ed-mini"
+												title={t('Draw another')}
+												onClick={() => redraw('look')}
+											>
+												<Dices size={13} />
+											</button>
+										</div>
+										<div className="mx-wiz-look-stage">
+											<img
+												className="mx-wiz-look-sprite"
+												src={lookUrl({ ...blankLook, ...look, mode: 'type' }, { cell: 128 })}
+												alt=""
+											/>
+										</div>
+										<div className="mx-wiz-look-foot">
 											<input
-												className="mx-wiz-input mono"
+												className="mx-wiz-input mono mx-wiz-look-id"
 												type="number"
+												title={t('Outfit')}
 												value={look.type}
 												onChange={e => {
 													mark('look');
 													setLook({ ...look, type: Number(e.target.value) });
 												}}
 											/>
-										</label>
-										<label className="mx-wiz-field">
-											<span>{t('Corpse')}</span>
+											<button className="ss-btn" onClick={() => onBrowse('outfit')}>
+												{t('Pick an outfit…')}
+											</button>
+										</div>
+									</div>
+
+									<div className="mx-wiz-look-card">
+										<div className="mx-wiz-look-title">{t('Corpse')}</div>
+										<div className="mx-wiz-look-stage">
+											<img
+												className="mx-wiz-look-sprite"
+												src={itemUrl(corpse, 128)}
+												alt=""
+												// No corpse, or one the database cannot draw: an empty
+												// tile rather than the browser's broken-image glyph.
+												onError={e => (e.currentTarget.style.visibility = 'hidden')}
+												onLoad={e => (e.currentTarget.style.visibility = 'visible')}
+											/>
+										</div>
+										<div className="mx-wiz-look-foot">
 											<input
-												className="mx-wiz-input mono"
+												className="mx-wiz-input mono mx-wiz-look-id"
 												type="number"
+												title={t('Corpse')}
 												value={corpse}
 												onChange={e => {
 													mark('corpse');
 													setCorpse(Number(e.target.value));
 												}}
 											/>
-											<span className="mx-wiz-pick-name">{corpseInfo?.name ?? ''}</span>
-										</label>
-										<label className="mx-wiz-field">
-											<span>{t('Race')}</span>
-											<select
-												className="mx-wiz-input"
-												value={race ?? ''}
-												onChange={e => {
-													mark('race');
-													setRace(e.target.value || null);
-												}}
-											>
-												{engine.races.map(r => (
-													<option key={r} value={r}>
-														{r}
-													</option>
-												))}
-											</select>
-										</label>
+											<button className="ss-btn" onClick={() => onBrowse('corpse')}>
+												{t('Pick a corpse…')}
+											</button>
+										</div>
+										<div className="mx-wiz-pick-name">{corpseInfo?.name ?? ''}</div>
 									</div>
-									<button className="ss-btn ss-btn-ghost mx-wiz-redraw" title={t('Draw another')} onClick={() => redraw('look')}>
-										<Dices size={14} />
-									</button>
 								</div>
-								{/* Both answers are pictures, and the app already has the two
-								    places those pictures live. Sending the user there beats a
-								    second grid in here that is worse than the real one: no
-								    animation, no filters, no name search, and a separate thing to
-								    keep working. The wizard steps aside and takes the answer back. */}
-								<div className="mx-wiz-browse">
-									<button className="ss-btn" onClick={() => onBrowse('outfit')}>
-										{t('Pick an outfit…')}
-									</button>
-									<button className="ss-btn" onClick={() => onBrowse('corpse')}>
-										{t('Pick a corpse…')}
-									</button>
-								</div>
+
+								{/* Race is not a picture, so it does not get a card — it is the
+								    one field on this step that is typed rather than looked at. */}
+								<label className="mx-wiz-field mx-wiz-look-race">
+									<span>{t('Race')}</span>
+									<select
+										className="mx-wiz-input"
+										value={race ?? ''}
+										onChange={e => {
+											mark('race');
+											setRace(e.target.value || null);
+										}}
+									>
+										{engine.races.map(r => (
+											<option key={r} value={r}>
+												{r}
+											</option>
+										))}
+									</select>
+								</label>
+
 								<div className="ss-modal-desc">
 									{outfitIds.length === 0
 										? t('No client is open, so there is nothing to draw — the outfit is an id, and the server will resolve it.')
@@ -912,30 +971,53 @@ export default function CreateWizard({
 						)}
 
 						{step === 5 && lootStep && (
-							<Step question={t('What does it drop?')}>
-								<div className="mx-wiz-list">
-									{loot.map((l, i) => (
-										<label key={i} className={l.on ? 'mx-wiz-item' : 'mx-wiz-item mx-wiz-item-off'}>
-											<input
-												type="checkbox"
-												checked={l.on}
-												onChange={() => {
+							// Which items drop is a question for the items browser — the real
+							// one, with its filters, its search and its Loot tray — so this
+							// step asks the other half: how often, and how many. The rows are
+							// a proposal off the donors to begin with; the tray adds to them.
+							<Step question={t('What does it drop, and how often?')}>
+								<div className="mx-wiz-loot">
+									<div className="mx-wiz-loot-head">
+										<span className="mx-wiz-loot-cell-name">{t('Item')}</span>
+										<span className="mx-wiz-loot-cell-chance">{t('Chance')}</span>
+										<span className="mx-wiz-loot-cell-count">{t('Count')}</span>
+										<span className="mx-wiz-loot-cell-from" />
+									</div>
+									<div className="mx-wiz-loot-rows">
+										{loot.length === 0 && (
+											<div className="ss-modal-desc mx-wiz-loot-empty">
+												{t('Nothing drops yet. Pick the items in the browser, then set the odds here.')}
+											</div>
+										)}
+										{loot.map((l, i) => (
+											<LootRow
+												key={`${l.item.entry.id}-${i}`}
+												row={l}
+												name={items.get(l.item.entry.id ?? -1)?.name ?? l.item.entry.comment ?? `#${l.item.entry.id}`}
+												onChange={next => {
 													mark('loot');
-													setLoot(loot.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
+													setLoot(loot.map((x, j) => (j === i ? next : x)));
+												}}
+												onRemove={() => {
+													mark('loot');
+													setLoot(loot.filter((_, j) => j !== i));
 												}}
 											/>
-											{l.item.entry.id !== null && <img className="mx-wiz-item-icon" src={itemUrl(l.item.entry.id, 32)} alt="" />}
-											<span className="mx-wiz-item-name">
-												{items.get(l.item.entry.id ?? -1)?.name ?? l.item.entry.comment ?? `#${l.item.entry.id}`}
-											</span>
-											<span className="mono mx-wiz-item-num">{(l.item.entry.chance / 1000).toFixed(2)}%</span>
-											<span className="mx-wiz-item-from">{t('from {{name}}', { name: l.item.from })}</span>
-										</label>
-									))}
+										))}
+									</div>
 								</div>
-								<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => redraw('loot')}>
-									{t('Draw again')}
-								</button>
+								<div className="mx-wiz-loot-actions">
+									<button className="ss-btn" onClick={() => onBrowse('loot')}>
+										<Plus size={14} />
+										{t('Pick items…')}
+									</button>
+									<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => redraw('loot')}>
+										{t('Draw again')}
+									</button>
+									<span className="mx-wiz-mini mx-wiz-loot-total">
+										{t('{{count}} drop', { count: loot.filter(l => l.on).length })}
+									</span>
+								</div>
 							</Step>
 						)}
 
@@ -1032,6 +1114,75 @@ function Step({ question, children }: { question: string; children: React.ReactN
 		<div className="mx-wiz-step">
 			<h3 className="mx-wiz-q">{question}</h3>
 			{children}
+		</div>
+	);
+}
+
+/**
+ * One drop: the item, how often, how many.
+ *
+ * The chance is typed as a percent and stored out of 100 000, and the odds
+ * beside it read the draft rather than the committed value — the same bargain
+ * the editor's own loot row makes, because "1 in 250" is what a chance means
+ * and it should follow the keystrokes rather than lag a field behind them.
+ *
+ * The tick stays: a proposal argued against is one the user is still choosing
+ * about, and a row that vanishes cannot be chosen back.
+ */
+function LootRow({
+	row,
+	name,
+	onChange,
+	onRemove
+}: {
+	row: Ticked<SampledLoot>;
+	name: string;
+	onChange: (next: Ticked<SampledLoot>) => void;
+	onRemove: () => void;
+}) {
+	const { t } = useTranslation();
+	const [draft, setDraft] = useState<number | null>(null);
+	const entry = row.item.entry;
+	const shown = draft ?? entry.chance;
+	const setEntry = (p: Partial<LootEntry>) => onChange({ ...row, item: { ...row.item, entry: { ...entry, ...p } } });
+
+	return (
+		<div className={row.on ? 'mx-wiz-loot-row' : 'mx-wiz-loot-row mx-wiz-item-off'}>
+			<label className="mx-wiz-loot-cell-name" title={name}>
+				<input type="checkbox" checked={row.on} onChange={() => onChange({ ...row, on: !row.on })} />
+				{entry.id !== null && <img className="mx-wiz-item-icon" src={itemUrl(entry.id, 32)} alt="" />}
+				<span className="mx-wiz-item-name">{name}</span>
+			</label>
+			<span className="mx-wiz-loot-cell-chance" title={`chance="${shown}" of ${MAX_CHANCE}`}>
+				<NumberField
+					value={Number((entry.chance / 1000).toFixed(3))}
+					onChange={v => setEntry({ chance: Math.max(0, Math.min(MAX_CHANCE, Math.round(v * 1000))) })}
+					onDraft={raw => setDraft(raw === null || raw.trim() === '' || !Number.isFinite(Number(raw)) ? null : Math.max(0, Math.min(MAX_CHANCE, Math.round(Number(raw) * 1000))))}
+					min={0}
+					max={100}
+					step={0.1}
+					width={72}
+				/>
+				<span className="mx-wiz-loot-odds">{oddsText(shown)}</span>
+			</span>
+			<span className="mx-wiz-loot-cell-count">
+				×
+				<NumberField
+					value={entry.countmax}
+					onChange={v => setEntry({ countmax: v })}
+					min={1}
+					max={MAX_COUNTMAX}
+					hardMax={MAX_COUNTMAX}
+					width={56}
+					title={t('Hard maximum 100 — a larger value makes the server drop the whole entry')}
+				/>
+			</span>
+			<span className="mx-wiz-loot-cell-from">
+				{row.item.from && <span className="mx-wiz-item-from">{t('from {{name}}', { name: row.item.from })}</span>}
+				<button className="ss-btn ss-btn-ghost ss-ed-mini" title={t('Remove')} onClick={onRemove}>
+					<Trash2 size={13} />
+				</button>
+			</span>
 		</div>
 	);
 }
