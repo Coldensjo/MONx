@@ -269,13 +269,23 @@ export default function Workspace({
 	// tab has to leave the editor blank — re-opening the first monster from here
 	// was what made that tab impossible to close.
 	const openedFirstRef = useRef(false);
+	// The files of the last list seen. "Vanished" means *was here and is not* —
+	// a file merely absent from this list is not the same thing, because the
+	// selection moves before the list does: creating a monster selects it and
+	// then asks the backend for a new list, so for one render the selection is a
+	// file the list has never heard of. Clearing on absence alone deselected
+	// every monster the wizard made, a keystroke after making it.
+	const seenFilesRef = useRef<Set<string>>(new Set());
 	useEffect(() => {
 		if (monsters.length === 0) return;
-		const exists = selected !== null && monsters.some(m => m.file === selected);
+		const files = new Set(monsters.map(m => m.file));
+		const seen = seenFilesRef.current;
+		seenFilesRef.current = files;
+		const exists = selected !== null && files.has(selected);
 		if (openedFirstRef.current) {
 			// A selection that vanished (renamed or deleted elsewhere) clears rather
 			// than jumping to an unrelated monster.
-			if (selected !== null && !exists) setSelected(null);
+			if (selected !== null && !exists && seen.has(selected)) setSelected(null);
 			return;
 		}
 		openedFirstRef.current = true;
