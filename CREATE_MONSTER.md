@@ -225,27 +225,30 @@ ability** appends a new one and opens it; **Remove this ability** drops the open
 one. A monster with only melee is a monster, so the step is happy with none.
 
 The card is **the editor's own `SpellCard`**, with the re-enactment open by
-default rather than folded behind its eye, laid out two-up so a whole ability is
-one page: the re-enactment across the top, **cadence on the left** (interval,
-chance), **what it does on the right** (range, min, max), and the **shape and
-the effects along the bottom**. The step is the one that widens the wizard,
-because two columns beside a visualiser need the room and the other five steps
-read better narrow.
+default rather than folded behind its eye, and laid out around it: **the
+visualiser in the middle**, what the spell costs down the left (interval,
+chance, then the area shape), what it does down the right (range, min, max, then
+the projectile and the magic effect). Both columns are describing the thing
+between them. The step is the one that widens the wizard, because three columns
+need the room and the other five steps read better narrow.
 
-The card's own markup is nearly untouched — it names its two grids and its two
-sub-groups, and the wizard's stylesheet places them, so the same card still
-reads as one column in the editor. The one change that is real: `range` now sits
-with `min` and `max` rather than with the cadence, on the grounds that how far a
-spell reaches is a fact about the hit and not about how often it fires. Where a
-family has no damage grid at all it stays where it was. That is the whole point of reusing it:
-picking the spell reshapes the card to the fields that family actually reads —
+That is CSS and nothing else: grid placement ignores document order, so the card
+names its two grids and its two sub-groups and the wizard's stylesheet puts them
+either side of the stage — the same card still reads as one column in the editor,
+and folding the stage away collapses its column rather than leaving a hole. The
+one change that is real: `range` now sits with `min` and `max` rather than with
+the cadence, on the grounds that how far a spell reaches is a fact about the hit
+and not about how often it fires. Where a family has no damage grid at all it
+stays where it was.
+
+Picking the spell reshapes the card to the fields that family actually reads —
 damage for a direct spell, `tick`/`start` or `cycle` or `count` for a condition
-as that engine requires, duration and speed for a status — and beside them the
-geometry the loader understands: beam `length` and `spread`, `radius`, `ring`
-where the engine allows one, `target`, `direction`, `range`, `interval` and
-`chance`. The `SpellStage` draws the result: the caster waits out the cooldown,
-rolls `chance`, throws the projectile and lights every tile the area covers.
-Change `spread` and the next cast is wider.
+as that engine requires, duration and speed for a status — and the geometry the
+loader understands appears with it: beam `length` and `spread`, `radius`, `ring`
+where the engine allows one, `target`, `direction`. The `SpellStage` draws the
+result: the caster waits out the cooldown, rolls `chance`, throws the projectile
+and lights every tile the area covers. Change `spread` and the next cast is
+wider.
 
 A second, wizard-shaped copy of that card would be a second thing to keep true
 across seven engines, and would be the one that was wrong. The wizard scopes the

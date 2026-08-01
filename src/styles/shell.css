@@ -1476,10 +1476,10 @@
 	width: min(760px, 92vw);
 }
 
-/* The fight step only: two columns of fields beside a visualiser needs the room,
-   and the other five steps read better without it. */
+/* The fight step only: the visualiser sits between two columns of fields, which
+   needs the room. The other five steps read better without it. */
 .mx-wiz-wide {
-	width: min(1040px, 96vw);
+	width: min(1180px, 96vw);
 }
 
 /* One dot per step, filled at the current one. A progress bar would imply the
@@ -1778,12 +1778,14 @@
 	flex: 1 1 150px;
 }
 
-/* The designer is the editor's own card, laid out two-up so a whole ability is
-   one page: cadence on the left, what it does on the right, and the shape and
-   the effects across the bottom where they are wide anyway.
-
-   The card's own markup is untouched — it names its two grids and this places
-   them, which is why the same card still reads as one column in the editor. */
+/* The designer is the editor's own card, laid out around the re-enactment: what
+   the spell costs on the left, what it does on the right, and the thing itself
+   in the middle where both columns are describing it.
+ 
+   The card's own markup is untouched but for the names — it labels its two grids
+   and its two sub-groups, and these rules place them, which is why the same card
+   still reads as one column in the editor. Grid placement ignores document
+   order, so nothing had to move in the JSX to sit either side of the stage. */
 .mx-wiz-designer {
 	max-height: 56vh;
 	overflow-y: auto;
@@ -1792,50 +1794,66 @@
 
 .mx-wiz-designer .ss-ed-card {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	column-gap: 18px;
+	/* `fit-content` rather than a fixed middle: with the re-enactment folded away
+	   the column collapses and the two field columns take the card, instead of
+	   leaving a hole where the stage was. */
+	grid-template-columns: minmax(160px, 1fr) fit-content(460px) minmax(160px, 1fr);
+	column-gap: 16px;
 	row-gap: 10px;
 	align-items: start;
 }
 
-/* Everything not placed below spans both columns: the spell picker, the
-   re-enactment, the banners, the area and the effects. */
+/* Anything not placed below — the banners, the notes, and the sub-groups a
+   melee, condition or status spell brings with it — runs full width underneath,
+   where a long note has the whole card to wrap in. */
 .mx-wiz-designer .ss-ed-card > * {
 	grid-column: 1 / -1;
 	min-width: 0;
 }
 
+.mx-wiz-designer .ss-ed-card > .ss-ed-card-head {
+	grid-column: 1 / -1;
+	grid-row: 1;
+}
+
+.mx-wiz-designer .ss-ed-card > .mx-stage {
+	grid-column: 2;
+	grid-row: 2 / span 2;
+}
+
 .mx-wiz-designer .ss-ed-card > .ss-ed-card-cadence {
 	grid-column: 1;
+	grid-row: 2;
+}
+
+.mx-wiz-designer .ss-ed-card > .ss-ed-area {
+	grid-column: 1;
+	grid-row: 3;
 }
 
 .mx-wiz-designer .ss-ed-card > .ss-ed-card-damage {
-	grid-column: 2;
+	grid-column: 3;
+	grid-row: 2;
 }
 
-/* The re-enactment spans both columns and keeps its own width — it is the point
-   of the step — but its grid is capped here so a 13-row spell does not push the
-   fields off the page. It scrolls in place, as it already does sideways. */
+.mx-wiz-designer .ss-ed-card > .ss-ed-effects {
+	grid-column: 3;
+	grid-row: 3;
+}
+
+/* The re-enactment keeps its own width and scrolls inside its column, sideways
+   as it always has and now vertically too: a thirteen-row spell must not push
+   the fields it is being described by off the page. */
 .mx-wiz-designer .mx-stage-viewport {
 	max-height: 232px;
 	overflow-y: auto;
 }
 
-/* The shape and the effects share the bottom row: both are short, and stacking
-   them is what pushed the card past one screen. */
-.mx-wiz-designer .ss-ed-card > .ss-ed-area {
-	grid-column: 1;
-}
-
-.mx-wiz-designer .ss-ed-card > .ss-ed-effects {
-	grid-column: 2;
-}
-
-/* Three fields to a row inside their own half, rather than the editor's wider
-   columns, so interval and chance sit side by side instead of stacking. */
+/* A column here is half the width of the editor's, so its fields stack rather
+   than being squeezed side by side. */
 .mx-wiz-designer .ss-ed-card-grid > .ss-ed-field {
 	flex: 1 1 120px;
-	max-width: 220px;
+	max-width: 240px;
 }
 
 /* The step's own actions, bottom right, clear of the wizard's footer. */
