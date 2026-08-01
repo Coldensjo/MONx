@@ -1566,10 +1566,78 @@
 	color: var(--text-muted);
 }
 
+/* The families the corpus fell into. Sprites, because the answer to "what kind
+   of monster is it" is a picture before it is a word. */
+.mx-wiz-families {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+	gap: 6px;
+	max-height: 232px;
+	overflow-y: auto;
+	padding-right: 2px;
+}
+
+.mx-wiz-family {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	padding: 8px 4px 6px;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	color: var(--text);
+	cursor: pointer;
+}
+
+.mx-wiz-family-on {
+	border-color: var(--accent);
+	background: var(--accent-dim);
+}
+
+.mx-wiz-family-face {
+	width: 32px;
+	height: 32px;
+	image-rendering: pixelated;
+}
+
+.mx-wiz-family-any {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	color: var(--text-muted);
+}
+
+.mx-wiz-family-label {
+	font-size: 12px;
+	font-weight: 600;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mx-wiz-family-count {
+	font-size: 10px;
+	color: var(--text-muted);
+}
+
 .mx-wiz-kinds {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 8px;
+}
+
+/* Under the families, where it is the second half of one question rather than
+   a question of its own. */
+.mx-wiz-kinds-inline {
+	margin-top: 12px;
+}
+
+.mx-wiz-kinds-inline .mx-wiz-kind {
+	padding: 6px 10px;
 }
 
 .mx-wiz-kind {
