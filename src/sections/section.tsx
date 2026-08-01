@@ -184,9 +184,21 @@ function BlockButtons({ id }: { id: SectionId }) {
 }
 
 /** A labelled sub-block inside a section (flag groups, geometry, status). */
-export function SubGroup({ title, note, children }: { title: string; note?: ReactNode; children: ReactNode }) {
+export function SubGroup({
+	title,
+	note,
+	className,
+	children
+}: {
+	title: string;
+	note?: ReactNode;
+	/** Named so a caller can place it — the create wizard lays the same card out
+	 *  two-up and has to know which group is which. */
+	className?: string;
+	children: ReactNode;
+}) {
 	return (
-		<div className="ss-ed-subgroup">
+		<div className={className ? `ss-ed-subgroup ${className}` : 'ss-ed-subgroup'}>
 			<div className="ss-ed-subgroup-title">{title}</div>
 			{note && <div className="ss-ed-field-note">{note}</div>}
 			{children}

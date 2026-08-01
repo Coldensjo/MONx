@@ -153,6 +153,28 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 	};
 
 	const showDamage = family === 'damage' || family === 'condition' || family === 'melee';
+	/** Whether the card has a second grid for what the spell does. Range belongs
+	 *  with min and max where there is one — how far it reaches is a fact about
+	 *  the hit, not about the cadence — and with the cadence where there is not. */
+	const damageGrid = showDamage && family !== 'melee';
+	const rangeField = (
+		<Field
+			label={t('Range')}
+			lints={lintAt('range')}
+			hint={t('tiles')}
+			ignored={block.name === 'melee'}
+			note={block.name === 'melee' ? t('Forced to 1 for melee.') : block.range === 0 ? t('Zero means line of sight only. Clamped to 22.') : undefined}
+		>
+			<NumberField
+				value={block.range}
+				onChange={v => set({ range: v })}
+				min={0}
+				max={22}
+				width={100}
+				disabled={readOnly || block.name === 'melee'}
+			/>
+		</Field>
+	);
 	const showGeometry = !registered && !scripted && (family === 'damage' || family === 'condition' || family === 'field' || family === 'noop');
 	const showEffects = !registered;
 	const healing = block.name === 'healing';
@@ -218,7 +240,7 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 				</Banner>
 			)}
 
-			<div className="ss-ed-card-grid">
+			<div className="ss-ed-card-grid ss-ed-card-cadence">
 				{/* Nostalrius spells carry no cadence attribute at all — chance
 				    alone gates a cast — so an interval box there would be a field
 				    the server never reads. */}
@@ -243,22 +265,7 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 				>
 					<NumberField value={block.chance} onChange={v => set({ chance: v })} min={0} max={100} width={100} disabled={readOnly} />
 				</Field>
-				<Field
-					label={t('Range')}
-					lints={lintAt('range')}
-					hint={t('tiles')}
-					ignored={block.name === 'melee'}
-					note={block.name === 'melee' ? t('Forced to 1 for melee.') : block.range === 0 ? t('Zero means line of sight only. Clamped to 22.') : undefined}
-				>
-					<NumberField
-						value={block.range}
-						onChange={v => set({ range: v })}
-						min={0}
-						max={22}
-						width={100}
-						disabled={readOnly || block.name === 'melee'}
-					/>
-				</Field>
+				{!damageGrid && rangeField}
 			</div>
 
 			{family === 'melee' && block.melee && (
@@ -383,8 +390,9 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 				</SubGroup>
 			)}
 
-			{showDamage && family !== 'melee' && (
-				<div className="ss-ed-card-grid">
+			{damageGrid && (
+				<div className="ss-ed-card-grid ss-ed-card-damage">
+					{rangeField}
 					<Field
 						label={healing ? t('Min healed') : t('Min damage')}
 						lints={lintAt('min')}
@@ -575,6 +583,7 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 			{showGeometry && (
 				<SubGroup
 					title={t('Area')}
+					className="ss-ed-area"
 					note={t('One shape only — if several are present the last one silently wins.')}
 				>
 					<ToggleGroup
@@ -648,7 +657,7 @@ export function SpellCard({ block, file, onChange, spells, lintAt, readOnly, par
 			)}
 
 			{showEffects && (
-				<SubGroup title={t('Effects')}>
+				<SubGroup title={t('Effects')} className="ss-ed-effects">
 					<div className="ss-ed-card-grid">
 						<Field label={t('Projectile')} lints={lintAt('effects.shootEffect')}>
 							<EffectSelect

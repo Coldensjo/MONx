@@ -497,7 +497,13 @@ export default function CreateWizard({
 		// wizard's state *is* the monster, and losing it to fetch one id would make
 		// the trip cost more than it saves.
 		<div className={hidden ? 'ss-backdrop mx-wiz-away' : 'ss-backdrop'} onMouseDown={onClose}>
-			<div className="ss-modal mx-wiz" onMouseDown={e => e.stopPropagation()} onKeyDown={onKeyDown}>
+			{/* The designer needs two columns and the visualiser needs room, so the
+			    fight step is the one that widens. Everything else reads better narrow. */}
+			<div
+				className={step === 4 ? 'ss-modal mx-wiz mx-wiz-wide' : 'ss-modal mx-wiz'}
+				onMouseDown={e => e.stopPropagation()}
+				onKeyDown={onKeyDown}
+			>
 				<div className="ss-modal-title">
 					{t('New monster')}
 					<span className="mx-wiz-steps">
