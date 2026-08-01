@@ -302,11 +302,36 @@ fn main() {
         // Reference §26 transcribes these from the corpus; recomputing them
         // here is how we know the reader agrees with whoever wrote that table.
         println!("balance bands (experience = 0 excluded):");
-        println!("  {:<12} {:>5} {:>8} {:>7} {:>7} {:>9}", "band", "n", "hp", "speed", "armor", "defense");
+        println!(
+            "  {:<14} {:>5} {:>8} {:>8} {:>8} {:>7} {:>7} {:>9}",
+            "band", "n", "hp p10", "hp med", "hp p90", "speed", "armor", "defense"
+        );
         for b in monster::balance_bands(&docs) {
+            // p10/p90 are the edges the panel calls low and high. Printing them
+            // beside the median is what makes a band's *width* visible, which is
+            // the thing a median alone hides.
+            let pct = |v: &[i64], p: f64| -> i64 {
+                if v.is_empty() {
+                    0
+                } else {
+                    v[(((v.len() - 1) as f64) * p).round() as usize]
+                }
+            };
             println!(
-                "  {:<12} {:>5} {:>8} {:>7} {:>7} {:>9}",
-                b.label, b.count, b.median_health, b.median_speed, b.median_armor, b.median_defense
+                "  {:<14} {:>5} {:>8} {:>8} {:>8} {:>7} {:>7} {:>9}{}",
+                b.label,
+                b.count,
+                pct(&b.health.values, 0.10),
+                b.health.median,
+                pct(&b.health.values, 0.90),
+                b.speed.median,
+                b.armor.median,
+                b.defense.median,
+                if b.count > 0 && b.count < monster::MIN_BAND_N {
+                    "  (too few to judge)"
+                } else {
+                    ""
+                }
             );
         }
     }

@@ -395,11 +395,33 @@ body.ss-dragging {
 	gap: 3px;
 }
 
+/* Four columns so the values line up down the panel: a row where the number
+   floats after a label of varying width cannot be scanned vertically, which is
+   the only way anyone reads four stats at once. */
 .ss-balance-row {
+	display: grid;
+	grid-template-columns: 3.5rem minmax(0, 1fr) 2.6rem auto;
+	align-items: baseline;
+	gap: 6px;
 	font-size: 11px;
 	color: var(--text-muted);
 	border-left: 2px solid var(--border);
 	padding-left: 6px;
+}
+
+.ss-balance-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ss-balance-value {
+	text-align: right;
+}
+
+/* The reading itself, so it carries the row's weight rather than the median. */
+.ss-balance-pct {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
 }
 
 .ss-balance-typical {
@@ -409,6 +431,19 @@ body.ss-dragging {
 .ss-balance-high,
 .ss-balance-low {
 	border-left-color: var(--warn);
+	color: var(--text);
+}
+
+.ss-balance-note {
+	margin-top: 6px;
+	font-size: 11px;
+	line-height: 1.45;
+	color: var(--text-muted);
+}
+
+.ss-balance-suggests {
+	border-left: 2px solid var(--warn);
+	padding-left: 6px;
 	color: var(--text);
 }
 

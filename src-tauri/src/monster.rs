@@ -96,6 +96,10 @@ pub struct MonsterSummary {
     pub experience: i64,
     pub health: i64,
     pub speed: i64,
+    /// Defense stats, on the summary so the balance overview can rank the whole
+    /// corpus without loading every document.
+    pub armor: i64,
+    pub defense: i64,
     pub species: Option<String>,
     pub race: Option<String>,
     pub look: Look,
@@ -533,17 +537,41 @@ pub struct SpellName {
 
 // ---------- Balance ----------
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Below this, a band's middle is not a norm — it is a handful of monsters that
+/// happen to share an experience range, and calling anything unusual against it
+/// says more about the sample than the monster. Ironcore has six monsters
+/// between 10,000 and 25,000 experience and TVP has one; a verdict drawn from
+/// either would be noise wearing a colour.
+///
+/// Lives here rather than on the frontend because the probe reports it too.
+pub const MIN_BAND_N: u32 = 8;
+
+/// One stat across one band: the middle of it, and enough of the shape to say
+/// where a given monster falls.
+///
+/// `values` is every monster's figure, ascending. A median alone cannot answer
+/// "is this unusual" — the same 1.5× above it is ordinary in a band that ranges
+/// over a factor of ten and remarkable in one that ranges over 1.2. The whole
+/// column is carried because a percentile read off it is exact, and the corpus
+/// is small enough that it costs a few thousand integers once per workspace.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BandStat {
+    pub median: i64,
+    pub values: Vec<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceBand {
     pub label: String,
     pub min: i64,
     pub max: i64,
     pub count: u32,
-    pub median_health: i64,
-    pub median_speed: i64,
-    pub median_armor: i64,
-    pub median_defense: i64,
+    pub health: BandStat,
+    pub speed: BandStat,
+    pub armor: BandStat,
+    pub defense: BandStat,
 }
 
 // =====================================================================
@@ -3776,6 +3804,8 @@ pub fn summarise(doc: &MonsterDoc) -> MonsterSummary {
         experience: doc.experience,
         health: doc.health.max,
         speed: doc.speed,
+        armor: doc.defense_stats.armor,
+        defense: doc.defense_stats.defense,
         species: doc.species.clone(),
         race: doc.race.clone(),
         look: doc.look.clone(),
@@ -4381,6 +4411,18 @@ fn pin_entries(
 /// `experience = 0`** so training dummies and statues don't poison the medians
 /// (§26). Band edges are the reference's.
 pub fn balance_bands(docs: &[MonsterDoc]) -> Vec<BalanceBand> {
+    // The top of the range used to be one open-ended `10000+`, which on a modern
+    // corpus is the *largest* band and the least informative: 262 of Canary's
+    // 1,320 scored monsters landed in it, spanning 25,000 to 250,000 health at
+    // the quartiles. Comparing anything against that middle flagged 84% of its
+    // own members as unusual.
+    //
+    // The four bands it became were chosen by measuring, not by rounding: they
+    // put 135/76/22/29 of Canary's monsters and 24/15/2/2 of BlackTek's into
+    // groups whose interquartile spread is 1.2×–3.1×, in line with the bands
+    // below them. Ironcore and TVP have almost nothing above 10,000 XP, and
+    // those bands come back too thin to draw a norm from — which is a question
+    // for whoever reads them, and the reason `count` is on the band.
     const EDGES: &[(&str, i64, i64)] = &[
         ("0–49", 0, 49),
         ("50–199", 50, 199),
@@ -4388,7 +4430,10 @@ pub fn balance_bands(docs: &[MonsterDoc]) -> Vec<BalanceBand> {
         ("600–1499", 600, 1499),
         ("1500–3999", 1500, 3999),
         ("4000–9999", 4000, 9999),
-        ("10000+", 10000, i64::MAX),
+        ("10000–24999", 10000, 24999),
+        ("25000–59999", 25000, 59999),
+        ("60000–149999", 60000, 149999),
+        ("150000+", 150000, i64::MAX),
     ];
 
     EDGES
@@ -4403,27 +4448,29 @@ pub fn balance_bands(docs: &[MonsterDoc]) -> Vec<BalanceBand> {
                 min: *min,
                 max: *max,
                 count: band.len() as u32,
-                median_health: median(band.iter().map(|d| d.health.max)),
-                median_speed: median(band.iter().map(|d| d.speed)),
-                median_armor: median(band.iter().map(|d| d.defense_stats.armor)),
-                median_defense: median(band.iter().map(|d| d.defense_stats.defense)),
+                health: stat(band.iter().map(|d| d.health.max)),
+                speed: stat(band.iter().map(|d| d.speed)),
+                armor: stat(band.iter().map(|d| d.defense_stats.armor)),
+                defense: stat(band.iter().map(|d| d.defense_stats.defense)),
             }
         })
         .collect()
 }
 
-fn median(values: impl Iterator<Item = i64>) -> i64 {
+fn stat(values: impl Iterator<Item = i64>) -> BandStat {
     let mut v: Vec<i64> = values.collect();
-    if v.is_empty() {
-        return 0;
-    }
     v.sort_unstable();
-    let mid = v.len() / 2;
-    if v.len() % 2 == 0 {
-        (v[mid - 1] + v[mid]) / 2
+    let median = if v.is_empty() {
+        0
     } else {
-        v[mid]
-    }
+        let mid = v.len() / 2;
+        if v.len() % 2 == 0 {
+            (v[mid - 1] + v[mid]) / 2
+        } else {
+            v[mid]
+        }
+    };
+    BandStat { median, values: v }
 }
 
 // ---------- Batch field edit (§ tools) ----------

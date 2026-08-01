@@ -406,6 +406,120 @@
 
 /* ---------- Compare ---------- */
 
+/* ---------- balance overview (BalanceDialog.tsx) ---------- */
+
+.mx-bal-modal {
+	width: 720px;
+	max-width: calc(100vw - 64px);
+}
+
+.mx-bal-note {
+	margin: 0 0 12px;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--text-muted);
+}
+
+.mx-bal-table {
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+/* One grid shared by the header, the band rows and the member rows, so every
+   column lines up through the whole table however deep it is nested. */
+.mx-bal-head,
+.mx-bal-row,
+.mx-bal-member {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 3rem repeat(4, 4.5rem);
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	text-align: left;
+	font-size: 12px;
+}
+
+.mx-bal-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 4px 8px;
+	background: var(--surface);
+	border-bottom: 1px solid var(--border);
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
+.mx-bal-head span:not(:first-child),
+.mx-bal-row span:not(:first-child),
+.mx-bal-member span:not(:first-child) {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.mx-bal-row {
+	padding: 6px 8px;
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	background: transparent;
+	color: var(--text);
+	cursor: pointer;
+}
+
+.mx-bal-row:hover {
+	background: var(--surface-2);
+}
+
+.mx-bal-row-open {
+	background: var(--accent-dim);
+	color: var(--accent);
+}
+
+.mx-bal-band {
+	font-weight: 500;
+}
+
+/* A band too thin to draw a median from. Marked rather than hidden — the count
+   is the finding. */
+.mx-bal-thin {
+	color: var(--warn);
+}
+
+.mx-bal-members {
+	border-bottom: 1px solid var(--border);
+	background: var(--surface-2);
+}
+
+.mx-bal-member {
+	padding: 4px 8px 4px 20px;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.mx-bal-member:hover {
+	background: var(--surface);
+	color: var(--text);
+}
+
+.mx-bal-member-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Outside the band's outer deciles — the reason the row sorted to the top. */
+.mx-bal-cell-out {
+	color: var(--warn);
+}
+
+.mx-bal-empty {
+	padding: 8px 20px;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
 /* ---------- files changed outside MONx (ExternalChangesDialog.tsx) ---------- */
 
 .mx-ext-modal {

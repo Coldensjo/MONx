@@ -72,6 +72,25 @@ function verdictClass(v: BalanceVerdict): string {
 	return `ss-balance-${v}`;
 }
 
+/** The four stats the bands carry, in the order the panel reads them. Defense
+ *  was computed and never rendered until this table existed. */
+const BALANCE_ROWS = [
+	{ key: 'health', label: 'HP' },
+	{ key: 'speed', label: 'Speed' },
+	{ key: 'armor', label: 'Armor' },
+	{ key: 'defense', label: 'Defense' }
+] as const;
+
+/** "62nd", "1st", "93rd" — an ordinal, because a percentile reads as a rank and
+ *  not as a quantity. English ordinals only; the suffix is part of the
+ *  translated string so a locale that forms them differently can say so. */
+export function pctLabel(t: (k: string, o?: Record<string, unknown>) => string, pct: number): string {
+	const tens = pct % 100;
+	const suffix =
+		tens >= 11 && tens <= 13 ? 'th' : pct % 10 === 1 ? 'st' : pct % 10 === 2 ? 'nd' : pct % 10 === 3 ? 'rd' : 'th';
+	return t('{{pct}}{{suffix}}', { pct, suffix });
+}
+
 interface LootRowProps {
 	entry: LootEntry;
 	depth: number;
@@ -416,19 +435,41 @@ export default function PreviewPanel({
 							</div>
 							{/* Advisory only, never a blocker and never auto-applied (§14.3). */}
 							<div className="ss-balance-rows">
-								<div className={`ss-balance-row ${verdictClass(hint.health.verdict)}`}>
-									{t('HP')} <span className="mono">{fmt(hint.health.value)}</span> {t('vs median')}{' '}
-									<span className="mono">{fmt(hint.health.median)}</span>
-								</div>
-								<div className={`ss-balance-row ${verdictClass(hint.speed.verdict)}`}>
-									{t('Speed')} <span className="mono">{fmt(hint.speed.value)}</span> {t('vs median')}{' '}
-									<span className="mono">{fmt(hint.speed.median)}</span>
-								</div>
-								<div className={`ss-balance-row ${verdictClass(hint.armor.verdict)}`}>
-									{t('Armor')} <span className="mono">{fmt(hint.armor.value)}</span> {t('vs median')}{' '}
-									<span className="mono">{fmt(hint.armor.median)}</span>
-								</div>
+								{BALANCE_ROWS.map(({ key, label }) => {
+									const stat = hint[key];
+									return (
+										<div key={key} className={`ss-balance-row ${verdictClass(stat.verdict)}`}>
+											<span className="ss-balance-label">{t(label)}</span>
+											<span className="mono ss-balance-value">{fmt(stat.value)}</span>
+											{/* The percentile is the reading; the median is the anchor that
+											    makes it legible. Both, because "62nd" alone says nothing
+											    about the scale being talked about. */}
+											<span className="ss-balance-pct">{hint.reliable ? pctLabel(t, stat.percentile) : '—'}</span>
+											<span className="ss-derived-note">
+												{t('median')} <span className="mono">{fmt(stat.median)}</span>
+											</span>
+										</div>
+									);
+								})}
 							</div>
+							{!hint.reliable && (
+								<div className="ss-balance-note">
+									{t('Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual.', {
+										count: hint.band.count
+									})}
+								</div>
+							)}
+							{hint.healthSuggests && (
+								<div className="ss-balance-note ss-balance-suggests">
+									{hint.health.verdict === 'high'
+										? t('Health sits with band {{band}} — the experience may be low for it.', {
+												band: hint.healthSuggests.label
+											})
+										: t('Health sits with band {{band}} — the experience may be high for it.', {
+												band: hint.healthSuggests.label
+											})}
+								</div>
+							)}
 						</div>
 					</>
 				)}

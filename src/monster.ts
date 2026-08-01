@@ -104,6 +104,10 @@ export interface MonsterSummary {
 	experience: number;
 	health: number;
 	speed: number;
+	/** Defense stats, on the summary so the balance overview can rank the corpus
+	 *  without loading every document. */
+	armor: number;
+	defense: number;
 	species: string | null;
 	race: string | null;
 	look: Look;
@@ -489,16 +493,28 @@ export interface SpellName {
 
 // ---------- Balance ----------
 
+/** One stat across one band. `values` is every monster's figure, ascending —
+ *  a median alone cannot say whether a number is unusual, because the same
+ *  distance above it means different things in a wide band and a narrow one. */
+export interface BandStat {
+	median: number;
+	values: number[];
+}
+
 export interface BalanceBand {
 	label: string; // "1500–3999"
 	min: number;
 	max: number; // XP bounds
 	count: number;
-	medianHealth: number;
-	medianSpeed: number;
-	medianArmor: number;
-	medianDefense: number;
+	health: BandStat;
+	speed: BandStat;
+	armor: BandStat;
+	defense: BandStat;
 }
+
+/** Below this a band is too thin for its middle to be a norm. Mirrors
+ *  `monster::MIN_BAND_N`, which the probe reports from. */
+export const MIN_BAND_N = 8;
 
 // ---------- Commands (README §6) ----------
 

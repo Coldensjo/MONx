@@ -1,4 +1,4 @@
-import type { BalanceBand, ItemInfo, LootEntry, MonsterDoc, SpellBlock } from './monster';
+import { MIN_BAND_N, type BalanceBand, type ItemInfo, type LootEntry, type MonsterDoc, type SpellBlock } from './monster';
 import { MAX_CHANCE, MAX_COUNTMAX, effectiveChance } from './lootsim';
 
 // Combat math the XML never states. Every formula here is engine behaviour from
@@ -349,26 +349,103 @@ export function summonTotals(doc: MonsterDoc): SummonTotals {
 
 export type BalanceVerdict = 'low' | 'typical' | 'high';
 
-export interface BalanceHint {
-	band: BalanceBand;
-	health: { value: number; median: number; verdict: BalanceVerdict };
-	speed: { value: number; median: number; verdict: BalanceVerdict };
-	armor: { value: number; median: number; verdict: BalanceVerdict };
-	defense: { value: number; median: number; verdict: BalanceVerdict };
+export interface BalanceStat {
+	value: number;
+	median: number;
+	/** 0–100: the share of the band this value is at or above. */
+	percentile: number;
+	verdict: BalanceVerdict;
 }
 
-// Advisory thresholds, not engine behaviour. Deliberately wide: §26 notes the
-// corpus is full of intentional outliers (Valacrax is 1,000,000 XP / 3,500,000 HP),
-// so anything inside 0.67×–1.5× of the band median reads as typical.
-const LOW_RATIO = 2 / 3;
-const HIGH_RATIO = 1.5;
+export interface BalanceHint {
+	band: BalanceBand;
+	/** False when the band holds too few monsters for its middle to be a norm.
+	 *  The figures are still shown — they are facts about the corpus — but no
+	 *  verdict is drawn from them. */
+	reliable: boolean;
+	health: BalanceStat;
+	speed: BalanceStat;
+	armor: BalanceStat;
+	defense: BalanceStat;
+	/** The band this monster's health alone would put it in, when that is not
+	 *  the band its experience puts it in. Null when they agree, which is the
+	 *  ordinary case. */
+	healthSuggests: BalanceBand | null;
+}
 
-function verdict(value: number, median: number): BalanceVerdict {
-	if (median <= 0) return 'typical';
-	const ratio = value / median;
-	if (ratio >= HIGH_RATIO) return 'high';
-	if (ratio <= LOW_RATIO) return 'low';
-	return 'typical';
+// The band's own outer deciles, rather than a fixed ratio either side of the
+// median.
+//
+// A fixed ratio cannot fit bands whose spread differs this much: measured across
+// the shipped corpora, 0.67×–1.5× called 42% of Ironcore, 44% of Canary and 38%
+// of TVP unusual, which is not a signal but a background hum. Deciles are
+// self-calibrating by construction — they flag a fifth of any band, whatever its
+// width — and measured on the same corpora they land at 15–21%.
+const LOW_PCT = 10;
+const HIGH_PCT = 90;
+
+/**
+ * Where `value` falls in an ascending column, 0–100.
+ *
+ * The share of the band at or below it, which is the reading a sentence like
+ * "tougher than 78% of monsters worth this much" wants. An empty column has no
+ * answer and returns 50, the position that draws no conclusion.
+ */
+export function percentileIn(values: number[], value: number): number {
+	if (values.length === 0) return 50;
+	let below = 0;
+	// Ascending, so the first value above `value` ends the count. A linear walk:
+	// bands run to a few hundred entries and this is not on a render path that
+	// repeats.
+	for (const v of values) {
+		if (v > value) break;
+		below++;
+	}
+	return Math.round((below / values.length) * 100);
+}
+
+function statFor(value: number, band: { median: number; values: number[] }, reliable: boolean): BalanceStat {
+	const percentile = percentileIn(band.values, value);
+	let verdict: BalanceVerdict = 'typical';
+	if (reliable) {
+		if (percentile <= LOW_PCT) verdict = 'low';
+		else if (percentile >= HIGH_PCT) verdict = 'high';
+	}
+	return { value, median: band.median, percentile, verdict };
+}
+
+/**
+ * Read backwards: the band this monster's health would sit in the middle of.
+ *
+ * The question a designer usually has is not "are the stats right for the
+ * experience" but the other way round, and the two are the same comparison from
+ * opposite ends. Health is the one stat used, because it is what the experience
+ * of a monster is really a price for; armor and speed vary for reasons that have
+ * nothing to do with how much a kill is worth.
+ *
+ * Only bands thick enough to be a norm are candidates, and the answer is the one
+ * whose median health this figure sits nearest to.
+ *
+ * Nearest in *ratio*, not in difference. Health runs from 20 to three and a half
+ * million across a corpus, so a plain subtraction makes the largest band nearest
+ * to almost everything. A first attempt ranked bands by how close to their 50th
+ * percentile the health fell, which looks equivalent and is not: anything above
+ * every band's range sits at the 100th percentile of all of them, ties at equal
+ * distance, and resolves to whichever band was checked first — which is how a
+ * 300,000-health monster came out reading as the 0–49 experience band.
+ */
+function bandForHealth(health: number, bands: BalanceBand[]): BalanceBand | null {
+	let best: BalanceBand | null = null;
+	let closest = Infinity;
+	for (const band of bands) {
+		if (band.count < MIN_BAND_N || band.health.median <= 0) continue;
+		const distance = Math.abs(Math.log(Math.max(1, health)) - Math.log(band.health.median));
+		if (distance < closest) {
+			closest = distance;
+			best = band;
+		}
+	}
+	return best;
 }
 
 /**
@@ -383,20 +460,23 @@ export function balanceHint(doc: MonsterDoc, bands: BalanceBand[]): BalanceHint 
 	if (doc.experience <= 0) return null;
 	const band = bands.find(b => doc.experience >= b.min && doc.experience <= b.max);
 	if (!band) return null;
+	const reliable = band.count >= MIN_BAND_N;
+	const health = statFor(doc.health.max, band.health, reliable);
+
+	// Offered only when the health is already remarkable where it is. Health
+	// sitting at the 60th percentile of its own band will still be nearer the
+	// middle of some *other* band, and saying so every time would bury the case
+	// that matters under one that never does.
+	const suggested = health.verdict === 'typical' ? null : bandForHealth(doc.health.max, bands);
+
 	return {
 		band,
-		health: { value: doc.health.max, median: band.medianHealth, verdict: verdict(doc.health.max, band.medianHealth) },
-		speed: { value: doc.speed, median: band.medianSpeed, verdict: verdict(doc.speed, band.medianSpeed) },
-		armor: {
-			value: doc.defenseStats.armor,
-			median: band.medianArmor,
-			verdict: verdict(doc.defenseStats.armor, band.medianArmor)
-		},
-		defense: {
-			value: doc.defenseStats.defense,
-			median: band.medianDefense,
-			verdict: verdict(doc.defenseStats.defense, band.medianDefense)
-		}
+		reliable,
+		health,
+		speed: statFor(doc.speed, band.speed, reliable),
+		armor: statFor(doc.defenseStats.armor, band.armor, reliable),
+		defense: statFor(doc.defenseStats.defense, band.defense, reliable),
+		healthSuggests: suggested && suggested.label !== band.label ? suggested : null
 	};
 }
 

@@ -74,6 +74,7 @@ import ScaleLootDialog from './ScaleLootDialog';
 import BatchEditDialog from './BatchEditDialog';
 import QuickOpenDialog from './QuickOpenDialog';
 import CompareDialog from './CompareDialog';
+import BalanceDialog from './BalanceDialog';
 import ExternalChangesDialog from './ExternalChangesDialog';
 import PatchNotesDialog from './PatchNotesDialog';
 import { loadCutoff, patchMarks, relativeWhen, saveCutoff } from './patchnotes';
@@ -591,6 +592,7 @@ export default function Workspace({
 	const [batchOpen, setBatchOpen] = useState(false);
 	const [quickOpen, setQuickOpen] = useState(false);
 	const [compareOpen, setCompareOpen] = useState(false);
+	const [balanceOpen, setBalanceOpen] = useState(false);
 	/** Species the corpus actually uses, for the batch filter's dropdown. */
 	const speciesList = useMemo(
 		() => [...new Set(monsters.map(m => m.species).filter((s): s is string => !!s))].sort(),
@@ -1734,6 +1736,13 @@ export default function Workspace({
 			enabled: monsters.length > 1,
 			run: () => setCompareOpen(true)
 		},
+		{
+			id: 'balance-overview',
+			label: t('Balance overview…'),
+			group: t('Tools'),
+			enabled: monsters.length > 0,
+			run: () => setBalanceOpen(true)
+		},
 		{ id: 'export-lints', label: t('Export lint report…'), group: t('Tools'), run: () => void exportLints() },
 		{ id: 'export-patch-notes', label: t('Export patch notes…'), group: t('Tools'), run: () => setPatchOpen(true) },
 		{
@@ -1808,6 +1817,7 @@ export default function Workspace({
 				item('scale-loot', { label: blocked(t('Scale loot chances…')) }),
 				item('batch-edit', { label: blocked(t('Batch edit fields…')) }),
 				item('compare-monsters', { separated: true }),
+				item('balance-overview'),
 				item('export-lints'),
 				item('export-patch-notes'),
 				item('set-patch-cutoff', { label: patchCutoffLabel })
@@ -2593,6 +2603,18 @@ export default function Workspace({
 						</div>
 					</div>
 				</div>
+			)}
+
+			{balanceOpen && (
+				<BalanceDialog
+					monsters={monsters}
+					onOpen={file => {
+						setBalanceOpen(false);
+						setView('monsters');
+						setSelected(file);
+					}}
+					onClose={() => setBalanceOpen(false)}
+				/>
 			)}
 
 			{conflicts.length > 0 && (
