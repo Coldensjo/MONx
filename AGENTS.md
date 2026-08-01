@@ -279,12 +279,24 @@ Four rules that come up constantly:
 - `index.css` is frozen; new styles go in `src/styles/*.css`.
 - Toast via `showToast` callback prop; auto-dismiss after 3.5s.
 
+### Text the user reads
+
+**Every new user-facing string goes through `t()` and lands in `pl.ts` and `pt.ts` in the same commit.** A string added in English only is not a half-finished translation, it is a hole: the key *is* the English source, so the app keeps working and nothing reports the gap — the Polish user simply gets an English sentence in the middle of a Polish dialog, and nobody notices until they do. Label, placeholder, `title=`, toast, tooltip, empty-state, button: all of it.
+
+- The key is the English sentence itself, so `en.ts` gets an entry **only** for what i18next cannot derive from the key — the plural forms. Every other English string needs no entry at all.
+- A string interpolating a count is pluralised, and the whole sentence is the plural unit, never a fragment. That means `en.ts` gets `_one`/`_other`, `pt.ts` the same two, and `pl.ts` gets `_one`/`_few`/`_many` — Polish has three categories and a missing one falls back to the English key.
+- Before adding a plural key, check whether one already says it: `'{{count}} monster'`, `'{{count}} item'`, `'{{count}} drop'`, `'{{count}} lint'` and friends are already carried in all three languages, and a second spelling of the same idea is three more entries to keep true.
+- Engine vocabulary stays English on purpose — `raceid`, `typeex`, flag names, `CONST_ME_*`, item names, lint codes. They are what the server reads and what the community writes, and translating them only makes the file harder to match against a corpus.
+- Interpolated nouns are a trap in inflected languages. Quote `{{kind}}` rather than declining it, or write the sentence so the noun sits in one case.
+- To find what a new view still owes: extract its `t('…')` keys and diff them against `pl.ts` and `pt.ts`. Keys that are plain identifiers are written unquoted in the locale files (`Cancel: 'Anuluj'`), so match both spellings.
+
 ### Adding a feature
 
 1. **Backend logic** → the owning module (pure Rust, testable via `examples/`).
 2. **New API surface** → `#[tauri::command]` in `lib.rs`, register in `invoke_handler!`.
 3. **Frontend types + invoke** → `monster.ts` (mirror serde field names in camelCase).
 4. **UI** → the relevant view component.
+5. **Its words** → wrap in `t()`, then add the Polish and Portuguese to `src/locales/` — see above.
 
 ### Adding a protocol route
 

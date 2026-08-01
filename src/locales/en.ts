@@ -144,7 +144,16 @@ const en: Record<string, string> = {
 	'Loaded “{{name}}” — {{count}} item, {{missing}} not in this workspace_one':
 		'Loaded “{{name}}” — {{count}} item, {{missing}} not in this workspace',
 	'Loaded “{{name}}” — {{count}} item, {{missing}} not in this workspace_other':
-		'Loaded “{{name}}” — {{count}} items, {{missing}} not in this workspace'
+		'Loaded “{{name}}” — {{count}} items, {{missing}} not in this workspace',
+
+	// --- Create wizard -----------------------------------------------------
+	'Everything from here is drawn from these {{count}}._one': 'Everything from here is drawn from this one.',
+	'Everything from here is drawn from these {{count}}._other':
+		'Everything from here is drawn from these {{count}}.',
+	'{{count}} monsters — too few to draw a norm from_one':
+		'{{count}} monster — too few to draw a norm from',
+	'{{count}} monsters — too few to draw a norm from_other':
+		'{{count}} monsters — too few to draw a norm from'
 };
 
 export default en;

@@ -473,6 +473,115 @@ const pl: Record<string, string> = {
 	'Renamed to {{name}}': 'Zmieniono nazwę na {{name}}',
 	'Duplicated to {{file}}': 'Zduplikowano do {{file}}',
 	'Deleted {{file}}': 'Usunięto {{file}}',
+
+	// --- Create wizard --------------------------------------------------------
+	// The kind labels double as a noun inside the "similar to" blurb, where they
+	// arrive lower-cased. The blurb quotes {{kind}} rather than declining it, so
+	// the nominative the button shows is the only form any of them needs.
+	'What kind of monster is it?': 'Jakiego rodzaju to potwór?',
+	'Ordinary monster': 'Zwykły potwór',
+	'Hostile, attackable, drops loot': 'Wrogi, można go zaatakować, zostawia łup',
+	'Rarer, tougher, unsummonable': 'Rzadszy, mocniejszy, nie do przywołania',
+	'Summoned minion': 'Przywoływany sługa',
+	'Summonable and convinceable': 'Można go przywołać i przekonać',
+	'Harmless critter': 'Nieszkodliwe stworzonko',
+	'Not hostile, pushable, no loot': 'Niewrogie, można je przepchnąć, bez łupu',
+	'This is the only question with no drawn answer — it picks which monsters everything else is drawn from.':
+		'To jedyne pytanie bez wylosowanej odpowiedzi — decyduje, z których potworów losowana jest cała reszta.',
+	monster: 'potwór',
+
+	'Is it similar to anything else?': 'Czy jest podobny do czegoś innego?',
+	'Optional. Name a few and the immunities, the melee, the drops and the power level all come off them; name none and the wizard draws from every {{kind}} in the corpus.':
+		'Opcjonalne. Wskaż kilka, a odporności, walka wręcz, łupy i poziom mocy zostaną wzięte z nich; nie wskazuj żadnego, a kreator losuje spośród wszystkich potworów rodzaju „{{kind}}” w korpusie.',
+	'Everything from here is drawn from these {{count}}._one': 'Wszystko od tego miejsca bierze się z tego jednego.',
+	'Everything from here is drawn from these {{count}}._few': 'Wszystko od tego miejsca bierze się z tych {{count}}.',
+	'Everything from here is drawn from these {{count}}._many':
+		'Wszystko od tego miejsca bierze się z tych {{count}}.',
+	'Search the corpus…': 'Szukaj w korpusie…',
+	'{{n}} of {{max}}': '{{n}} z {{max}}',
+	'Nothing in this corpus matches.': 'Nic w tym korpusie nie pasuje.',
+	'{{name}} — {{exp}} exp': '{{name}} — {{exp}} exp',
+
+	'What does it look like?': 'Jak wygląda?',
+	'Draw another': 'Wylosuj inny',
+	'Pick an outfit…': 'Wybierz wygląd…',
+	'Pick a corpse…': 'Wybierz zwłoki…',
+	'No client is open, so there is nothing to draw — the outfit is an id, and the server will resolve it.':
+		'Żaden klient nie jest otwarty, więc nie ma z czego losować — wygląd to id, a serwer sam je rozwiąże.',
+	'The outfit is one no monster in this corpus wears. The corpse is a donor’s, so the item database can resolve it.':
+		'Tego wyglądu nie nosi żaden potwór w korpusie. Zwłoki pochodzą od dawcy, więc baza przedmiotów potrafi je rozwiązać.',
+
+	'What is it called?': 'Jak się nazywa?',
+	Classic: 'Klasyczne',
+	'Corpus style': 'W stylu korpusu',
+	'Drawn from the generator’s own word tables.': 'Losowane z własnych tablic słów generatora.',
+	'Built from the names this corpus already uses.': 'Zbudowane z nazw, których korpus już używa.',
+	'Hide file and group': 'Ukryj plik i grupę',
+	'File and group': 'Plik i grupa',
+
+	'How much is a kill worth?': 'Ile warte jest zabicie go?',
+	'This corpus has no experience bands to draw from — type the figures yourself.':
+		'Ten korpus nie ma przedziałów doświadczenia do losowania — wpisz liczby samodzielnie.',
+	'{{count}} monsters — too few to draw a norm from_one': '{{count}} potwór — za mało, by wyznaczyć normę',
+	'{{count}} monsters — too few to draw a norm from_few': '{{count}} potwory — za mało, by wyznaczyć normę',
+	'{{count}} monsters — too few to draw a norm from_many': '{{count}} potworów — za mało, by wyznaczyć normę',
+	'Read off the band at its {{p}}th percentile.': 'Odczytane z przedziału na {{p}}. percentylu.',
+	'Draw again': 'Losuj ponownie',
+
+	'How does it fight?': 'Jak walczy?',
+	'Fights in melee': 'Walczy wręcz',
+	'Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.':
+		'Wyliczane: ceil(umiejętność × atak × 0,05 + atak × 0,5). Liczy to loader, więc nie ma na to pola.',
+	'max {{damage}}': 'maks. {{damage}}',
+	'from {{name}}': 'od {{name}}',
+	'A melee block is copied off a donor rather than composed, and nothing in this band has one to lend.':
+		'Blok walki wręcz jest kopiowany od dawcy, a nie układany, i nic w tym przedziale nie ma go do pożyczenia.',
+	'no melee available': 'brak dostępnej walki wręcz',
+	Abilities: 'Zdolności',
+	'A monster with only melee is a monster — this step is happy with none.':
+		'Potwór z samą walką wręcz to nadal potwór — ten krok obejdzie się bez żadnej.',
+	'No abilities yet.': 'Jeszcze żadnych zdolności.',
+	script: 'skrypt',
+	'Remove this ability': 'Usuń tę zdolność',
+	'Add an ability': 'Dodaj zdolność',
+	'Nothing in this engine’s catalogue names client effect {{id}}.':
+		'Nic w katalogu tego silnika nie nazywa efektu klienta {{id}}.',
+
+	'What does it drop, and how often?': 'Co zostawia i jak często?',
+	'Nothing drops yet. Pick the items in the browser, then set the odds here.':
+		'Na razie nic nie wypada. Wybierz przedmioty w przeglądarce, a szanse ustaw tutaj.',
+	'Pick items…': 'Wybierz przedmioty…',
+	'How many items a draw proposes': 'Ile przedmiotów proponuje jedno losowanie',
+	items: 'przedmiotów',
+	'Replaces the table with a fresh draw off the donors': 'Zastępuje tabelę nowym losowaniem od dawców',
+	'What does it drop?': 'Co zostawia?',
+	'Critters drop nothing. Add loot in the editor if this one should.':
+		'Stworzonka nic nie zostawiają. Dodaj łup w edytorze, jeśli to ma go mieć.',
+	'No item database is open, so there is no way to tell a real item id from an invented one. Add loot in the editor.':
+		'Żadna baza przedmiotów nie jest otwarta, więc nie da się odróżnić prawdziwego id przedmiotu od zmyślonego. Dodaj łup w edytorze.',
+
+	// The review rail. These four are the tail of a figure — "300 hp · 200
+	// szybkości" — so they are in the genitive the number governs, not the
+	// dictionary form.
+	'(unnamed)': '(bez nazwy)',
+	speed: 'szybkości',
+	armor: 'pancerza',
+	defense: 'obrony',
+	exp: 'exp',
+	'Drawn from': 'Wylosowane z',
+	stats: 'statystyki',
+	'similar to': 'podobne do',
+	donors: 'dawcy',
+	look: 'wygląd',
+	'unused outfit {{id}}': 'nieużywany wygląd {{id}}',
+	'No lint findings': 'Brak uwag',
+
+	Back: 'Wstecz',
+	'Create blank': 'Utwórz pusty',
+	Next: 'Dalej',
+	'Creating…': 'Tworzenie…',
+	'Create monster': 'Utwórz potwora',
+	'Draw everything again': 'Wylosuj wszystko ponownie',
 	'Only {{filter}} — click to exclude instead': 'Tylko {{filter}} — kliknij, aby zamiast tego wykluczyć',
 	'Excluding {{filter}} — click to clear': 'Wykluczanie {{filter}} — kliknij, aby wyczyścić',
 	'Only {{filter}}; click twice to exclude it': 'Tylko {{filter}}; kliknij dwa razy, aby wykluczyć',

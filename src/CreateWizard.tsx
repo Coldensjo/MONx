@@ -886,7 +886,7 @@ export default function CreateWizard({
 												{band
 													? band.count < MIN_BAND_N
 														? t('{{count}} monsters — too few to draw a norm from', { count: band.count })
-														: t('{{count}} monsters', { count: band.count })
+														: t('{{count}} monster', { count: band.count })
 													: ''}
 											</span>
 										</div>
@@ -1170,7 +1170,7 @@ export default function CreateWizard({
 							{!touched.has('look') && <div>{t('look')}: {t('unused outfit {{id}}', { id: look.type })}</div>}
 						</div>
 						<div className={loud.length > 0 ? 'mx-wiz-lints mx-wiz-lints-bad' : 'mx-wiz-lints'}>
-							{loud.length === 0 ? t('No lint findings') : t('{{count}} findings', { count: loud.length })}
+							{loud.length === 0 ? t('No lint findings') : t('{{count}} lint', { count: loud.length })}
 						</div>
 						{loud.slice(0, 3).map((l, i) => (
 							<div key={i} className="mx-wiz-lint">

@@ -398,6 +398,112 @@ const pt: Record<string, string> = {
 	'Renamed to {{name}}': 'Renomeado para {{name}}',
 	'Duplicated to {{file}}': 'Duplicado para {{file}}',
 	'Deleted {{file}}': '{{file}} excluído',
+
+	// --- Create wizard ---------------------------------------------------------------------
+	// The kind labels double as a noun inside the "similar to" blurb, where they
+	// arrive lower-cased. The blurb quotes {{kind}} instead of agreeing with it,
+	// so the label the button shows is the only form any of them needs.
+	'What kind of monster is it?': 'Que tipo de monstro é?',
+	'Ordinary monster': 'Monstro comum',
+	'Hostile, attackable, drops loot': 'Hostil, atacável, dropa loot',
+	'Rarer, tougher, unsummonable': 'Mais raro, mais forte, não invocável',
+	'Summoned minion': 'Lacaio invocado',
+	'Summonable and convinceable': 'Invocável e convencível',
+	'Harmless critter': 'Bicho inofensivo',
+	'Not hostile, pushable, no loot': 'Não hostil, empurrável, sem loot',
+	'This is the only question with no drawn answer — it picks which monsters everything else is drawn from.':
+		'Esta é a única pergunta sem resposta sorteada — ela escolhe de quais monstros todo o resto é sorteado.',
+	monster: 'monstro',
+
+	'Is it similar to anything else?': 'Ele é parecido com algum outro?',
+	'Optional. Name a few and the immunities, the melee, the drops and the power level all come off them; name none and the wizard draws from every {{kind}} in the corpus.':
+		'Opcional. Indique alguns e as imunidades, o corpo a corpo, os drops e o nível de poder saem deles; não indique nenhum e o assistente sorteia entre todos os monstros do tipo “{{kind}}” no corpus.',
+	'Everything from here is drawn from these {{count}}._one': 'Tudo daqui em diante sai deste um.',
+	'Everything from here is drawn from these {{count}}._other': 'Tudo daqui em diante sai destes {{count}}.',
+	'Search the corpus…': 'Buscar no corpus…',
+	'{{n}} of {{max}}': '{{n}} de {{max}}',
+	'Nothing in this corpus matches.': 'Nada neste corpus corresponde.',
+	'{{name}} — {{exp}} exp': '{{name}} — {{exp}} exp',
+
+	'What does it look like?': 'Com o que ele se parece?',
+	'Draw another': 'Sortear outro',
+	'Pick an outfit…': 'Escolher um outfit…',
+	'Pick a corpse…': 'Escolher um corpo…',
+	'No client is open, so there is nothing to draw — the outfit is an id, and the server will resolve it.':
+		'Nenhum cliente está aberto, então não há o que sortear — o outfit é um id, e o servidor vai resolvê-lo.',
+	'The outfit is one no monster in this corpus wears. The corpse is a donor’s, so the item database can resolve it.':
+		'O outfit é um que nenhum monstro deste corpus usa. O corpo é de um doador, então a base de itens consegue resolvê-lo.',
+
+	'What is it called?': 'Como ele se chama?',
+	Classic: 'Clássico',
+	'Corpus style': 'Estilo do corpus',
+	'Drawn from the generator’s own word tables.': 'Sorteado das tabelas de palavras do próprio gerador.',
+	'Built from the names this corpus already uses.': 'Montado a partir dos nomes que este corpus já usa.',
+	'Hide file and group': 'Ocultar arquivo e grupo',
+	'File and group': 'Arquivo e grupo',
+
+	'How much is a kill worth?': 'Quanto vale matá-lo?',
+	'This corpus has no experience bands to draw from — type the figures yourself.':
+		'Este corpus não tem faixas de experiência para sortear — digite os números você mesmo.',
+	'{{count}} monsters — too few to draw a norm from_one': '{{count}} monstro — poucos demais para tirar uma norma',
+	'{{count}} monsters — too few to draw a norm from_other':
+		'{{count}} monstros — poucos demais para tirar uma norma',
+	'Read off the band at its {{p}}th percentile.': 'Lido da faixa no percentil {{p}}.',
+	'Draw again': 'Sortear de novo',
+
+	'How does it fight?': 'Como ele luta?',
+	'Fights in melee': 'Luta corpo a corpo',
+	'Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.':
+		'Derivado: ceil(skill × ataque × 0,05 + ataque × 0,5). O loader calcula, então não há campo para isso.',
+	'max {{damage}}': 'máx. {{damage}}',
+	'from {{name}}': 'de {{name}}',
+	'A melee block is copied off a donor rather than composed, and nothing in this band has one to lend.':
+		'Um bloco de corpo a corpo é copiado de um doador em vez de composto, e nada nesta faixa tem um para emprestar.',
+	'no melee available': 'sem corpo a corpo disponível',
+	Abilities: 'Habilidades',
+	'A monster with only melee is a monster — this step is happy with none.':
+		'Um monstro só com corpo a corpo é um monstro — esta etapa aceita nenhuma.',
+	'No abilities yet.': 'Nenhuma habilidade ainda.',
+	script: 'script',
+	'Remove this ability': 'Remover esta habilidade',
+	'Add an ability': 'Adicionar uma habilidade',
+	'Nothing in this engine’s catalogue names client effect {{id}}.':
+		'Nada no catálogo deste engine nomeia o efeito de cliente {{id}}.',
+
+	'What does it drop, and how often?': 'O que ele dropa, e com que frequência?',
+	'Nothing drops yet. Pick the items in the browser, then set the odds here.':
+		'Nada dropa ainda. Escolha os itens no navegador e ajuste as chances aqui.',
+	'Pick items…': 'Escolher itens…',
+	'How many items a draw proposes': 'Quantos itens um sorteio propõe',
+	items: 'itens',
+	'Replaces the table with a fresh draw off the donors': 'Substitui a tabela por um novo sorteio dos doadores',
+	'What does it drop?': 'O que ele dropa?',
+	'Critters drop nothing. Add loot in the editor if this one should.':
+		'Bichos não dropam nada. Adicione loot no editor se este deveria dropar.',
+	'No item database is open, so there is no way to tell a real item id from an invented one. Add loot in the editor.':
+		'Nenhuma base de itens está aberta, então não há como distinguir um id de item real de um inventado. Adicione loot no editor.',
+
+	// The review rail. These three trail a figure — "300 hp · 200 de velocidade"
+	// — so they carry the preposition the number needs.
+	'(unnamed)': '(sem nome)',
+	speed: 'de velocidade',
+	armor: 'de armadura',
+	defense: 'de defesa',
+	exp: 'exp',
+	'Drawn from': 'Sorteado de',
+	stats: 'atributos',
+	'similar to': 'parecido com',
+	donors: 'doadores',
+	look: 'aparência',
+	'unused outfit {{id}}': 'outfit {{id}} não usado',
+	'No lint findings': 'Nenhum apontamento',
+
+	Back: 'Voltar',
+	'Create blank': 'Criar vazio',
+	Next: 'Avançar',
+	'Creating…': 'Criando…',
+	'Create monster': 'Criar monstro',
+	'Draw everything again': 'Sortear tudo de novo',
 	'Only {{filter}} — click to exclude instead': 'Apenas {{filter}} — clique para excluir em vez disso',
 	'Excluding {{filter}} — click to clear': 'Excluindo {{filter}} — clique para limpar',
 	'Only {{filter}}; click twice to exclude it': 'Apenas {{filter}}; clique duas vezes para excluí-lo',
