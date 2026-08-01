@@ -22,6 +22,8 @@ const SPRITE = 32;
 // the URLs stay stable (and cached) while scrolling instead of changing per frame.
 const CHUNK = 32;
 const OVERSCAN = 6;
+/** Stable identity, so the default does not re-render every row on every parent pass. */
+const EMPTY_OVERRIDES: Map<string, string> = new Map();
 
 /**
  * What the shell's hotkeys can ask of the list. The list owns the new / rename /
@@ -58,6 +60,12 @@ interface Props {
 	onReveal?: (file: string) => void;
 	/** Double-click: jump to the editor for the row's monster. */
 	onOpen?: (file: string) => void;
+	/** Look previews for files edited but not yet saved, by file. `/monsters.png`
+	 *  draws from the backend's corpus, which only moves on save, so an outfit
+	 *  change would otherwise not reach the list until then. These are
+	 *  `lookUrl`s — rendered from the look's own field values — and take the
+	 *  place of the row's atlas cell. */
+	lookOverrides?: Map<string, string>;
 }
 
 interface MenuState {
@@ -99,6 +107,7 @@ const MonsterRow = memo(function MonsterRow({
 	atlasUrl,
 	atlasIndex,
 	atlasLength,
+	lookUrl,
 	onSelect,
 	onContextMenu,
 	onOpen
@@ -110,6 +119,8 @@ const MonsterRow = memo(function MonsterRow({
 	atlasUrl: string;
 	atlasIndex: number;
 	atlasLength: number;
+	/** Set while the file has unsaved edits: drawn instead of the atlas cell. */
+	lookUrl?: string;
 	onSelect: (file: string) => void;
 	onContextMenu: (e: React.MouseEvent, file: string) => void;
 	onOpen?: (file: string) => void;
@@ -137,9 +148,9 @@ const MonsterRow = memo(function MonsterRow({
 				style={{
 					width: SPRITE,
 					height: SPRITE,
-					backgroundImage: `url("${atlasUrl}")`,
-					backgroundSize: `${atlasLength * SPRITE}px ${SPRITE}px`,
-					backgroundPosition: `-${atlasIndex * SPRITE}px 0`,
+					backgroundImage: `url("${lookUrl ?? atlasUrl}")`,
+					backgroundSize: lookUrl ? `${SPRITE}px ${SPRITE}px` : `${atlasLength * SPRITE}px ${SPRITE}px`,
+					backgroundPosition: lookUrl ? '0 0' : `-${atlasIndex * SPRITE}px 0`,
 					backgroundRepeat: 'no-repeat'
 				}}
 			/>
@@ -181,7 +192,8 @@ export default function MonsterList({
 	showToast,
 	groups = [],
 	onReveal,
-	onNewMonster
+	onNewMonster,
+	lookOverrides = EMPTY_OVERRIDES
 }: Props) {
 	const { t } = useTranslation();
 	const [search, setSearch] = useState('');
@@ -524,6 +536,7 @@ export default function MonsterList({
 				atlasUrl={chunk.url}
 				atlasIndex={i - chunk.start}
 				atlasLength={chunk.files.length}
+				lookUrl={lookOverrides.get(monster.file)}
 				onSelect={onSelect}
 				onContextMenu={handleContextMenu}
 				onOpen={onOpen}

@@ -18,6 +18,7 @@ import {
 	listMonsterScripts,
 	listMonsters,
 	listSpellNames,
+	lookUrl,
 	reloadCorpus,
 	revealMonster,
 	saveMonster,
@@ -485,6 +486,19 @@ export default function Workspace({
 		while (used.has(id)) id++;
 		return id;
 	}, [monsters, dirtyFiles, doc]);
+
+	// The list draws its sprites from `/monsters.png`, which renders the backend's
+	// corpus — so a look only reaches it on save. Every file with unsaved edits
+	// therefore hands the list a `lookUrl` built from its own buffer instead, and
+	// the open document overrides its buffer, which lags a keystroke behind.
+	const listLooks = useMemo(() => {
+		const out = new Map<string, string>();
+		for (const file of dirtyFiles) {
+			const d = doc && doc.file === file ? doc : buffersRef.current.get(file)?.doc;
+			if (d) out.set(file, lookUrl(d.look, { cell: 32 }));
+		}
+		return out;
+	}, [dirtyFiles, doc]);
 
 	/** Client things for the editor's effect, missile and outfit previews. */
 	const previewUrl = useCallback<PreviewUrl>(
@@ -1956,6 +1970,7 @@ export default function Workspace({
 						groups={groups}
 						onReveal={reveal}
 						onNewMonster={() => setWizardOpen(true)}
+						lookOverrides={listLooks}
 					/>
 				</aside>
 
