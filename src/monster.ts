@@ -326,6 +326,34 @@ export interface ItemInfo {
 	ambiguousName: boolean;
 }
 
+/** Reads an items.xml attribute without caring how the database spelled its key.
+ *
+ *  Attribute names are stored as the database writes them and the databases
+ *  disagree: Ironcore and BlackTek write `corpseType`/`decayTo`, TVP writes both
+ *  entirely in lower case. Only `items.srv` is renamed on the way in (`items.rs`
+ *  `srv_attr`), so anything matching on an exact key is blind to an engine. */
+export function itemAttr(info: ItemInfo, key: string): string | undefined {
+	const direct = info.attributes[key];
+	if (direct !== undefined) return direct;
+	const want = key.toLowerCase();
+	for (const [k, v] of Object.entries(info.attributes)) if (k.toLowerCase() === want) return v;
+	return undefined;
+}
+
+/** The "Show corpses with decay" rule, in one place because two things obey it:
+ *  the Items filter of that name, and the corpse the create wizard proposes.
+ *  `decayTo` is the link to the next stage — a corpse without one is terminal
+ *  and stays on the ground forever, which is not what `<look corpse="">`
+ *  usually wants. `duration` alone is not decay; there is nothing for it to
+ *  count down to. */
+export function isCorpse(info: ItemInfo): boolean {
+	return itemAttr(info, 'corpseType') !== undefined;
+}
+
+export function corpseDecays(info: ItemInfo): boolean {
+	return isCorpse(info) && itemAttr(info, 'decayTo') !== undefined;
+}
+
 // ---------- Corpus tools ----------
 
 export interface PinnedLoot {

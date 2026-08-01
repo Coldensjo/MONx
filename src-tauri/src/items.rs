@@ -54,6 +54,20 @@ pub struct ItemCrossCheck {
     pub missing_from_xml: u32,
 }
 
+/// Carries a `corpseType`, however the database spelled the key.
+///
+/// Attribute names are kept as the file writes them, and the files disagree:
+/// Ironcore and BlackTek write `corpseType`, TVP writes `corpsetype`. Only
+/// `items.srv` is renamed on the way in (`srv_attr`), so an exact-key lookup is
+/// blind to an engine — and a corpse picker that finds nothing on TVP reads as
+/// "this server has no corpses" rather than as a bug. The frontend's own
+/// "Show corpses" filters match the same way (`monster.ts` `itemAttr`).
+fn is_corpse(item: &ItemInfo) -> bool {
+    item.attributes
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("corpseType"))
+}
+
 #[derive(Debug, Default)]
 pub struct ItemIndex {
     by_id: BTreeMap<u32, ItemInfo>,
@@ -112,7 +126,9 @@ impl ItemIndex {
     /// `pickupable_only` is for the Items browser, which exists to feed loot —
     /// the pickers keep it off because corpses and `typeex` looks are not
     /// pickupable. `corpses_only` keeps items carrying a `corpseType`
-    /// attribute, for the corpse picker's filter.
+    /// attribute, for the corpse picker's filter — matched case-insensitively,
+    /// because the databases disagree on the spelling and TVP writes the key
+    /// entirely in lower case.
     pub fn search(
         &self,
         query: &str,
@@ -130,7 +146,7 @@ impl ItemIndex {
                 .values()
                 .filter(|i| i.server_id >= FIRST_ITEM_ID)
                 .filter(move |i| !pickupable_only || i.pickupable)
-                .filter(move |i| !corpses_only || i.attributes.contains_key("corpseType"))
+                .filter(move |i| !corpses_only || is_corpse(i))
         };
 
         if q.is_empty() {
@@ -140,7 +156,7 @@ impl ItemIndex {
         if let Ok(id) = q.parse::<u32>() {
             if let Some(item) = self.by_id.get(&id) {
                 if (!pickupable_only || item.pickupable)
-                    && (!corpses_only || item.attributes.contains_key("corpseType"))
+                    && (!corpses_only || is_corpse(item))
                 {
                     return vec![item.clone()];
                 }

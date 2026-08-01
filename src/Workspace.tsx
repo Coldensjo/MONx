@@ -12,6 +12,8 @@ import {
 	itemUrl,
 	itemUsage,
 	writeTextFile,
+	corpseDecays,
+	isCorpse,
 	lintMonster,
 	lintWorkspace,
 	listMonsterGroups,
@@ -1300,19 +1302,6 @@ export default function Workspace({
 	const itemFilters = useMemo(() => {
 		const attr = (key: string) => (i: ItemInfo) => key in i.attributes;
 		const attrIs = (key: string, value: string) => (i: ItemInfo) => i.attributes[key] === value;
-		// Attribute keys are stored as the database spells them, and the databases
-		// disagree: Ironcore and BlackTek write `corpseType`/`decayTo`, TVP writes
-		// both entirely in lower case. Only `items.srv` is renamed on the way in
-		// (`items.rs` `srv_attr`), so an exact-key test is blind to a whole engine —
-		// which for the corpse filters means the picker they open would come up
-		// empty on TVP.
-		const attrCI = (...keys: string[]) => {
-			const want = keys.map(k => k.toLowerCase());
-			return (i: ItemInfo) => {
-				const have = Object.keys(i.attributes).map(k => k.toLowerCase());
-				return want.every(k => have.includes(k));
-			};
-		};
 		const special = 'Special';
 		const kind = 'Kind';
 		const weapons = 'Weapons';
@@ -1326,19 +1315,19 @@ export default function Workspace({
 				test: (i: ItemInfo) => favourites.has(i.serverId)
 			},
 			{ key: 'pickupable', label: 'Pickupable', section: special, test: (i: ItemInfo) => i.pickupable },
-			{ key: 'corpses', label: 'Show corpses', section: special, test: attrCI('corpseType') },
+			{ key: 'corpses', label: 'Show corpses', section: special, test: isCorpse },
 			{
 				// The corpses that actually rot, which is what a monster's <look
-				// corpse=""> almost always wants: `decayTo` is the link to the next
-				// stage, and DecayChain reads a corpse without one as terminal — it
-				// stays on the ground forever. `duration` alone is not enough, since
-				// there is nothing for it to count down to. This is the filter the
-				// corpse pickers open on; the plain one above is still there for the
-				// static corpses, which do exist and are occasionally what you want.
+				// corpse=""> almost always wants. The rule itself is `corpseDecays` in
+				// monster.ts, because the create wizard's drawn corpse obeys it too and
+				// a default that disagrees with the filter it opens on is a default
+				// nobody can explain. This is the filter both corpse pickers open on;
+				// the plain one above is still there for the static corpses, which do
+				// exist and are occasionally what you want.
 				key: 'corpses-decay',
 				label: 'Show corpses with decay',
 				section: special,
-				test: attrCI('corpseType', 'decayTo')
+				test: corpseDecays
 			},
 			{
 				// Loot only — an item used as a corpse or worn as a typeex look still

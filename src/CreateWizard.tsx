@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { Dices, ChevronLeft, Plus, Trash2, X } from 'lucide-react';
 import {
 	balanceBands,
+	corpseDecays,
 	createMonster,
 	droppedItemIds,
 	getMonster,
@@ -140,6 +141,11 @@ const MAX_SIMILAR = 10;
  *  browser adds as many as you like on top — but on how many the generator will
  *  propose, and a proposal longer than this is one nobody reads. */
 const MAX_DRAW = 25;
+
+/** How far down the corpse preference order the draw will look. Every candidate
+ *  is one resolve request, and the list is ordered donors-first, so this is a
+ *  ceiling on the search rather than on the choice. */
+const MAX_CORPSE_CANDIDATES = 60;
 
 /** Everything the generator can fill in, and therefore everything the `touched`
  *  set has keys for. A field the user has edited is never redrawn under them. */
@@ -307,13 +313,39 @@ export default function CreateWizard({
 		};
 	}, [monsters, band, kind, seed, similar]);
 
+	/** Corpse ids the drawn corpse may come from, best first: the donors' own,
+	 *  then the ones worn by monsters of this kind, then the rest of the corpus.
+	 *
+	 *  Ordered rather than filtered, because the choice is made by walking this
+	 *  list until one passes `corpseDecays` — so a donor's corpse still wins when
+	 *  it rots, which is the common case and the behaviour this had before.
+	 *  Corpse ids come off the summaries, so the whole corpus is available
+	 *  without loading a single document. */
+	const corpseCandidates = useMemo(() => {
+		const seen = new Set<number>();
+		const out: number[] = [];
+		const push = (id: number) => {
+			if (id > 0 && !seen.has(id)) {
+				seen.add(id);
+				out.push(id);
+			}
+		};
+		for (const donor of donors) push(donor.look.corpse);
+		for (const m of monsters) if (matchesKind(m, kind)) push(m.look.corpse);
+		for (const m of monsters) push(m.look.corpse);
+		// Bounded because every candidate is one resolve request. They are in
+		// preference order, so a decaying corpse further down the tail than this
+		// is one the draw was never going to reach anyway.
+		return out.slice(0, MAX_CORPSE_CANDIDATES);
+	}, [donors, monsters, kind]);
+
 	// ---- Resolve the items the proposals will need ----
 	useEffect(() => {
 		const ids = new Set<number>();
 		for (const donor of donors) {
 			for (const entry of donor.loot) if (entry.id !== null) ids.add(entry.id);
-			if (donor.look.corpse) ids.add(donor.look.corpse);
 		}
+		for (const id of corpseCandidates) ids.add(id);
 		// A bounded slice of the drop pool, for the top-up. Resolving all of it
 		// would be one request per id on a corpus that drops thousands.
 		for (const id of dropped.slice(0, 200)) ids.add(id);
@@ -330,7 +362,7 @@ export default function CreateWizard({
 		return () => {
 			live = false;
 		};
-	}, [donors, dropped, itemIndex]);
+	}, [donors, dropped, itemIndex, corpseCandidates]);
 
 	// ---- Derive every untouched answer ----
 	useEffect(() => {
@@ -347,10 +379,26 @@ export default function CreateWizard({
 		if (donors.length === 0) return;
 		const donor = donors[0];
 		if (!touched.has('race')) setRace(donor.race ?? engine.races[0] ?? null);
-		// Never drawn: a corpse id has to exist in the item database and actually
-		// be a corpse, and a donor's is known to be both.
-		if (!touched.has('corpse')) setCorpse(donor.look.corpse);
-	}, [donors, engine.races, touched]);
+		if (touched.has('corpse')) return;
+		// Never invented: a corpse id has to exist in the item database and
+		// actually be a corpse, and one already in use is known to be both.
+		//
+		// Which of them is drawn obeys `corpseDecays` — the same rule as the "Show
+		// corpses with decay" filter the picker opens on, so the wizard proposes
+		// the kind of corpse it would then show you. A corpse with no `decayTo` is
+		// terminal: it sits on the floor for the rest of the server's uptime, which
+		// is a thing to choose deliberately rather than to be handed.
+		//
+		// The fallback is the donor's own corpse, decaying or not. It fires when
+		// nothing in the candidates rots — which on Canary and CrystalServer is
+		// every time, because their item databases mark no corpses at all — and a
+		// corpse that outstays its welcome still beats no corpse.
+		const decaying = corpseCandidates.find(id => {
+			const info = items.get(id);
+			return info !== undefined && corpseDecays(info);
+		});
+		setCorpse(decaying ?? donor.look.corpse);
+	}, [donors, engine.races, touched, corpseCandidates, items]);
 
 	// Melee is its own answer, because it is the one attack a monster either has
 	// or does not — the abilities are a handful it might. Taken off the nearest
