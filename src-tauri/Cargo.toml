@@ -1,6 +1,6 @@
 [package]
 name = "monx"
-version = "0.1.76"
+version = "0.1.77"
 description = "MONx — Ironcore monster XML editor"
 authors = ["Ironcore"]
 edition = "2021"

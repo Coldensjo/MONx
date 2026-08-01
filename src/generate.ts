@@ -126,6 +126,16 @@ export function sampleStats(rng: Rng, band: BalanceBand): Stats {
 
 // ---------- Donors ----------
 
+/** Whether a monster is the kind the user asked for. Its own function because
+ *  the wizard offers the same test as an ordering: the "similar to" step opens
+ *  on the monsters this would have drawn from. */
+export function matchesKind(m: MonsterSummary, kind: Kind): boolean {
+	if (kind === 'boss') return m.boss;
+	if (kind === 'minion') return m.summonable;
+	if (kind === 'critter') return m.experience < 10;
+	return !m.boss;
+}
+
 /**
  * The monsters everything after the stats is sampled from.
  *
@@ -133,18 +143,32 @@ export function sampleStats(rng: Rng, band: BalanceBand): Stats {
  * read as one family rather than as a shuffle of the whole corpus. Falls back
  * to the band alone, then to the corpus, rather than returning nothing: a
  * corpus with two bosses in it still has to be able to make a third.
+ *
+ * Only ever reached when the user named no neighbours of their own. A named
+ * donor beats a drawn one at everything this is for, so the wizard asks first
+ * and draws when the answer is nothing.
  */
 export function pickDonors(rng: Rng, monsters: MonsterSummary[], band: BalanceBand | null, kind: Kind, n = 3): MonsterSummary[] {
 	const inBand = band ? monsters.filter(m => m.experience >= band.min && m.experience <= band.max) : monsters;
-	const matches = (m: MonsterSummary) => {
-		if (kind === 'boss') return m.boss;
-		if (kind === 'minion') return m.summonable;
-		if (kind === 'critter') return m.experience < 10;
-		return !m.boss;
-	};
-	const first = inBand.filter(matches);
+	const first = inBand.filter(m => matchesKind(m, kind));
 	const pool = first.length >= 2 ? first : inBand.length >= 2 ? inBand : monsters;
 	return pickSome(rng, pool, n);
+}
+
+/** The band an experience figure falls in. How a set of named neighbours picks
+ *  the band: "similar to a bandit" is a statement about power, not only about
+ *  loot, and a run that ignored it would draw a bandit's drops onto a demon's
+ *  health. */
+export function bandFor(bands: BalanceBand[], experience: number): BalanceBand | null {
+	return bands.find(b => experience >= b.min && experience <= b.max) ?? null;
+}
+
+/** The middle of a set — the figure a band is chosen from, so one outlier in ten
+ *  picks does not carry the whole run to the top of the corpus. */
+export function median(values: number[]): number {
+	if (values.length === 0) return 0;
+	const sorted = [...values].sort((a, b) => a - b);
+	return sorted[Math.floor(sorted.length / 2)];
 }
 
 // ---------- Flags ----------

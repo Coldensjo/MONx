@@ -1,9 +1,15 @@
-// The create wizard: six questions, each arriving with an answer already in it.
+// The create wizard: seven questions, each arriving with an answer already in it.
 //
 // They are asked in the order a monster is imagined rather than the order the
-// file is written: what kind of thing it is, what it looks like, what it is
-// called, and only then the numbers. Naming comes third because a name is
-// easier to accept once there is something on screen to name.
+// file is written: what kind of thing it is, what it is like, what it looks
+// like, what it is called, and only then the numbers. Naming comes fourth
+// because a name is easier to accept once there is something on screen to name.
+//
+// The second question is the one that makes the rest worth answering. "Similar
+// to a bandit, a wild warrior and a hunter" narrows the corpus to a family, and
+// every proposal after it — the immunities, the melee block, the loot table,
+// the band the stats are read off — is lifted off those monsters rather than
+// off whatever the kind's whole pool happened to hold.
 //
 // The generator supplies the default answer to every question and the user
 // supplies the ones they care about. Accept them all and you get what a
@@ -12,12 +18,12 @@
 // your choices.
 //
 // Nothing is written until the last click. The wizard's state is a MonsterDoc
-// in memory and nothing else, so Escape on step five leaves no scratch file, no
+// in memory and nothing else, so Escape on the last step leaves no scratch file, no
 // registry entry and nothing to clean up.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dices, ChevronLeft, Plus, Trash2 } from 'lucide-react';
+import { Dices, ChevronLeft, Plus, Trash2, X } from 'lucide-react';
 import {
 	balanceBands,
 	createMonster,
@@ -26,6 +32,7 @@ import {
 	itemUrl,
 	lintMonster,
 	lookUrl,
+	monstersRowUrl,
 	monsterTemplate,
 	nextFreeRaceid,
 	saveMonster,
@@ -54,8 +61,11 @@ import { makeRng } from './lootsim';
 import { generateName, type NameStyle } from './namegen';
 import {
 	KINDS,
+	bandFor,
 	defaultBand,
 	flagsFor,
+	matchesKind,
+	median,
 	newSeed,
 	pickDonors,
 	pickMelee,
@@ -108,7 +118,23 @@ interface Ticked<T> {
 	on: boolean;
 }
 
-const STEP_COUNT = 6;
+/** The questions, in the order a monster is imagined. Named rather than counted
+ *  because they are referred to from eight places — the width of the dialog, the
+ *  focus, what Enter does, which button is primary — and a step inserted in the
+ *  middle used to mean finding every one of them. */
+const KIND_STEP = 0;
+const SIMILAR_STEP = 1;
+const LOOK_STEP = 2;
+const NAME_STEP = 3;
+const STATS_STEP = 4;
+const FIGHT_STEP = 5;
+const DROP_STEP = 6;
+const STEP_COUNT = 7;
+
+/** As many neighbours as are worth naming. Past this the picks stop describing
+ *  one family and start describing the corpus, which is what the drawn default
+ *  already does. */
+const MAX_SIMILAR = 10;
 
 /** Everything the generator can fill in, and therefore everything the `touched`
  *  set has keys for. A field the user has edited is never redrawn under them. */
@@ -155,6 +181,9 @@ export default function CreateWizard({
 	const [group, setGroup] = useState(groups[0] ?? '');
 	const [showFile, setShowFile] = useState(false);
 	const [kind, setKind] = useState<Kind>('monster');
+	/** The neighbours the user named. Empty means "draw your own", which is what
+	 *  every run did before the question existed. */
+	const [similar, setSimilar] = useState<MonsterSummary[]>([]);
 	const [bandLabel, setBandLabel] = useState<string | null>(null);
 	const [stats, setStats] = useState<Stats | null>(null);
 	const [look, setLook] = useState({ type: 0, head: 0, body: 0, legs: 0, feet: 0 });
@@ -256,18 +285,18 @@ export default function CreateWizard({
 		setBandLabel(defaultBand(bands, kind)?.label ?? null);
 	}, [bands, kind, bandLabel]);
 
-	// ---- Donors follow kind and band ----
+	// ---- Donors are the named neighbours, or a draw when there are none ----
 	useEffect(() => {
 		if (monsters.length === 0) return;
 		let live = true;
-		const chosen = pickDonors(makeRng(seed ^ 0x5f3a), monsters, band, kind, 3);
+		const chosen = similar.length > 0 ? similar : pickDonors(makeRng(seed ^ 0x5f3a), monsters, band, kind, 3);
 		void Promise.all(chosen.map(m => getMonster(m.file).catch(() => null)))
 			.then(docs => live && setDonors(docs.filter((d): d is MonsterDoc => d !== null)))
 			.catch(() => undefined);
 		return () => {
 			live = false;
 		};
-	}, [monsters, band, kind, seed]);
+	}, [monsters, band, kind, seed, similar]);
 
 	// ---- Resolve the items the proposals will need ----
 	useEffect(() => {
@@ -335,6 +364,26 @@ export default function CreateWizard({
 		const drawn = sampleLoot(makeRng((seed ^ 0xbee5) + nonce.loot), donors, dropped, items, 5);
 		setLoot(drawn.map(item => ({ item, on: true })));
 	}, [donors, dropped, items, seed, nonce.loot, kind, hasItems, touched]);
+
+	/** Naming a neighbour is also a statement about power, so the band follows the
+	 *  middle of the picks — set here rather than in an effect so that moving the
+	 *  slider afterwards stays moved. The kind buttons make the same bargain. */
+	const toggleSimilar = useCallback(
+		(m: MonsterSummary) => {
+			setSimilar(prev => {
+				const on = prev.some(x => x.file === m.file);
+				if (!on && prev.length >= MAX_SIMILAR) return prev;
+				const next = on ? prev.filter(x => x.file !== m.file) : [...prev, m];
+				setBandLabel(
+					next.length > 0
+						? bandFor(bands, median(next.map(x => x.experience)))?.label ?? null
+						: defaultBand(bands, kind)?.label ?? null
+				);
+				return next;
+			});
+		},
+		[bands, kind]
+	);
 
 	const openIndex = Math.min(active, Math.max(0, abilities.length - 1));
 	const open = abilities[openIndex] ?? null;
@@ -468,12 +517,11 @@ export default function CreateWizard({
 	// ---- Navigation ----
 	const lootStep = hasItems && kind !== 'critter';
 	const lastStep = STEP_COUNT - 1;
-	const NAME_STEP = 2;
 	const canAdvance = step !== NAME_STEP || name.trim().length > 0;
 
 	// The loot step is always reached, even when it has nothing to offer — it says
 	// why instead of listing ids it cannot vouch for. Skipping it outright would
-	// strand the user on step five, where the primary button is still "Next".
+	// strand the user on the step before, where the primary button is still "Next".
 	const next = useCallback(() => setStep(s => Math.min(lastStep, s + 1)), [lastStep]);
 
 	const back = useCallback(() => setStep(s => Math.max(0, s - 1)), []);
@@ -566,7 +614,11 @@ export default function CreateWizard({
 			    is one thing to answer and reads better narrow. */}
 			<div
 				className={`ss-modal mx-wiz${
-					step === 4 && abilities.length > 0 ? ' mx-wiz-wide' : step === 5 && lootStep ? ' mx-wiz-mid' : ''
+					step === FIGHT_STEP && abilities.length > 0
+						? ' mx-wiz-wide'
+						: step === SIMILAR_STEP || (step === DROP_STEP && lootStep)
+							? ' mx-wiz-mid'
+							: ''
 				}`}
 				onMouseDown={e => e.stopPropagation()}
 				onKeyDown={onKeyDown}
@@ -582,7 +634,7 @@ export default function CreateWizard({
 
 				<div className="mx-wiz-body">
 					<div className="mx-wiz-main">
-						{step === 0 && (
+						{step === KIND_STEP && (
 							<Step question={t('What kind of monster is it?')}>
 								<div className="mx-wiz-kinds">
 									{KINDS.map(k => (
@@ -605,7 +657,36 @@ export default function CreateWizard({
 							</Step>
 						)}
 
-						{step === 1 && (
+						{step === SIMILAR_STEP && (
+							// The kind narrowed the corpus to a pool; this narrows it to a
+							// family. Everything the wizard proposes from here on — the
+							// immunities, the melee block, the loot table, the band the stats
+							// are read off — is lifted off the monsters named here, so naming
+							// six humanoids is the difference between a monster that belongs
+							// in that camp and one drawn from the whole server.
+							//
+							// Answering nothing is a real answer: the pool the kind chose is
+							// what the wizard drew from before this question existed, and it
+							// still is.
+							<Step question={t('Is it similar to anything else?')}>
+								<MonsterPicker
+									monsters={monsters}
+									kind={kind}
+									band={band}
+									picked={similar}
+									onToggle={toggleSimilar}
+								/>
+								<div className="ss-modal-desc">
+									{similar.length === 0
+										? t('Optional. Name a few and the immunities, the melee, the drops and the power level all come off them; name none and the wizard draws from every {{kind}} in the corpus.', {
+												kind: t(KINDS.find(k => k.key === kind)?.label ?? 'monster').toLowerCase()
+											})
+										: t('Everything from here is drawn from these {{count}}.', { count: similar.length })}
+								</div>
+							</Step>
+						)}
+
+						{step === LOOK_STEP && (
 							<Step question={t('What does it look like?')}>
 								{/* Two answers, two cards, each the size of the thing it is
 								    about: a step whose whole subject is what the monster looks
@@ -712,7 +793,7 @@ export default function CreateWizard({
 							</Step>
 						)}
 
-						{step === 2 && (
+						{step === NAME_STEP && (
 							<Step question={t('What is it called?')}>
 								<div className="mx-wiz-row">
 									<input
@@ -776,7 +857,7 @@ export default function CreateWizard({
 							</Step>
 						)}
 
-						{step === 3 && (
+						{step === STATS_STEP && (
 							<Step question={t('How much is a kill worth?')}>
 								{bands.length === 0 ? (
 									<div className="ss-modal-desc">{t('This corpus has no experience bands to draw from — type the figures yourself.')}</div>
@@ -838,7 +919,7 @@ export default function CreateWizard({
 							</Step>
 						)}
 
-						{step === 4 && (
+						{step === FIGHT_STEP && (
 							<Step question={t('How does it fight?')}>
 								{/* Melee is asked first and asked as a yes or no, because it is the
 								    one attack a monster either has or does not. Its damage is not a
@@ -970,7 +1051,7 @@ export default function CreateWizard({
 							</Step>
 						)}
 
-						{step === 5 && lootStep && (
+						{step === DROP_STEP && lootStep && (
 							// Which items drop is a question for the items browser — the real
 							// one, with its filters, its search and its Loot tray — so this
 							// step asks the other half: how often, and how many. The rows are
@@ -1021,7 +1102,7 @@ export default function CreateWizard({
 							</Step>
 						)}
 
-						{step === 5 && !lootStep && (
+						{step === DROP_STEP && !lootStep && (
 							<Step question={t('What does it drop?')}>
 								<div className="ss-modal-desc">
 									{kind === 'critter'
@@ -1054,7 +1135,7 @@ export default function CreateWizard({
 							)}
 							{donors.length > 0 && (
 								<div>
-									{t('donors')}: {donors.map(d => d.name).join(', ')}
+									{similar.length > 0 ? t('similar to') : t('donors')}: {donors.map(d => d.name).join(', ')}
 								</div>
 							)}
 							{!touched.has('look') && <div>{t('look')}: {t('unused outfit {{id}}', { id: look.type })}</div>}
@@ -1114,6 +1195,139 @@ function Step({ question, children }: { question: string; children: React.ReactN
 		<div className="mx-wiz-step">
 			<h3 className="mx-wiz-q">{question}</h3>
 			{children}
+		</div>
+	);
+}
+
+/** Cell size in the neighbour grid, and how many share one atlas request. The
+ *  grid asks `/monsters.png` for a strip per block rather than a PNG per cell,
+ *  the same bargain the sidebar list makes — a corpus is hundreds of monsters
+ *  and this one is browsed, not scrolled past. */
+const MON_SPRITE = 48;
+const MON_CHUNK = 30;
+
+/**
+ * The neighbour picker: every monster in the corpus as its own sprite, the ones
+ * this kind would have drawn from first.
+ *
+ * A picture per row rather than per cell — `/monsters.png` returns a strip and
+ * each cell shows its slice of it, so browsing four hundred monsters is a
+ * handful of requests. The ordering is the answer to "which of these are even
+ * plausible": the kind's own pool, then the band's, then everything else, each
+ * alphabetical, so the grid opens on the monsters the sentence "similar to" is
+ * likely to end with and the search is for when it does not.
+ */
+function MonsterPicker({
+	monsters,
+	kind,
+	band,
+	picked,
+	onToggle
+}: {
+	monsters: MonsterSummary[];
+	kind: Kind;
+	band: BalanceBand | null;
+	picked: MonsterSummary[];
+	onToggle: (m: MonsterSummary) => void;
+}) {
+	const { t } = useTranslation();
+	const [query, setQuery] = useState('');
+	// The band as the step opened, not as it stands. Naming a neighbour moves the
+	// band to the middle of the picks, and ranking on the live one would reshuffle
+	// the grid under the cursor on every click — the cell you were about to press
+	// second is somewhere else by the time you press it.
+	const [rankBand] = useState(band);
+
+	const chosen = useMemo(() => new Set(picked.map(m => m.file)), [picked]);
+
+	const shown = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		const matched = q ? monsters.filter(m => m.name.toLowerCase().includes(q)) : monsters;
+		// Rank rather than filter: a corpus with three bosses in it must still
+		// offer the other four hundred monsters, just not first.
+		const rank = (m: MonsterSummary) => {
+			const inBand = rankBand ? m.experience >= rankBand.min && m.experience <= rankBand.max : true;
+			if (matchesKind(m, kind) && inBand) return 0;
+			if (inBand) return 1;
+			return matchesKind(m, kind) ? 2 : 3;
+		};
+		return [...matched].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+	}, [monsters, query, kind, rankBand]);
+
+	// One atlas per aligned block of the list, addressed by each cell's offset
+	// into it. Blocks rather than the visible window: a corpus is a dozen
+	// requests this way, and a scroll listener to save half of them is a scroll
+	// listener to keep working. The whole corpus is drawn — a cap here would be
+	// a monster the user cannot pick and cannot see is missing.
+	const chunks = useMemo(() => {
+		const out: { start: number; files: string[]; url: string }[] = [];
+		for (let start = 0; start < shown.length; start += MON_CHUNK) {
+			const files = shown.slice(start, start + MON_CHUNK).map(m => m.file);
+			out.push({ start, files, url: monstersRowUrl(files, MON_SPRITE) });
+		}
+		return out;
+	}, [shown]);
+
+	const full = picked.length >= MAX_SIMILAR;
+
+	return (
+		<div className="mx-wiz-similar">
+			<div className="mx-wiz-similar-bar">
+				<input
+					className="mx-wiz-input"
+					value={query}
+					onChange={e => setQuery(e.target.value)}
+					placeholder={t('Search the corpus…')}
+				/>
+				<span className={full ? 'mx-wiz-mini mx-wiz-similar-full' : 'mx-wiz-mini'}>
+					{t('{{n}} of {{max}}', { n: picked.length, max: MAX_SIMILAR })}
+				</span>
+			</div>
+
+			{/* What has been named, always in sight — the grid reorders under a
+			    search and a pick that scrolled away is one nobody can take back. */}
+			{picked.length > 0 && (
+				<div className="mx-wiz-similar-picked">
+					{picked.map(m => (
+						<button key={m.file} className="mx-wiz-similar-chip" onClick={() => onToggle(m)} title={t('Remove')}>
+							<img src={lookUrl(m.look, { cell: 24 })} alt="" />
+							{m.name}
+							<X size={12} />
+						</button>
+					))}
+				</div>
+			)}
+
+			<div className="mx-wiz-similar-grid">
+				{shown.length === 0 && <div className="ss-modal-desc">{t('Nothing in this corpus matches.')}</div>}
+				{chunks.map(chunk =>
+					chunk.files.map((_, i) => {
+						const m = shown[chunk.start + i];
+						const on = chosen.has(m.file);
+						return (
+							<button
+								key={m.file}
+								className={on ? 'mx-wiz-mon mx-wiz-mon-on' : 'mx-wiz-mon'}
+								// Full is not the same as disabled: the picked ones must stay
+								// clickable, because clicking one is how you make room.
+								disabled={full && !on}
+								title={t('{{name}} — {{exp}} exp', { name: m.name, exp: fmt(m.experience) })}
+								onClick={() => onToggle(m)}
+							>
+								<span
+									className="mx-wiz-mon-sprite"
+									style={{
+										backgroundImage: `url("${chunk.url}")`,
+										backgroundSize: `${chunk.files.length * MON_SPRITE}px ${MON_SPRITE}px`,
+										backgroundPosition: `-${i * MON_SPRITE}px 0`
+									}}
+								/>
+								<span className="mx-wiz-mon-name">{m.name}</span>
+							</button>
+						);
+					})
+				)}
+			</div>
 		</div>
 	);
 }

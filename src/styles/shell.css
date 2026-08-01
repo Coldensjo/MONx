@@ -1490,12 +1490,126 @@
 	width: min(1420px, 96vw);
 }
 
-/* The drop step: four columns of table, of which the item's name is the one
-   that has to be legible. At the dialog's ordinary width the name column is
-   what the three fixed ones leave over, which is not enough for "dragon scale
-   mail". */
+/* Two steps that are browsing rather than answering: a grid of the corpus, and
+   a table of drops. Both want more columns than a question does — at the
+   dialog's ordinary width the drop table's name column is what the three fixed
+   ones leave over, which is not enough for "dragon scale mail". */
 .mx-wiz-mid {
 	width: min(920px, 94vw);
+}
+
+/* ---- The neighbour picker ---- */
+
+.mx-wiz-similar {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.mx-wiz-similar-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.mx-wiz-similar-bar .mx-wiz-input {
+	flex: 1 1 auto;
+}
+
+.mx-wiz-similar-full {
+	color: var(--accent);
+}
+
+/* What has been named. A chip is a remove button that shows what it would
+   remove — there is no other control, because there is nothing else to do to a
+   pick. */
+.mx-wiz-similar-picked {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.mx-wiz-similar-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 8px 2px 2px;
+	border: 1px solid var(--accent);
+	border-radius: 999px;
+	background: var(--accent-dim);
+	color: var(--text);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.mx-wiz-similar-chip img {
+	width: 24px;
+	height: 24px;
+	image-rendering: pixelated;
+}
+
+/* The one surface in the wizard that scrolls on purpose: it is a corpus, and a
+   corpus is browsed. Bounded in rows so the question, the chips and the footer
+   keep their places while it is. */
+.mx-wiz-similar-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+	gap: 4px;
+	max-height: min(52vh, 470px);
+	overflow-y: auto;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+}
+
+.mx-wiz-mon {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+	padding: 6px 4px;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--text);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.mx-wiz-mon:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+
+.mx-wiz-mon-on {
+	border-color: var(--accent);
+	background: var(--accent-dim);
+}
+
+/* Dimmed at ten, but only the ones that are not already picked — clicking a
+   picked cell is how you make room for another. */
+.mx-wiz-mon:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
+.mx-wiz-mon-sprite {
+	width: 48px;
+	height: 48px;
+	background-repeat: no-repeat;
+	image-rendering: pixelated;
+}
+
+.mx-wiz-mon-name {
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-muted);
+}
+
+.mx-wiz-mon-on .mx-wiz-mon-name {
+	color: var(--text);
 }
 
 /* One dot per step, filled at the current one. A progress bar would imply the
