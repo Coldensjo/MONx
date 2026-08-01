@@ -136,6 +136,11 @@ const STEP_COUNT = 7;
  *  already does. */
 const MAX_SIMILAR = 10;
 
+/** The ceiling on a draw. Not a limit on how much a monster may drop — the
+ *  browser adds as many as you like on top — but on how many the generator will
+ *  propose, and a proposal longer than this is one nobody reads. */
+const MAX_DRAW = 25;
+
 /** Everything the generator can fill in, and therefore everything the `touched`
  *  set has keys for. A field the user has edited is never redrawn under them. */
 type Field = 'name' | 'stats' | 'look' | 'race' | 'corpse' | 'melee' | 'loot';
@@ -199,6 +204,10 @@ export default function CreateWizard({
 	 *  carries the whole kit, and five open cards is a page, not a question. */
 	const [active, setActive] = useState(0);
 	const [loot, setLoot] = useState<Ticked<SampledLoot>[]>([]);
+	/** How many drops a draw proposes. Five is what a mid-band monster in this
+	 *  corpus tends to have; a boss wants more and a bat wants one, and the
+	 *  generator has no way to know which without being told. */
+	const [drawCount, setDrawCount] = useState(5);
 
 	// ---- Corpus ----
 	const [bands, setBands] = useState<BalanceBand[]>([]);
@@ -361,9 +370,9 @@ export default function CreateWizard({
 			setLoot([]);
 			return;
 		}
-		const drawn = sampleLoot(makeRng((seed ^ 0xbee5) + nonce.loot), donors, dropped, items, 5);
+		const drawn = sampleLoot(makeRng((seed ^ 0xbee5) + nonce.loot), donors, dropped, items, drawCount);
 		setLoot(drawn.map(item => ({ item, on: true })));
-	}, [donors, dropped, items, seed, nonce.loot, kind, hasItems, touched]);
+	}, [donors, dropped, items, seed, nonce.loot, kind, hasItems, touched, drawCount]);
 
 	/** Naming a neighbour is also a statement about power, so the band follows the
 	 *  middle of the picks — set here rather than in an effect so that moving the
@@ -1092,7 +1101,27 @@ export default function CreateWizard({
 										<Plus size={14} />
 										{t('Pick items…')}
 									</button>
-									<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => redraw('loot')}>
+									{/* How many to draw, then the draw: the parameter reads before
+									    the button that uses it. A boss wants twelve drops and a bat
+									    wants one, and five is only ever a guess at which this is —
+									    the one thing the corpus cannot tell the generator. */}
+									<span className="mx-wiz-loot-draw">
+										<NumberField
+											value={drawCount}
+											onChange={setDrawCount}
+											min={1}
+											max={MAX_DRAW}
+											hardMax={MAX_DRAW}
+											width={56}
+											title={t('How many items a draw proposes')}
+										/>
+										<span className="mx-wiz-mini">{t('items')}</span>
+									</span>
+									<button
+										className="ss-btn ss-btn-ghost ss-ed-mini"
+										title={t('Replaces the table with a fresh draw off the donors')}
+										onClick={() => redraw('loot')}
+									>
 										{t('Draw again')}
 									</button>
 									<span className="mx-wiz-mini mx-wiz-loot-total">
