@@ -135,7 +135,8 @@ cargo run --example probe_assets -- <assets-dir> [out_dir]
 │  Rust backend (src-tauri/src/)                          │
 │  lib.rs      — #[tauri::command] handlers                │
 │  workspace.rs— the open folders and all they loaded      │
-│  monster.rs  — monster XML read/write (round-trip safe)  │
+│  monster/    — monster XML read/write (round-trip safe): │
+│      model dom read write corpus crud pinloot bands      │
 │  registry.rs — monsters.xml registry (raceid ↔ file)     │
 │  spells.rs   — spell name catalogue + ### verification    │
 │  lint.rs     — the lint engine                           │
@@ -257,8 +258,8 @@ The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the pro
 
 - `catalog.rs` / `catalog.ts` — the enum tables (flags, damage and condition types, races, skulls, `CONST_ME_*`, `CONST_ANI_*`, built-in spells), each citing its section. The two are hand-kept mirrors and **`bun run catalog` is what keeps them honest** — add a value to one side only and nothing breaks, no build fails and no probe notices: the linter quietly stops calling it unknown while the picker still will not offer it, which is the "renders as nothing, deleted on the next click" case above. The check compares wire-exact names and numbers only; labels, colours, notes and group headings are UI-only and diverge on purpose. Where the two sides model the same fact differently — the unreachable shoot effects are a Rust exclusion list and a TS row flag — the check knows, and the comments in `scripts/check-catalog.mjs` say why for each.
 - `customeffects.ts` / `engine.rs` `CustomEffects` — the escape hatch for the tables above. Every effect table is read out of a shipped server's source, which is what makes it trustworthy and what makes it wrong for anyone who modified their own. A user declares the extras (Preferences → Custom effects, `monx.customEffects`), the picker appends them to the engine's list, and the linter stops calling them unknown. **The probes deliberately pass `CustomEffects::default()`** — a gate a setting can quieten is not a gate. Effects that are neither shipped nor declared still show in the picker as off-catalogue rather than reading as `(none)`, because a value the editor renders as "nothing" is a value the next click deletes.
-- `lint.rs` — every engine rule with an observable consequence, as stable machine codes. If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text. Three codes live outside it, on the cross-file path: `registry.orphan` and `file.unreadable` in `monster.rs`, `items.missing-from-otb` in `lib.rs`.
-- `monster.rs` — the reader and writer comments, which record why the model is shaped the way it is (why `pacifist`/`leash` are fields and not lines, why `<flag>` keeps only its first attribute, and so on).
+- `lint.rs` — every engine rule with an observable consequence, as stable machine codes. If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text. Three codes live outside it, on the cross-file path: `file.unreadable` in `monster/corpus.rs`, `registry.orphan` in `monster/crud.rs`, `items.missing-from-otb` in `lib.rs`.
+- `monster/` — the reader and writer comments, which record why the model is shaped the way it is (why `pacifist`/`leash` are fields and not lines, why `<flag>` keeps only its first attribute, and so on). `mod.rs` opens with why the writer splices rather than renders, which is the thing to read before touching `write.rs`.
 - `git log` — the two files are in history if you need the prose: `git show f050169^:MONSTER_EDITOR_REFERENCE.md`. `LOOT_SIMULATOR.md`, which `lootsim.ts` and `LootSimDialog.tsx` still cite by section, went the same way: `git show de45203^:LOOT_SIMULATOR.md`.
 
 Four rules that come up constantly:

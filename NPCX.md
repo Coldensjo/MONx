@@ -84,14 +84,14 @@ NumberField, Toggle, colour grids, `preview.tsx`), `ThingBrowser.tsx`,
 
 ### What stays in `monx`
 
-`monster.rs`, `monster_lua.rs`, `lint.rs`, `engine.rs`, `registry.rs`,
+`monster/` (all eight modules), `monster_lua.rs`, `lint.rs`, `engine.rs`, `registry.rs`,
 `spells.rs`, `catalog.rs`, and the whole monster half of the frontend.
 
 ### What has to be generalised, not just moved
 
 Three things are entangled and need a small amount of surgery:
 
-1. **`Lint`** — currently defined in `monster.rs`. It is a severity, a code, a
+1. **`Lint`** — currently defined in `monster/model.rs`. It is a severity, a code, a
    message, a file, a path and a `fixable` bit; nothing about it is monster-shaped.
    Move the type, the three severities and the `lint_applies` suppression
    mechanism into core. The *rules* stay per-app.
