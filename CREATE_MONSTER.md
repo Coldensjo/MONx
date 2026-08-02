@@ -79,7 +79,7 @@ write is the one `create_monster` already does.
 | `CreateWizard.tsx` | `src/CreateWizard.tsx` | new — the six steps |
 | `generate.ts` | `src/generate.ts` | new — the samplers, pure, no React |
 | `namegen.ts` | `src/namegen.ts` | new — vendored from TibiaNameGen |
-| `monster_template` | `lib.rs` → `monster::template` | new — the skeleton, unwritten |
+| `monster_template` | `commands/monsters.rs` → `monster::template` | new — the skeleton, unwritten |
 | Entry: `new-monster` command | `Workspace.tsx` / `MonsterList.tsx` | exists, repointed |
 | Corpus stats | `balanceBands()` | exists |
 | Drop pool | `droppedItemIds()` | exists |

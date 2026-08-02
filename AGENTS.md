@@ -12,7 +12,7 @@ Opens a workspace of up to four folders: the server's `monster/` folder, its `it
 
 MONx is a fork of **SPRx**, a sprite browser for the same client formats. The sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image server, the virtualized browsers — is inherited whole. What's new is the monster-XML layer on top.
 
-**There is a refactor in progress.** [MODULARITY.md](MODULARITY.md) tracks it: what has been split so far, the two-part method used to prove each split changed no behaviour, and what is left. Read it before splitting a large file or before starting on `lib.rs`, `Workspace.tsx` or `CreateWizard.tsx`, and delete it when its list is empty.
+**There is a refactor in progress.** [MODULARITY.md](MODULARITY.md) tracks it: what has been split so far, the two-part method used to prove each split changed no behaviour, and what is left. Read it before splitting a large file or before starting on `Workspace.tsx` or `CreateWizard.tsx`, and delete it when its list is empty.
 
 ## Stack
 
@@ -135,7 +135,9 @@ cargo run --example probe_assets -- <assets-dir> [out_dir]
                      │ Tauri invoke + custom URI scheme
 ┌────────────────────▼────────────────────────────────────┐
 │  Rust backend (src-tauri/src/)                          │
-│  lib.rs      — #[tauri::command] handlers                │
+│  lib.rs      — module list, run(), invoke_handler!        │
+│  commands/   — the #[tauri::command] handlers:            │
+│      things session monsters itemdb batch patchnotes     │
 │  workspace.rs— the open folders and all they loaded      │
 │  monster/    — monster XML read/write (round-trip safe): │
 │      model dom read write/ corpus crud pinloot bands     │
@@ -261,7 +263,8 @@ The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the pro
 
 - `catalog.rs` / `catalog.ts` — the enum tables (flags, damage and condition types, races, skulls, `CONST_ME_*`, `CONST_ANI_*`, built-in spells), each citing its section. The two are hand-kept mirrors and **`bun run catalog` is what keeps them honest** — add a value to one side only and nothing breaks, no build fails and no probe notices: the linter quietly stops calling it unknown while the picker still will not offer it, which is the "renders as nothing, deleted on the next click" case above. The check compares wire-exact names and numbers only; labels, colours, notes and group headings are UI-only and diverge on purpose. Where the two sides model the same fact differently — the unreachable shoot effects are a Rust exclusion list and a TS row flag — the check knows, and the comments in `scripts/check-catalog.mjs` say why for each.
 - `customeffects.ts` / `engine/custom.rs` — the escape hatch for the tables above. Every effect table is read out of a shipped server's source, which is what makes it trustworthy and what makes it wrong for anyone who modified their own. A user declares the extras (Preferences → Custom effects, `monx.customEffects`), the picker appends them to the engine's list, and the linter stops calling them unknown. **The probes deliberately pass `CustomEffects::default()`** — a gate a setting can quieten is not a gate. Effects that are neither shipped nor declared still show in the picker as off-catalogue rather than reading as `(none)`, because a value the editor renders as "nothing" is a value the next click deletes.
-- `lint.rs` — every engine rule with an observable consequence, as stable machine codes. If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text. Three codes live outside it, on the cross-file path: `file.unreadable` in `monster/corpus.rs`, `registry.orphan` in `monster/crud.rs`, `items.missing-from-otb` in `lib.rs`.
+- `lint.rs` — every engine rule with an observable consequence, as stable machine codes. If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text. Three codes live outside it, on the cross-file path: `file.unreadable` in `monster/corpus.rs`, `registry.orphan` in `monster/crud.rs`, `items.missing-from-otb` in
+`commands/session.rs`.
 - `monster/` — the reader and writer comments, which record why the model is shaped the way it is (why `pacifist`/`leash` are fields and not lines, why `<flag>` keeps only its first attribute, and so on). `mod.rs` opens with why the writer splices rather than renders, which is the thing to read before touching `write/`.
 - `git log` — the two files are in history if you need the prose: `git show f050169^:MONSTER_EDITOR_REFERENCE.md`. `LOOT_SIMULATOR.md`, which `lootsim.ts` and `LootSimDialog.tsx` still cite by section, went the same way: `git show de45203^:LOOT_SIMULATOR.md`.
 
@@ -325,7 +328,9 @@ The trap is that a feature arrives over many commits and the words feel like cle
 ### Adding a feature
 
 1. **Backend logic** → the owning module (pure Rust, testable via `examples/`).
-2. **New API surface** → `#[tauri::command]` in `lib.rs`, register in `invoke_handler!`.
+2. **New API surface** → `#[tauri::command]` in the matching `commands/` module,
+   register in `lib.rs`'s `invoke_handler!` (as `commands::<name>` — the handler
+   macro needs the module path, not a bare name).
 3. **Frontend types + invoke** → `monster.ts` (mirror serde field names in camelCase).
 4. **UI** → the relevant view component.
 5. **Its words** → wrap in `t()`, then add the Polish and Portuguese to `src/locales/` — see above.

@@ -19,9 +19,11 @@ proved. Do not relax it without saying so in the commit.
 | `5e53a2c` | `probe_monster --crud` mirrored `.monx-backup` and counted it as its own work |
 | `867a4ee` | `engine.rs` (2,306) → `engine/`, 6 modules |
 | `5931476` | `monster/write.rs` (1,758) → `write/`, 7 modules |
+| this one | `lib.rs` (1,680) → `commands/`, 6 modules + `mod.rs` |
 
-Version is at `0.1.98`. No Rust file is now over 900 lines outside the frozen
-`dat.rs` / `spr.rs`.
+Version is at `0.1.99`. No Rust file is now over 900 lines outside the frozen
+`dat.rs` / `spr.rs`, and `lib.rs` is 98 lines: the module list, the
+`CustomEffectsState` type, and `run()`.
 
 Two new gates exist and are documented in AGENTS.md. Run both on every change
 that touches what they cover:
@@ -98,6 +100,7 @@ Results so far, each with **zero unexplained lines in either direction**:
 | `monster/` | 4,552 → 4,552 | 15, all `pub(crate)` on helpers crossing a module line |
 | `engine/` | 2,145 → 2,145 | 43, all `pub(crate)` on table consts |
 | `write/` | 1,668 → 1,667 | 47 `pub(super)` on methods; the odd line is the `impl` closing brace, which became six |
+| `commands/` | 1,560 → 1,639 | 44 handler entries gaining a `commands::` prefix, 44 `fn` → `pub(crate) fn`, 8 wire structs and the `CustomEffectsState` type the same, the moved `use` lines, 6 × `use super::*`, 7 `mod` declarations, and ~70 lines of new `//!` module docs |
 
 A Python sketch of the comparison is in the `write/` commit's working notes; it
 is ~30 lines of `collections.Counter` and quicker to rewrite than to find.
@@ -133,40 +136,55 @@ the work was done on and will not exist elsewhere:**
     npcs/       110 NPC XML — unused by MONx today, relevant to NPCX.md
 ```
 
-Re-point `$B` at whatever real workspace is available. `assets/` and `sources/`
-as described in AGENTS.md did **not** exist on that machine, so the seven-engine
-matrix documented there has never been run against this work — only the fixtures
-(1–3 monsters per engine) and the one real Ironcore corpus.
+Re-point `$B` at whatever real workspace is available.
 
-**That is the largest gap in the verification.** If a populated `assets/` tree is
-available at home, run the seven `--mutate` commands from AGENTS.md against the
-three splits before building anything on top of them.
+**That gap is now closed.** `assets/` and `sources/` did not exist on the machine
+the first three splits were done on, so the seven-engine matrix in AGENTS.md had
+never been run against them. It has now, on a machine where both trees are
+populated, and every engine passes `--mutate` and the sniffed detection run:
+
+| engine | corpus | files |
+|---|---|---|
+| Ironcore | `assets/Ironcore/monsters` | 382 |
+| TVP | `assets/TVP/monster` | 157 |
+| Nostalrius | `assets/Nostalrius/monster` | 160 |
+| Canary | `assets/Canary/monster` | 1,655 |
+| Crystal | `assets/CrystalServer/monster` | 1,665 |
+| Crystal (repo) | `sources/crystalserver-main/data-global/monster` | 1,800 |
+| BlackTek | `assets/BlackTek/monster` | 740 |
+| TFS | `sources/forgottenserver-master/data/monster` | 1,166 |
+
+9,725 files, round-trip identical, every gate exit 0. The `gates.ps1` baseline
+used for `commands/` covers all eight corpora × five flag sets plus the seven
+fixtures and four `probe_lua` runs — 76 invocations, and the before/after diff
+was empty outside the timing lines.
 
 ---
 
 ## 4. Left to do
 
-In order. The first is mechanical and provable; everything after it is not.
+The mechanical Rust splits are done. Everything below is frontend, and none of
+it is provable the way they were — read §4.5 first.
 
-### 4.1 `lib.rs` → `commands/` — 1,680 lines, 44 commands
+### 4.1 ~~`lib.rs` → `commands/`~~ — done
 
-The last of the mechanical Rust splits. Already sectioned by comment:
+Six modules on the banner comments the file already carried: `things` (the
+inherited `.spr`/`.dat` commands), `session`, `monsters`, `itemdb`, `batch`,
+`patchnotes`. The stale `(Agent 1)` / `(Agent 2)` provenance labels went with
+the split rather than into the new files.
 
-```
-260   // ---------- Workspace (Agent 1) ----------
-582   // ---------- Monsters (Agent 2) ----------
-918   // ---------- Items (Agent 1) ----------
-1130  // ---------- Batch field edit ----------
-1395  // ---------- Patch notes ----------
-```
+Two things the earlier plan got wrong, worth knowing before the next one:
 
-The `(Agent 1)` / `(Agent 2)` labels are stale provenance from how the code was
-originally written. They mean nothing to a reader now and should go with the
-split rather than be carried into the new files.
-
-Watch for: `lib.rs` also holds the `run()` entry point, the `invoke_handler!`
-registration and several shared serde structs (`ThingSummary`, `ExternalChange`).
-Those stay in `lib.rs`; only the command bodies move. Verify with §2.
+- **The wire structs moved with their commands, not into `lib.rs`.** The plan
+  said `ThingSummary` and `ExternalChange` were shared and should stay behind.
+  They are not shared — each is named by exactly one command, and leaving them
+  in `lib.rs` would have meant a lookup away from the only caller for nothing.
+- **`generate_handler!` needs the module path.** `use commands::*;` and a bare
+  `open_spr,` does not compile: `#[tauri::command]` also emits a `__cmd__<name>`
+  macro, which a glob re-export does not carry. The registration lists
+  `commands::open_spr` and the command functions are `pub(crate)` — which is
+  also what makes the macro `#[macro_export]`, and so re-exportable at all.
+  A private `fn` in a submodule silently fails to produce one.
 
 ### 4.2 `WorkspaceContext` — do this *before* any frontend split
 
@@ -255,6 +273,12 @@ Do not start §4.3 or §4.4 until one of those is actually in place.
   broken twice.
 - **Engine detection is only covered by the sniffed probe run.** An explicit
   `--engine` run will not notice detection breaking.
+- **A macro-generating attribute changes what a split costs.** `#[tauri::command]`
+  emits two `macro_rules!` beside the function, and macros do not travel through
+  `pub use module::*` the way functions do. Moving such a function into a
+  submodule is not the same operation as moving a plain one — see §4.1. Anything
+  else in this codebase that generates items beside a function will behave the
+  same way.
 
 ---
 

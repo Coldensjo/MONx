@@ -179,7 +179,7 @@ the whole prefix:
 
 Three lint codes live outside `lint.rs`, on the cross-file path:
 `registry.orphan` in `monster/crud.rs` and `file.unreadable` in `monster/corpus.rs`, and
-`items.missing-from-otb` in `lib.rs`.
+`items.missing-from-otb` in `commands/session.rs`.
 
 ## Detection
 

@@ -106,8 +106,8 @@ fn stat(values: impl Iterator<Item = i64>) -> BandStat {
 
 // ---------- Batch field edit (§ tools) ----------
 //
-// Filter + target + the one-document edit. The Tauri command in lib.rs is the
-// thin wrapper: it walks the corpus, counts, and saves.
+// Filter + target + the one-document edit. The Tauri command in
+// `commands/batch.rs` is the thin wrapper: it walks the corpus, counts, and saves.
 
 /// Which monsters a batch edit touches. Every field that is set narrows the
 /// selection; they are AND-ed, so "undead" + "experience ≥ 1000" is both.
