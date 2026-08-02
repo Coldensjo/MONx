@@ -1,6 +1,6 @@
 // Effects a server has added that no shipped table could know about.
 //
-// The engine tables in `engine.ts` and `engine.rs` are each read out of a real
+// The engine tables in `engine.ts` and `engine/tables.rs` are each read out of a real
 // server's source, which is what makes them worth trusting — and exactly why
 // they cannot cover the effect somebody added to their own fork last Tuesday.
 // Without this, magic effect 105 on a modified Ironcore is invisible in the

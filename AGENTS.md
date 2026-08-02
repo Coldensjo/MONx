@@ -30,7 +30,7 @@ No test suite, no linter config beyond TypeScript strict mode.
 
 - Frontend: `bun run build` (runs `tsc` then Vite) or `bun run tauri:dev`.
 - Frontend strings: `bun run i18n` — fails naming any string `pl.ts` or `pt.ts` is missing. Run it on every change that touches `src/`; see [Text the user reads](#text-the-user-reads).
-- Catalogue mirrors: `bun run catalog` — fails when `catalog.rs` and `catalog.ts`, or `engine.rs` and `engine.ts`, stop agreeing. Run it on every change to any of the four.
+- Catalogue mirrors: `bun run catalog` — fails when `catalog.rs` and `catalog.ts`, or `engine/` and `engine.ts`, stop agreeing. Run it on every change to any of the four.
 - Backend compile: `cargo check` in `src-tauri/`.
 - Backend behavior: `probe_monster` is the fastest end-to-end check — it reads and rewrites the whole monster corpus and diffs the bytes, so a round-trip regression fails across every file at once instead of arriving as a bug report. `probe_dat` does the same for sprite composition.
 
@@ -141,7 +141,8 @@ cargo run --example probe_assets -- <assets-dir> [out_dir]
 │  spells.rs   — spell name catalogue + ### verification    │
 │  lint.rs     — the lint engine                           │
 │  catalog.rs  — enum catalogues (effects, conditions, …)   │
-│  engine.rs   — engine profiles (7 servers, two formats)  │
+│  engine/     — engine profiles (7 servers, two formats):  │
+│      caps profile tables profiles custom detect          │
 │  luadoc.rs   — span-preserving Lua documents (Canary/BT)  │
 │  monster_lua.rs — Lua tables <-> MonsterDoc               │
 │  assets.rs   — modern client bundle: LZMA sprite sheets    │
@@ -211,7 +212,7 @@ src/
   UiInspector.tsx      Hold-F2 element inspector overlay
   monster.ts           Monster/workspace types, invoke wrappers, protocol URL builders
   spr.ts               Inherited invoke wrappers + protocol URLs
-  engine.ts            The frontend's projection of engine.rs — which sections
+  engine.ts            The frontend's projection of engine/ — which sections
                        render, which enums to offer, which fields are inert
   settings.ts          localStorage (monx.* keys)
   i18n.ts              Language layer: locale registry, i18next init (monx.locale)
@@ -247,7 +248,7 @@ assets/                fixture workspaces, one folder per engine: each has
 
 **Do not infer behaviour from upstream TFS.** Ironcore diverges in ways that matter constantly: per-spell cooldowns, extra flags, the pacifist system, `force` on summons, `corpseactionid`, `masterEffect`.
 
-MONx also opens **TheForgottenServer 1.x, TheVioletProject, Nostalrius, Canary/OTServBR, CrystalServer and BlackTek** corpora. Everything below describes Ironcore, which is the default profile; what the other six do differently lives in `engine.rs` and is summarised in [ENGINES.md](ENGINES.md). Four consequences worth knowing before touching anything:
+MONx also opens **TheForgottenServer 1.x, TheVioletProject, Nostalrius, Canary/OTServBR, CrystalServer and BlackTek** corpora. Everything below describes Ironcore, which is the default profile; what the other six do differently lives in `engine/profiles.rs` and is summarised in [ENGINES.md](ENGINES.md). Four consequences worth knowing before touching anything:
 
 - **The reader, writer and linter all take a `&'static EngineProfile`.** There is one `MonsterDoc` for all seven engines — a superset — and the profile decides which parts the reader populates and the writer emits. Never hard-code a spelling like `raceid` or `CONST_ME_*`; ask the profile.
 - **Two formats, one model.** Canary and BlackTek define monsters as Lua tables, not XML. `Parsed` is an enum with an XML body and a Lua body; `read_bytes`/`write_bytes` dispatch on `profile.format`. Everything above the document layer — `MonsterDoc`, the lints, the editor — is shared, and should stay that way.
@@ -257,7 +258,7 @@ MONx also opens **TheForgottenServer 1.x, TheVioletProject, Nostalrius, Canary/O
 The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the product in `DESIGN.md`; both were derived from the server's own source and have since been removed from the repo. The `§n` markers throughout the code cite them. What they said now lives in the code, and that is where to look — or to add to:
 
 - `catalog.rs` / `catalog.ts` — the enum tables (flags, damage and condition types, races, skulls, `CONST_ME_*`, `CONST_ANI_*`, built-in spells), each citing its section. The two are hand-kept mirrors and **`bun run catalog` is what keeps them honest** — add a value to one side only and nothing breaks, no build fails and no probe notices: the linter quietly stops calling it unknown while the picker still will not offer it, which is the "renders as nothing, deleted on the next click" case above. The check compares wire-exact names and numbers only; labels, colours, notes and group headings are UI-only and diverge on purpose. Where the two sides model the same fact differently — the unreachable shoot effects are a Rust exclusion list and a TS row flag — the check knows, and the comments in `scripts/check-catalog.mjs` say why for each.
-- `customeffects.ts` / `engine.rs` `CustomEffects` — the escape hatch for the tables above. Every effect table is read out of a shipped server's source, which is what makes it trustworthy and what makes it wrong for anyone who modified their own. A user declares the extras (Preferences → Custom effects, `monx.customEffects`), the picker appends them to the engine's list, and the linter stops calling them unknown. **The probes deliberately pass `CustomEffects::default()`** — a gate a setting can quieten is not a gate. Effects that are neither shipped nor declared still show in the picker as off-catalogue rather than reading as `(none)`, because a value the editor renders as "nothing" is a value the next click deletes.
+- `customeffects.ts` / `engine/custom.rs` — the escape hatch for the tables above. Every effect table is read out of a shipped server's source, which is what makes it trustworthy and what makes it wrong for anyone who modified their own. A user declares the extras (Preferences → Custom effects, `monx.customEffects`), the picker appends them to the engine's list, and the linter stops calling them unknown. **The probes deliberately pass `CustomEffects::default()`** — a gate a setting can quieten is not a gate. Effects that are neither shipped nor declared still show in the picker as off-catalogue rather than reading as `(none)`, because a value the editor renders as "nothing" is a value the next click deletes.
 - `lint.rs` — every engine rule with an observable consequence, as stable machine codes. If you want to know what the loader does with a bad value, the lint for it says so. Filter on `code`, never on message text. Three codes live outside it, on the cross-file path: `file.unreadable` in `monster/corpus.rs`, `registry.orphan` in `monster/crud.rs`, `items.missing-from-otb` in `lib.rs`.
 - `monster/` — the reader and writer comments, which record why the model is shaped the way it is (why `pacifist`/`leash` are fields and not lines, why `<flag>` keeps only its first attribute, and so on). `mod.rs` opens with why the writer splices rather than renders, which is the thing to read before touching `write.rs`.
 - `git log` — the two files are in history if you need the prose: `git show f050169^:MONSTER_EDITOR_REFERENCE.md`. `LOOT_SIMULATOR.md`, which `lootsim.ts` and `LootSimDialog.tsx` still cite by section, went the same way: `git show de45203^:LOOT_SIMULATOR.md`.

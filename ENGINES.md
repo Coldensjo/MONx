@@ -3,9 +3,9 @@
 MONx opens monster corpora from seven OpenTibia servers. They disagree about
 almost everything — the file format, the spelling of a race id, what a spell's
 `range` does when it is too large — and MONx models that disagreement in one
-place: the `EngineProfile` table in [`src-tauri/src/engine.rs`](src-tauri/src/engine.rs).
+place: the `EngineProfile` declarations in [`src-tauri/src/engine/profiles.rs`](src-tauri/src/engine/profiles.rs).
 
-This document is the map. `engine.rs` is the territory, and where the two
+This document is the map. `engine/` is the territory, and where the two
 disagree the code wins.
 
 ## The one rule
@@ -185,7 +185,7 @@ Three lint codes live outside `lint.rs`, on the cross-file path:
 
 The Landing dialog sniffs the corpus rather than asking, and `probe_monster`
 uses the identical path when you omit `--engine`. Detection scores substring
-signals over sampled monster files (`SIGNALS` in `engine.rs`), ranked
+signals over sampled monster files (`SIGNALS` in `engine/detect.rs`), ranked
 decisive-structural-marker first, then spellings, then weak hints.
 
 **A signal never rules a profile out on its own.** Corpora are hand-maintained
@@ -225,7 +225,7 @@ command list and the `--engine` keys.
 
 ## Adding an engine
 
-1. Add the `EngineProfile` constant in `engine.rs`. Fill in **every** field
+1. Add the `EngineProfile` constant in `engine/profiles.rs`, and any table it needs in `engine/tables.rs`. Fill in **every** field
    deliberately — the compiler will demand them, and a copied value that
    happens to compile is how a wrong rule gets declared applicable.
 2. Add detection signals to `SIGNALS`, priced against the engines it most

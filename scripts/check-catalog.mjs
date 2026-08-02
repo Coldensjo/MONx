@@ -27,12 +27,23 @@
 //     exist in Rust with the same tick). Rust also accepts `physical`, which
 //     the UI folds into bleed.
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const RS = readFileSync('src-tauri/src/catalog.rs', 'utf8');
 const TS = readFileSync('src/catalog.ts', 'utf8');
-const ENGINE_RS = readFileSync('src-tauri/src/engine.rs', 'utf8');
 const ENGINE_TS = readFileSync('src/engine.ts', 'utf8');
+
+// The whole engine module, concatenated. The profile declarations live in
+// engine/profiles.rs today, but reading the directory rather than that one file
+// means a later move inside the module cannot quietly take the engine check
+// with it — the failure would be an empty key list comparing clean, which is
+// the silence this script exists to prevent.
+const ENGINE_DIR = 'src-tauri/src/engine';
+const ENGINE_RS = readdirSync(ENGINE_DIR)
+	.filter(f => f.endsWith('.rs'))
+	.map(f => readFileSync(join(ENGINE_DIR, f), 'utf8'))
+	.join('\n');
 
 /** The body of a `pub const NAME: … = &[ … ];` table, on one line or many. */
 function rustTable(name) {
@@ -172,7 +183,7 @@ compareSet(
 	'ENGINES',
 	[...ENGINE_RS.matchAll(/\bkey:\s*"(\w+)"/g)].map(m => m[1]),
 	[...ENGINE_TS.matchAll(/\bkey:\s*'(\w+)'/g)].map(m => m[1]),
-	'engine.rs',
+	'engine/',
 	'engine.ts'
 );
 
@@ -182,4 +193,4 @@ if (problems.length) {
 	console.error('\nSee AGENTS.md → Domain knowledge. Fix the side that is wrong — they are not ranked.');
 	process.exit(1);
 }
-console.log('catalog.rs and catalog.ts agree; engine.rs and engine.ts offer the same engines.');
+console.log('catalog.rs and catalog.ts agree; engine/ and engine.ts offer the same engines.');

@@ -19,7 +19,7 @@ Measured against the tree as it stands:
 | Rust | 10,967 lines | 6,720 lines |
 | Frontend | 13,274 lines | 13,271 lines |
 
-More than half of MONx would be inert in an NPC editor. `engine.rs` looks like
+More than half of MONx would be inert in an NPC editor. `engine/` looks like
 shared infrastructure and is not: of its 51 `EngineProfile` fields, roughly 41 are
 monster vocabulary — flags, immunities, elements, builtin spells, melee, summons,
 voices, loot, bestiary, races, skulls. An NPC profile needs about ten of them.
@@ -84,7 +84,7 @@ NumberField, Toggle, colour grids, `preview.tsx`), `ThingBrowser.tsx`,
 
 ### What stays in `monx`
 
-`monster/` (all eight modules), `monster_lua.rs`, `lint.rs`, `engine.rs`, `registry.rs`,
+`monster/` (all eight modules), `monster_lua.rs`, `lint.rs`, `engine/`, `registry.rs`,
 `spells.rs`, `catalog.rs`, and the whole monster half of the frontend.
 
 ### What has to be generalised, not just moved

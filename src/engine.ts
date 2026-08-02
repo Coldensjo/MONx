@@ -1,6 +1,6 @@
 // What the UI needs to know about the active engine: which sections to render,
 // which enum lists to offer, which fields are inert. The authority is
-// `src-tauri/src/engine.rs` — this is the projection of it the frontend needs,
+// `src-tauri/src/engine/` — this is the projection of it the frontend needs,
 // kept deliberately small so the two cannot drift far.
 //
 // The effect tables are the exception and are duplicated in full, because the
@@ -304,7 +304,7 @@ const CANARY: EngineInfo = {
 	// also carries — `challengeable`, `isBoss`, `ignoreSpawnBlock`,
 	// `canWalkOnIce`, `isPet`, `canTeleport` — are parsed and dropped, and
 	// offering them here would be offering a control that does nothing. They are
-	// `DEAD_FLAGS_CANARY` in `engine.rs`, and the linter names them.
+	// `DEAD_FLAGS_CANARY` in `engine/tables.rs`, and the linter names them.
 	boolFlags: [
 		'summonable', 'attackable', 'hostile', 'convinceable', 'illusionable',
 		'pushable', 'canPushItems', 'canPushCreatures', 'isBlockable', 'healthHidden',
@@ -342,7 +342,7 @@ const CANARY: EngineInfo = {
 // Crystal registers a `skull` setter where Canary registers none, so the picker
 // that must stay empty there can be filled here; and its registrar reads two
 // flags Canary's does not. The renamed effect constants and the agony damage
-// type are real differences too, but they are backend-side — see `engine.rs`
+// type are real differences too, but they are backend-side — see `engine/`
 // `CRYSTAL` and `catalog.ts` `damageTypes`.
 const CRYSTAL: EngineInfo = {
 	...CANARY,
