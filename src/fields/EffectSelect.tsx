@@ -66,13 +66,18 @@ export function EffectBrowse({
 	value,
 	engine,
 	onBrowse,
-	onClear
+	onClear,
+	emptyLabel
 }: {
 	kind: 'area' | 'shoot';
 	value: string | null;
 	engine?: string;
 	onBrowse: () => void;
 	onClear: () => void;
+	/** What an unset picker says. The spell designer's two sit under their own
+	 *  labels and need no words; a picker in a row of numbers has nothing else
+	 *  to say what it is, so it says "Pick effect". */
+	emptyLabel?: string;
 }) {
 	const { t } = useTranslation();
 	const info = engineInfo(engine);
@@ -112,9 +117,9 @@ export function EffectBrowse({
 				{entry ? (
 					<EffectPreview id={entry.id} kind={kind} size={64} />
 				) : (
-					<span className="ss-ed-effect-chip ss-ed-effect-chip-lg">—</span>
+					!emptyLabel && <span className="ss-ed-effect-chip ss-ed-effect-chip-lg">—</span>
 				)}
-				{!hasSprite && <span className="ss-ed-item-name">{label}</span>}
+				{!hasSprite && <span className="ss-ed-item-name">{(!value && emptyLabel) || label}</span>}
 			</button>
 			{value && (
 				<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" title={t('Clear')} onClick={onClear}>

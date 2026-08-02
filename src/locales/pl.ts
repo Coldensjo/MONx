@@ -541,6 +541,7 @@ const pl: Record<string, string> = {
 	'Played on the summoner as it calls, rather than on what it called.':
 		'Odtwarzany na przyzywającym w chwili wezwania, a nie na przyzwanym.',
 	Effect: 'Efekt',
+	'Pick effect': 'Wybierz efekt',
 	'Pick the monsters it calls for above.': 'Wybierz powyżej potwory, które przyzywa.',
 	'Fights in melee': 'Walczy wręcz',
 	'Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.':

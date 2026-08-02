@@ -72,7 +72,7 @@ import { damageTypes } from './catalog';
 import { CompactProvider } from './fields/Field';
 import { useItemInfo } from './fields/ItemPicker';
 import { useCustomEffects } from './fields/customctx';
-import { EffectSelect } from './fields/EffectSelect';
+import { EffectBrowse } from './fields/EffectSelect';
 import { mergeEffects } from './customeffects';
 import { NumberField } from './fields/NumberField';
 import { SpellCard } from './sections/SpellCard';
@@ -302,6 +302,11 @@ export default function CreateWizard({
 	const [voices, setVoices] = useState<Ticked<SampledVoice>[]>([]);
 	const [cadence, setCadence] = useState({ interval: 5000, chance: 10 });
 	const [summons, setSummons] = useState<Ticked<SampledSummon>[]>([]);
+	/** Which summon row sent the user to the effects browser, and which of its
+	 *  two effect fields is waiting for the answer. The trip out and back loses
+	 *  every other kind of context — the browser knows only that an effect was
+	 *  asked for — so the question has to be held here until the answer lands. */
+	const [summonFx, setSummonFx] = useState<{ index: number; field: 'effect' | 'masterEffect' } | null>(null);
 	/** How many summons may be alive at once. Drawn off the donors like the rest
 	 *  of the proposal, but typed over like the rest of it too — zero here is the
 	 *  one value that makes every entry below inert, so it is worth a field rather
@@ -841,6 +846,16 @@ export default function CreateWizard({
 			const found = table.find(e => e.id === id);
 			if (!found) {
 				showToast('error', t('Nothing in this engine’s catalogue names client effect {{id}}.', { id }));
+			} else if (step === SUMMON_DETAIL_STEP && summonFx) {
+				// Routed by the row that asked rather than by the open card, because
+				// summon rows are all open at once — there is no "current" one for
+				// the answer to fall back to.
+				mark('summons');
+				const { index, field } = summonFx;
+				setSummons(prev =>
+					prev.map((s, j) => (j === index ? { ...s, item: { ...s.item, entry: { ...s.item.entry, [field]: found.name } } } : s))
+				);
+				setSummonFx(null);
 			} else if (step === DEFEND_STEP) {
 				mark('defenses');
 				setDefenses(prev =>
@@ -861,7 +876,11 @@ export default function CreateWizard({
 			}
 		}
 		onPickUsed();
-	}, [picked, mark, onPickUsed, engine.key, custom, openIndex, openDefenseIndex, step, itemIndex, outfits, showToast, t]);
+		// `summonFx` belongs here: it is read above, and it is set on the way out
+		// to the browser. Without it the closure that handles the answer is the one
+		// from before the question was asked, which still has it null — the summon
+		// branch never fires and the effect lands on an ability instead.
+	}, [picked, mark, onPickUsed, engine.key, custom, openIndex, openDefenseIndex, step, summonFx, itemIndex, outfits, showToast, t]);
 
 	// ---- The document, assembled ----
 	const assemble = useCallback(
@@ -1709,21 +1728,31 @@ export default function CreateWizard({
 																/>
 															</span>
 														)}
-														{/* The effect the summon arrives with, and the one played
-														    on the summoner as it calls. The popover grid rather
-														    than the browser: a trip out to the effects browser and
-														    back, per summon, is a lot of travel for a flourish —
-														    and unlike the spell designer's pickers these sit in a
-														    row that is already wide. */}
+														{/* Out to the effects browser, like every other picture-shaped
+														    question the wizard asks. The popover grid was the wrong
+														    control here: it is the editor's, sized for a field with a
+														    label above it, and the wizard's whole bargain is that
+														    choosing a picture happens in the real browser — its search,
+														    its filters, the animation at the client's own rate.
+
+														    Which row asked is held in `summonFx`: the trip out and back
+														    keeps nothing but "an effect was chosen", and unlike the spell
+														    designer there is no single open card for the answer to fall
+														    back to — every summon row is on screen at once. */}
 														{engine.summonEffects && (
 															<>
 																<span className="mx-wiz-summon-num">
 																	<span className="mx-wiz-mini">{t('Effect')}</span>
-																	<EffectSelect
+																	<EffectBrowse
 																		kind="area"
 																		value={entry.effect}
-																		onChange={v => update({ effect: v })}
 																		engine={engine.key}
+																		emptyLabel={t('Pick effect')}
+																		onBrowse={() => {
+																			setSummonFx({ index: i, field: 'effect' });
+																			onBrowse('effect');
+																		}}
+																		onClear={() => update({ effect: null })}
 																	/>
 																</span>
 																<span className="mx-wiz-summon-num">
@@ -1733,11 +1762,16 @@ export default function CreateWizard({
 																	>
 																		{t('On caster')}
 																	</span>
-																	<EffectSelect
+																	<EffectBrowse
 																		kind="area"
 																		value={entry.masterEffect}
-																		onChange={v => update({ masterEffect: v })}
 																		engine={engine.key}
+																		emptyLabel={t('Pick effect')}
+																		onBrowse={() => {
+																			setSummonFx({ index: i, field: 'masterEffect' });
+																			onBrowse('effect');
+																		}}
+																		onClear={() => update({ masterEffect: null })}
 																	/>
 																</span>
 															</>

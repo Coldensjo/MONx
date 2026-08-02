@@ -464,6 +464,7 @@ const pt: Record<string, string> = {
 	'Played on the summoner as it calls, rather than on what it called.':
 		'Reproduzido no invocador ao chamar, e não no que foi invocado.',
 	Effect: 'Efeito',
+	'Pick effect': 'Escolher efeito',
 	'Pick the monsters it calls for above.': 'Escolha acima os monstros que ele invoca.',
 	'Fights in melee': 'Luta corpo a corpo',
 	'Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.':
