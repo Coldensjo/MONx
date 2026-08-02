@@ -103,21 +103,6 @@ export default function PreferencesDialog({
 					</div>
 				</div>
 
-				<div className="ss-modal-desc">{t('Tabs')}</div>
-				<div className="mx-prefs-tabs">
-					{SECTION_IDS.map(id => (
-						<label key={id} className="mx-prefs-tab">
-							<input type="checkbox" checked={visible.includes(id)} onChange={() => toggle(id)} />
-							{t(SECTION_LABEL[id])}
-						</label>
-					))}
-				</div>
-				<div className="ss-ed-field-note">
-					{t('A hidden tab keeps its data — the file is written whole either way. {{tab}} is hidden by default.', {
-						tab: t(SECTION_LABEL.events)
-					})}
-				</div>
-
 				{/* Not a view filter — the monster list has one of those. A monster
 				    ticked here is taken out of the corpus the backend hands to
 				    everything: the sidebar, Ctrl+P, the wizard's donors, the loot and
@@ -159,6 +144,21 @@ export default function PreferencesDialog({
 								<span className="mx-prefs-hidden-file">{m.file}</span>
 							</label>
 						);
+					})}
+				</div>
+
+				<div className="ss-modal-desc">{t('Tabs')}</div>
+				<div className="mx-prefs-tabs">
+					{SECTION_IDS.map(id => (
+						<label key={id} className="mx-prefs-tab">
+							<input type="checkbox" checked={visible.includes(id)} onChange={() => toggle(id)} />
+							{t(SECTION_LABEL[id])}
+						</label>
+					))}
+				</div>
+				<div className="ss-ed-field-note">
+					{t('A hidden tab keeps its data — the file is written whole either way. {{tab}} is hidden by default.', {
+						tab: t(SECTION_LABEL.events)
 					})}
 				</div>
 

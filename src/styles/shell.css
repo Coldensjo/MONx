@@ -153,8 +153,11 @@
 }
 
 /* Two columns of tab checkboxes — ten tabs in one column would run past the
-   dialog's natural height. */
+   dialog's natural height. Never squeezed, for the same reason as the filter
+   list below: a short window scrolls the dialog rather than flattening a box
+   inside it. */
 .mx-prefs-tabs {
+	flex: 0 0 auto;
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 4px 12px;
@@ -182,14 +185,22 @@
 }
 
 .mx-prefs-hidden-search {
+	flex: 0 0 auto;
 	width: 100%;
 	margin: 8px 0 6px;
 }
 
 /* Scrolls rather than growing: a corpus is hundreds of monsters and this is
-   one section of a dialog, not a screen of its own. */
+   one section of a dialog, not a screen of its own.
+
+   `flex-shrink: 0` is what makes it visible at all. The modal is a flex column
+   with a height ceiling, so without it this box — the only child that can give
+   ground — was squeezed to 14 px on a 700 px window and the list read as
+   missing. The dialog scrolls instead. */
 .mx-prefs-hidden-list {
+	flex: 0 0 auto;
 	max-height: 240px;
+	min-height: 132px;
 	overflow-y: auto;
 	padding: 6px 8px;
 	border: 1px solid var(--border);
