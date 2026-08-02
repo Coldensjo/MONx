@@ -190,7 +190,8 @@ src/
   PatchNotesDialog.tsx Patch notes since the user's cut-off point (Tools menu)
   HotkeysDialog.tsx    The hotkey manager (Preferences menu)
   LootSimDialog.tsx    Roll a monster's loot table over N kills (Tools menu)
-  PreferencesDialog.tsx  Language, editor tab visibility + default tab (Preferences menu)
+  PreferencesDialog.tsx  Language, editor tab visibility + default tab, and the
+                       corpus filter (Preferences menu)
   CustomEffectsDialog.tsx  Effects this server adds on top of its engine's (Preferences menu)
   LanguagePicker.tsx   One flag per language, no dropdown
   UiInspector.tsx      Hold-F2 element inspector overlay
@@ -210,6 +211,8 @@ src/
   compare.ts           Two docs → grouped rows with deltas
   lintfix.ts           The one unambiguous repair behind each Fix button
   favourites.ts        Starred item ids (monx.favourites)
+  hidden.ts            Monsters filtered out of a corpus (monx.hidden.<folder>) —
+                       stored per corpus, pushed to the backend before the open
   lootpresets.ts       Named loot-tray sets (monx.lootPresets)
   fixtures.ts          Fixture data for component development
   customeffects.ts     Declared effects: storage, the backend push, the merge

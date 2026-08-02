@@ -388,7 +388,18 @@ fn open_workspace(
     );
     // Before the read — see `refresh` for why the order matters.
     let stamps = workspace::stamp_corpus(profile, &monsters_dir);
-    let (docs, read_errors) = monster::read_corpus(profile, &monsters_dir, &registry, &spells);
+    let (all_docs, all_read_errors) = monster::read_corpus(profile, &monsters_dir, &registry, &spells);
+    // The hidden set is pushed in before the open, so the corpus is filtered
+    // here rather than after — the counts, the lints and the summaries this
+    // call returns are all about the corpus the user says they have.
+    let hidden = state.read().map_err(|e| format!("lock: {e}"))?.hidden.clone();
+    let (hidden_docs, docs): (Vec<_>, Vec<_>) = all_docs
+        .into_iter()
+        .partition(|d| hidden.contains(&d.file));
+    let read_errors: Vec<Lint> = all_read_errors
+        .into_iter()
+        .filter(|l| l.file.as_ref().is_none_or(|f| !hidden.contains(f)))
+        .collect();
 
     let registered_count = docs.iter().filter(|d| d.registered).count() as u32;
     let orphan_count = docs.len() as u32 - registered_count;
@@ -400,7 +411,7 @@ fn open_workspace(
         .get(profile.key)
         .cloned()
         .unwrap_or_default();
-    let mut lints = lint::lint_workspace(profile, &docs, &registry, &spells, &monsters_dir);
+    let mut lints = lint::lint_workspace(profile, &docs, &hidden_docs, &registry, &spells, &monsters_dir);
     let monsters = lint::summaries(profile, &docs, &read_errors, &spells, &index, &custom);
     lints.extend(read_errors.iter().cloned());
     lints.extend(item_lints(&index));
@@ -435,6 +446,7 @@ fn open_workspace(
     ws.items = index;
     ws.monsters = monsters;
     ws.docs = docs;
+    ws.hidden_docs = hidden_docs;
     ws.source_lints = read_errors;
     ws.registry = registry;
     ws.stamps = stamps;
@@ -475,6 +487,54 @@ fn set_custom_effects(
         );
     }
     Ok(())
+}
+
+/// Replaces the set of monsters filtered out of this corpus.
+///
+/// Pushed by the frontend, which owns the setting and stores it per corpus.
+/// Sent *before* `open_workspace` on a cold open, so the corpus arrives already
+/// filtered and nothing ever flashes a monster the user has hidden; sent again
+/// whenever the list changes, which re-splits what is already in memory.
+///
+/// Returns the summaries of what is now hidden — the filter dialog is the one
+/// place they are still visible, and it cannot list them from a corpus they
+/// have just been taken out of.
+#[tauri::command]
+fn set_hidden_monsters(
+    state: State<WorkspaceState>,
+    files: Vec<String>,
+) -> Result<Vec<MonsterSummary>, String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    let next: std::collections::BTreeSet<String> = files.into_iter().collect();
+    if ws.hidden != next {
+        ws.hidden = next;
+        if ws.is_open() {
+            let all = ws.take_all_docs();
+            ws.set_docs(all);
+            resummarise(&mut ws);
+        }
+    }
+    Ok(hidden_summaries(&ws))
+}
+
+/// What the filter dialog lists. Summarised on demand rather than kept beside
+/// `monsters`: it is read when a dialog opens and nowhere else, and a second
+/// list to keep in step with every save is a second list to get wrong.
+#[tauri::command]
+fn list_hidden_monsters(state: State<WorkspaceState>) -> Result<Vec<MonsterSummary>, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    Ok(hidden_summaries(&ws))
+}
+
+fn hidden_summaries(ws: &workspace::Workspace) -> Vec<MonsterSummary> {
+    lint::summaries(
+        ws.profile,
+        &ws.hidden_docs,
+        &ws.source_lints,
+        &ws.spells,
+        &ws.items,
+        &ws.custom_effects,
+    )
 }
 
 #[tauri::command]
@@ -561,16 +621,24 @@ fn refresh(ws: &mut workspace::Workspace) {
     // which is a redundant prompt rather than a lost edit.
     ws.stamps = workspace::stamp_corpus(ws.profile, &dir);
     let (docs, source_lints) = monster::read_corpus(ws.profile, &dir, &ws.registry, &ws.spells);
+    ws.set_docs(docs);
+    ws.source_lints = source_lints;
+    resummarise(ws);
+}
+
+/// The list projection of whatever `docs` now holds. Its own function because
+/// three things change it — a save, a reload, and the filter — and the one that
+/// forgets to call it shows a stale sidebar.
+fn resummarise(ws: &mut workspace::Workspace) {
+    let ws = &mut *ws;
     ws.monsters = lint::summaries(
         ws.profile,
-        &docs,
-        &source_lints,
+        &ws.docs,
+        &ws.source_lints,
         &ws.spells,
         &ws.items,
         &ws.custom_effects,
     );
-    ws.docs = docs;
-    ws.source_lints = source_lints;
 }
 
 /// One monster file that has moved on disk since MONx last read it.
@@ -756,6 +824,7 @@ fn lint_workspace(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
     Ok(lint::lint_workspace(
         ws.profile,
         &ws.docs,
+        &ws.hidden_docs,
         &ws.registry,
         &ws.spells,
         &ws.monsters_dir(),
@@ -1452,6 +1521,7 @@ fn all_lints(state: State<WorkspaceState>) -> Result<Vec<Lint>, String> {
     let mut all = lint::lint_workspace(
         ws.profile,
         &ws.docs,
+        &ws.hidden_docs,
         &ws.registry,
         &ws.spells,
         &ws.monsters_dir(),
@@ -1583,6 +1653,8 @@ pub fn run() {
             search_items,
             get_item,
             balance_bands,
+            set_hidden_monsters,
+            list_hidden_monsters,
             pin_loot_ids,
             item_usage,
             dropped_item_ids,

@@ -9,7 +9,7 @@
 //! M0 scope: path probing, the items index, and a shallow monster scrape.
 //! Agent 2's registry/reader replaces the monster half; `otb.rs` lands at M1.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
@@ -223,6 +223,21 @@ pub struct Workspace {
     /// the frontend, which owns the setting; the backend holds a copy only so
     /// the linter can stop calling a declared effect unknown.
     pub custom_effects: crate::engine::CustomEffects,
+    /// Monster files the user has filtered out of this corpus, by relative
+    /// path. Pushed in by the frontend before the workspace opens, and stored
+    /// per corpus in its settings — a hidden monster stays hidden across
+    /// restarts.
+    pub hidden: BTreeSet<String>,
+    /// The documents `hidden` names, parsed and set aside.
+    ///
+    /// This is the whole mechanism: `docs` is the corpus everything above it
+    /// is handed — the lints, the tools, the pickers, the bands, the summon
+    /// pool — so a filtered monster is not something each of them remembers to
+    /// skip, it is not in the corpus they are given. Kept rather than dropped
+    /// because the user has to be able to see what they filtered and put it
+    /// back, and because the linter still needs their names: a monster that
+    /// summons a hidden one is not summoning something that does not exist.
+    pub hidden_docs: Vec<MonsterDoc>,
 }
 
 impl Default for Workspace {
@@ -242,6 +257,8 @@ impl Default for Workspace {
             transparent: false,
             bundle: None,
             custom_effects: crate::engine::CustomEffects::default(),
+            hidden: BTreeSet::new(),
+            hidden_docs: Vec::new(),
         }
     }
 }
@@ -258,6 +275,26 @@ impl Workspace {
 
     pub fn monsters_dir(&self) -> PathBuf {
         PathBuf::from(&self.paths.monsters)
+    }
+
+    /// Takes a freshly read corpus and splits it against the hidden set. Every
+    /// path that reloads the corpus goes through here, so there is one place
+    /// that knows what the app is allowed to see.
+    pub fn set_docs(&mut self, docs: Vec<MonsterDoc>) {
+        let (hidden, visible) = docs
+            .into_iter()
+            .partition(|d| self.hidden.contains(&d.file));
+        self.docs = visible;
+        self.hidden_docs = hidden;
+    }
+
+    /// The whole corpus again, in the order it was read — `monster_files`
+    /// sorts, so sorting by the same key restores it exactly.
+    pub fn take_all_docs(&mut self) -> Vec<MonsterDoc> {
+        let mut all: Vec<MonsterDoc> = std::mem::take(&mut self.docs);
+        all.append(&mut self.hidden_docs);
+        all.sort_by(|a, b| a.file.cmp(&b.file));
+        all
     }
 }
 

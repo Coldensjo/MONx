@@ -15,6 +15,7 @@ import {
 	type WorkspacePaths
 } from './monster';
 import { openDat, openSpr } from './spr';
+import { loadHidden, pushHidden, sameHidden } from './hidden';
 import { clearItemInfoCache } from './fields/ItemPicker';
 import { loadSetting, loadWorkspaces, saveSetting, saveWorkspace, type RecentWorkspace } from './settings';
 import Landing from './Landing';
@@ -69,7 +70,17 @@ export default function App() {
 			setOpening(true);
 			setError(null);
 			try {
+				// Before the open, not after: the backend splits the corpus as it
+				// reads it, so a filtered monster never exists in a list the UI
+				// could show. The setting is keyed by the monsters folder, and the
+				// path given here is not always the canonical one — a drop can name
+				// a file inside it — so the settled path is checked again below.
+				await pushHidden(loadHidden(paths.monsters)).catch(() => undefined);
 				const loaded = await openWorkspace(paths);
+				const settled = loadHidden(loaded.paths.monsters);
+				if (!sameHidden(settled, loadHidden(paths.monsters))) {
+					await pushHidden(settled).catch(() => undefined);
+				}
 				// Bump the protocol cache-buster so images can't leak across
 				// workspaces, then take frontend handles on the client files —
 				// the managers already hold them, this just names them for the

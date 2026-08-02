@@ -173,7 +173,13 @@ const en: Record<string, string> = {
 	'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server._other':
 		'{{count}} monsters with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server.',
 	'{{count}} monster left out_one': '{{count}} monster left out',
-	'{{count}} monster left out_other': '{{count}} monsters left out'
+	'{{count}} monster left out_other': '{{count}} monsters left out',
+
+	// --- Filtered monsters -------------------------------------------------
+	'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart._one':
+		'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart.',
+	'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart._other':
+		'{{count}} monsters are filtered out of this corpus everywhere in the app, and stay that way after a restart.'
 };
 
 export default en;

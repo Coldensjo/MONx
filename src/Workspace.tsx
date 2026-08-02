@@ -54,6 +54,7 @@ import {
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 import { applyLintFix } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
+import { listHidden, loadHidden, pushHidden, saveHidden } from './hidden';
 import PreferencesDialog from './PreferencesDialog';
 import CustomEffectsDialog from './CustomEffectsDialog';
 import {
@@ -225,6 +226,11 @@ export default function Workspace({
 	 *  server's declarations. */
 	const [customFx, setCustomFx] = useState<CustomEffectsByEngine>(loadCustomEffects);
 	const [customFxOpen, setCustomFxOpen] = useState(false);
+	/** Monsters filtered out of this corpus, and the summaries of them — the
+	 *  backend keeps the documents aside and answers with these, because the
+	 *  filter dialog is the only place a filtered monster is still visible. */
+	const [hidden, setHidden] = useState<string[]>(() => loadHidden(info.paths.monsters));
+	const [hiddenMonsters, setHiddenMonsters] = useState<MonsterSummary[]>([]);
 	const engineFx = effectsFor(customFx, info.engine);
 	/** The monster list's own actions, so a hotkey can reach its dialogs. */
 	const listActions = useRef<ListActions | null>(null);
@@ -754,6 +760,38 @@ export default function Workspace({
 	useEffect(() => {
 		pushCustomEffects(customFx);
 	}, [customFx]);
+
+	// Fetched when the dialog that shows them opens, rather than held from the
+	// open: the corpus moves under saves and renames, and a list kept warm for a
+	// dialog nobody has opened is one more thing to keep in step.
+	useEffect(() => {
+		if (!prefsOpen) return;
+		listHidden().then(setHiddenMonsters).catch(() => undefined);
+	}, [prefsOpen]);
+
+	/** Filters a set of monsters out of the corpus, or puts them back. Saved per
+	 *  corpus, pushed to the backend, and then everything is re-read: the sidebar,
+	 *  the workspace lints and every tool downstream of them are all reading a
+	 *  corpus that has just changed size. */
+	const updateHidden = useCallback(
+		(files: string[]) => {
+			setHidden(files);
+			saveHidden(info.paths.monsters, files);
+			// The monster on screen may be the one just filtered. Nothing else would
+			// clear it — the list it was selected from no longer contains it — and an
+			// editor holding a monster the app says it does not have is the one place
+			// this feature could contradict itself.
+			setSelected(prev => (prev && files.includes(prev) ? null : prev));
+			pushHidden(files)
+				.then(list => {
+					setHiddenMonsters(list);
+					onMonstersChanged(null);
+					lintWorkspace().then(setWorkspaceLints).catch(() => {});
+				})
+				.catch(() => undefined);
+		},
+		[info.paths.monsters, onMonstersChanged]
+	);
 
 	/** Saves the declarations, pushes them, and re-lints what is on screen so
 	 *  the answer is visible without reopening the monster. */
@@ -2917,7 +2955,15 @@ export default function Workspace({
 			)}
 
 			{prefsOpen && (
-				<PreferencesDialog prefs={prefs} onChange={updatePrefs} onClose={() => setPrefsOpen(false)} />
+				<PreferencesDialog
+					prefs={prefs}
+					onChange={updatePrefs}
+					monsters={monsters}
+					hidden={hidden}
+					hiddenMonsters={hiddenMonsters}
+					onHiddenChange={updateHidden}
+					onClose={() => setPrefsOpen(false)}
+				/>
 			)}
 
 			{customFxOpen && (

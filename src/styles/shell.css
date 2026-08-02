@@ -137,8 +137,13 @@
 }
 
 .mx-prefs-modal {
-	width: 460px;
+	width: 520px;
 	max-width: calc(100vw - 64px);
+	/* The filter list made this the tallest dialog in the app; index.css puts no
+	   ceiling on a modal, so it needs its own or a short window cuts the buttons
+	   off the bottom. */
+	max-height: calc(100vh - 64px);
+	overflow-y: auto;
 }
 
 .mx-prefs-default {
@@ -165,6 +170,73 @@
 	gap: 7px;
 	font-size: 12px;
 	cursor: pointer;
+}
+
+/* ---- Filtered monsters ---- */
+
+.mx-prefs-hidden-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+.mx-prefs-hidden-search {
+	width: 100%;
+	margin: 8px 0 6px;
+}
+
+/* Scrolls rather than growing: a corpus is hundreds of monsters and this is
+   one section of a dialog, not a screen of its own. */
+.mx-prefs-hidden-list {
+	max-height: 240px;
+	overflow-y: auto;
+	padding: 6px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface-2);
+}
+
+.mx-prefs-hidden-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 4px;
+	border-radius: var(--radius);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.mx-prefs-hidden-row:hover {
+	background: var(--surface);
+}
+
+.mx-prefs-hidden-row img {
+	width: 24px;
+	height: 24px;
+	image-rendering: pixelated;
+}
+
+/* Filtered rows stay in the list and stay legible — this is the one screen
+   they can be found on, so they are marked, not faded away. */
+.mx-prefs-hidden-off .mx-prefs-hidden-name {
+	color: var(--text-muted);
+	text-decoration: line-through;
+}
+
+.mx-prefs-hidden-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mx-prefs-hidden-file {
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--text-muted);
+	opacity: 0.75;
 }
 
 .mx-pin-list {

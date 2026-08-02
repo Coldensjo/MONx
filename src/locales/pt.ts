@@ -1490,6 +1490,15 @@ const pt: Record<string, string> = {
 	'Too few to draw a median from': 'Poucos demais para tirar uma mediana',
 	'No monsters in this band.': 'Nenhum monstro nesta faixa.',
 	'{{label}} {{value}} — {{pct}}% of the band is at or below it': '{{label}} {{value}} — {{pct}}% da faixa está nesse valor ou abaixo',
+	// --- Filtered monsters ------------------------------------------------------------------
+	'Filtered monsters': 'Monstros filtrados',
+	'Show all again': 'Mostrar todos de novo',
+	'Nothing is filtered. A monster ticked here disappears from the whole app — every list, every tool, every lint — and stays gone after a restart.':
+		'Nada está filtrado. Um monstro marcado aqui some do aplicativo inteiro — de toda lista, toda ferramenta, todo lint — e continua sumido depois de reiniciar.',
+	'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart._one':
+		'{{count}} monstro está filtrado deste corpus em todo o aplicativo, e continua assim depois de reiniciar.',
+	'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart._other':
+		'{{count}} monstros estão filtrados deste corpus em todo o aplicativo, e continuam assim depois de reiniciar.',
 };
 
 export default pt;

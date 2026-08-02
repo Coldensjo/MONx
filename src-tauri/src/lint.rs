@@ -1064,9 +1064,17 @@ fn spell_nodes(container: &Node, path: &str, r: &mut Report) {
 /// §24 "Cross-file integrity". Everything here needs the whole corpus, the
 /// registry and the surrounding folders, so none of it can be checked while
 /// editing a single monster.
+/// `filtered` is the corpus the user has hidden from the app (see
+/// `Workspace::hidden_docs`). It is deliberately not linted — that is what
+/// hiding it means — but it still exists on disk and in `monsters.xml`, so it
+/// has to count for the two rules that ask what the corpus *contains*: a
+/// registry line pointing at a hidden monster is not dangling, and summoning
+/// one is not summoning something that does not exist. Empty for every caller
+/// that has no workspace.
 pub fn lint_workspace(
     profile: &'static EngineProfile,
     docs: &[MonsterDoc],
+    filtered: &[MonsterDoc],
     registry: &Registry,
     spells: &SpellIndex,
     dir: &Path,
@@ -1082,7 +1090,11 @@ pub fn lint_workspace(
     }
     r.file = None;
     for entry in &registry.entries {
-        if !docs.iter().any(|d| d.file.eq_ignore_ascii_case(&entry.file)) {
+        if !docs
+            .iter()
+            .chain(filtered.iter())
+            .any(|d| d.file.eq_ignore_ascii_case(&entry.file))
+        {
             r.add(ERROR, "registry.dangling", None, true,
                 format!("monsters.xml lists \"{}\" as {}, but that file does not exist", entry.name, entry.file));
         }
@@ -1122,7 +1134,7 @@ pub fn lint_workspace(
         .entries
         .iter()
         .map(|e| e.name.to_lowercase())
-        .chain(docs.iter().map(|d| d.name.to_lowercase()))
+        .chain(docs.iter().chain(filtered.iter()).map(|d| d.name.to_lowercase()))
         .collect();
     let known_name = |name: &str| names.contains(&name.to_lowercase());
     for doc in docs {
