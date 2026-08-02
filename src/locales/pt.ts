@@ -1479,8 +1479,8 @@ const pt: Record<string, string> = {
 		'Monstros que escrevem hostile="0". Um monstro sem nenhuma flag hostile não conta como passivo — a maior parte do corpus do TVP a omite.',
 	'Monsters flagged summonable, which is what a summon is': 'Monstros com a flag summonable, que é o que uma invocação é',
 	'Immune to damage': 'Imunes a dano',
-	'Immune to every damage type this engine offers, by immunity or by a 100% element — nothing can hurt it':
-		'Imune a todos os tipos de dano que este engine oferece, por imunidade ou por um elemento de 100% — nada consegue feri-lo',
+	'Not attackable, or immune to every damage type this engine offers by immunity or by a 100% element — nothing can hurt it':
+		'Não pode ser atacado, ou é imune a todos os tipos de dano que este engine oferece, por imunidade ou por um elemento de 100% — nada consegue feri-lo',
 	'{{count}} monster left out_one': '{{count}} monstro de fora',
 	'{{count}} monster left out_other': '{{count}} monstros de fora',
 	Band: 'Faixa',

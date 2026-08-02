@@ -1561,8 +1561,8 @@ const pl: Record<string, string> = {
 		'Potwory, które zapisują hostile="0". Potwór bez flagi hostile w ogóle nie liczy się jako pasywny — większość korpusu TVP jej nie zapisuje.',
 	'Monsters flagged summonable, which is what a summon is': 'Potwory z flagą summonable, czyli to, czym jest przywołaniec',
 	'Immune to damage': 'Odporne na obrażenia',
-	'Immune to every damage type this engine offers, by immunity or by a 100% element — nothing can hurt it':
-		'Odporne na każdy typ obrażeń tego silnika, przez odporność albo element 100% — nic nie może go zranić',
+	'Not attackable, or immune to every damage type this engine offers by immunity or by a 100% element — nothing can hurt it':
+		'Nie da się go zaatakować albo jest odporny na każdy typ obrażeń tego silnika, przez odporność albo element 100% — nic nie może go zranić',
 	'{{count}} monster left out_one': 'pominięto {{count}} potwora',
 	'{{count}} monster left out_few': 'pominięto {{count}} potwory',
 	'{{count}} monster left out_many': 'pominięto {{count}} potworów',

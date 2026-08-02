@@ -3812,12 +3812,20 @@ fn flag_is_false(doc: &MonsterDoc, name: &str) -> bool {
 
 /// Immune to everything this engine can hurt it with.
 ///
-/// Both spellings count, because the two tables are the same statement written
-/// differently: `<immunity fire="1"/>` and `firePercent="100"` are one monster
-/// that does not burn. The damage types asked about are the engine's own — a
-/// Crystal monster is not un-immune because it says nothing about agony on an
-/// Ironcore corpus that has no agony.
+/// `attackable="0"` is the shortest way to say it and the commonest: nothing
+/// may target the monster at all, so no damage type ever gets as far as being
+/// resisted. Written and false, like `hostile` — a flag nobody wrote is not a
+/// statement about the monster.
+///
+/// Otherwise both spellings of resistance count, because the two tables are the
+/// same statement written differently: `<immunity fire="1"/>` and
+/// `firePercent="100"` are one monster that does not burn. The damage types
+/// asked about are the engine's own — a Crystal monster is not un-immune
+/// because it says nothing about agony on an Ironcore corpus that has no agony.
 fn is_damage_immune(doc: &MonsterDoc) -> bool {
+    if flag_is_false(doc, "attackable") {
+        return true;
+    }
     let profile = crate::engine::by_key(&doc.engine).unwrap_or_else(crate::engine::default_profile);
     // Every combat type this engine has a spelling for, either way round.
     let mut types: Vec<&'static str> = Vec::new();

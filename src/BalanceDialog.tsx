@@ -41,7 +41,7 @@ const FILTERS = [
 	{
 		key: 'excludeImmune',
 		label: 'Immune to damage',
-		title: 'Immune to every damage type this engine offers, by immunity or by a 100% element — nothing can hurt it'
+		title: 'Not attackable, or immune to every damage type this engine offers by immunity or by a 100% element — nothing can hurt it'
 	}
 ] as const satisfies readonly { key: keyof BandFilter; label: string; title: string }[];
 
