@@ -1654,166 +1654,186 @@ export default function CreateWizard({
 							// here: the previous step chose the monsters and this one is about
 							// the numbers, which is the whole reason the two are separate.
 							<Step question={t('How many does it summon?')}>
-										<div className="mx-wiz-summons">
-											{summons.map((s, i) => {
-												const entry = s.item.entry;
-												const update = (p: Partial<typeof entry>) => {
-													mark('summons');
-													setSummons(summons.map((x, j) => (j === i ? { ...x, item: { ...x.item, entry: { ...x.item.entry, ...p } } } : x)));
-												};
-												// A summon naming a monster the server cannot find is
-												// dropped without a word — `summon.unknown` is silent,
-												// and it lives on a cross-file pass the wizard's own
-												// linting never runs. So the row says so itself.
-												const unknown = entry.name.trim() !== '' && !takenNames.has(entry.name.trim().toLowerCase());
-												return (
-													<div key={i} className={s.on ? 'mx-wiz-summon' : 'mx-wiz-summon mx-wiz-item-off'}>
-														<input
-															type="checkbox"
-															checked={s.on}
-															onChange={() => {
-																mark('summons');
-																setSummons(summons.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
-															}}
+								{/* The cap first. It governs every row below it — "zero means it
+								    never summons, whatever the rows say" — and a control that
+								    overrides a list reads as a footnote when it sits under one. */}
+								<label className="mx-wiz-field mx-wiz-summon-max">
+									<span title={t('Total across all entries — zero means it never summons, whatever the rows say.')}>
+										{t('Max live summons')}
+									</span>
+									<NumberField
+										value={maxSummons}
+										onChange={v => {
+											mark('summons');
+											setMaxSummons(v);
+										}}
+										min={0}
+										max={100}
+										width={64}
+									/>
+								</label>
+
+								{/* One card per summon rather than one line. The line worked for
+								    a single monster and fell apart at three: five inline
+								    label-field pairs plus two 64px effects is a row taller than
+								    it is readable, and it only grows sideways. A card puts the
+								    monster at the top, the numbers in a grid under it, and the
+								    effects beside them — so a fourth summon costs height, which
+								    the step has, rather than width, which it does not. */}
+								<div className="mx-wiz-summon-cards">
+									{summons.map((s, i) => {
+										const entry = s.item.entry;
+										const update = (p: Partial<typeof entry>) => {
+											mark('summons');
+											setSummons(summons.map((x, j) => (j === i ? { ...x, item: { ...x.item, entry: { ...x.item.entry, ...p } } } : x)));
+										};
+										// A summon naming a monster the server cannot find is dropped
+										// without a word — `summon.unknown` is silent, and it lives on
+										// a cross-file pass the wizard's own linting never runs. So
+										// the card says so itself.
+										const named = entry.name.trim().toLowerCase();
+										const unknown = named !== '' && !takenNames.has(named);
+										// The monster's own look, so the card is recognisable as the
+										// thing that will appear rather than as a row of numbers with
+										// a name on it. Absent for a name this corpus does not have,
+										// which is the case `unknown` is already about.
+										const summoned = monsters.find(m => m.name.trim().toLowerCase() === named);
+										return (
+											<div key={i} className={s.on ? 'mx-wiz-summon-card' : 'mx-wiz-summon-card mx-wiz-item-off'}>
+												<div className="mx-wiz-summon-head">
+													<input
+														type="checkbox"
+														checked={s.on}
+														onChange={() => {
+															mark('summons');
+															setSummons(summons.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
+														}}
+													/>
+													{summoned ? (
+														<img
+															className="mx-wiz-summon-look"
+															src={lookUrl(summoned.look, { cell: 32 })}
+															alt=""
+															width={32}
+															height={32}
+															draggable={false}
+															onError={e => (e.currentTarget.style.visibility = 'hidden')}
 														/>
-														{/* A name, not a field: it came from the corpus picker, so
-														    there is nothing to type and nothing to get wrong. The
-														    invalid styling stays for the one case that can still
-														    occur — a row inherited from a donor naming a monster
-														    this corpus does not have. */}
-														<span
-															className={unknown ? 'mx-wiz-summon-name ss-ed-invalid' : 'mx-wiz-summon-name'}
-															title={
-																unknown
-																	? t('No monster with this name is registered — the server summons nothing and says nothing.')
-																	: entry.name
-															}
-														>
-															{entry.name}
-														</span>
-														{/* Each label glued to its own field: three numbers on a row
-														    wrap on a narrow dialog, and they have to wrap as pairs
-														    rather than stranding a label above the box it names. */}
+													) : (
+														<span className="mx-wiz-summon-look" />
+													)}
+													<span
+														className={unknown ? 'mx-wiz-summon-name ss-ed-invalid' : 'mx-wiz-summon-name'}
+														title={
+															unknown
+																? t('No monster with this name is registered — the server summons nothing and says nothing.')
+																: entry.name
+														}
+													>
+														{entry.name}
+													</span>
+													<span className="mx-wiz-item-from">
+														{s.item.from
+															? t('from {{name}}', { name: s.item.from })
+															: s.item.corpusCount > 0
+																? t('{{count}} monster summons it', { count: s.item.corpusCount })
+																: t('yours')}
+													</span>
+													<button
+														className="ss-btn ss-btn-ghost ss-ed-mini"
+														title={t('Remove')}
+														onClick={() => {
+															mark('summons');
+															setSummons(summons.filter((_, j) => j !== i));
+														}}
+													>
+														<Trash2 size={13} />
+													</button>
+												</div>
+
+												<div className="mx-wiz-summon-body">
+													<span className="mx-wiz-summon-num">
+														<span className="mx-wiz-mini">{t('at once')}</span>
+														<NumberField
+															value={entry.max}
+															onChange={v => update({ max: v })}
+															min={0}
+															max={100}
+															width={52}
+															title={t('How many of this one may be alive at once')}
+														/>
+													</span>
+													<span className="mx-wiz-summon-num">
+														<span className="mx-wiz-mini">{t('Chance')}</span>
+														<NumberField
+															value={entry.chance}
+															onChange={v => update({ chance: v })}
+															min={0}
+															max={100}
+															width={52}
+															title={t('Chance the summon fires on each attempt')}
+														/>
+													</span>
+													{engine.summonInterval && (
 														<span className="mx-wiz-summon-num">
-															<span className="mx-wiz-mini">{t('at once')}</span>
+															<span className="mx-wiz-mini">{t('Interval')}</span>
 															<NumberField
-																value={entry.max}
-																onChange={v => update({ max: v })}
-																min={0}
-																max={100}
-																width={52}
-																title={t('How many of this one may be alive at once')}
+																value={entry.interval}
+																onChange={v => update({ interval: v })}
+																min={1}
+																width={68}
+																title={t('How often it tries, in milliseconds')}
 															/>
 														</span>
-														<span className="mx-wiz-summon-num">
-															<span className="mx-wiz-mini">{t('Chance')}</span>
-															<NumberField
-																value={entry.chance}
-																onChange={v => update({ chance: v })}
-																min={0}
-																max={100}
-																width={52}
-																title={t('Chance the summon fires on each attempt')}
-															/>
-														</span>
-														{engine.summonInterval && (
+													)}
+													{/* Out to the effects browser, like every other
+													    picture-shaped question the wizard asks. Which row
+													    asked is held in `summonFx`: the trip out and back
+													    keeps nothing but "an effect was chosen", and every
+													    summon card is on screen at once, so there is no
+													    single open one for the answer to fall back to. */}
+													{engine.summonEffects && (
+														<>
 															<span className="mx-wiz-summon-num">
-																<span className="mx-wiz-mini">{t('Interval')}</span>
-																<NumberField
-																	value={entry.interval}
-																	onChange={v => update({ interval: v })}
-																	min={1}
-																	width={68}
-																	title={t('How often it tries, in milliseconds')}
+																<span className="mx-wiz-mini">{t('Effect')}</span>
+																<EffectBrowse
+																	kind="area"
+																	value={entry.effect}
+																	engine={engine.key}
+																	emptyLabel={t('Pick effect')}
+																	onBrowse={() => {
+																		setSummonFx({ index: i, field: 'effect' });
+																		onBrowse('effect');
+																	}}
+																	onClear={() => update({ effect: null })}
 																/>
 															</span>
-														)}
-														{/* Out to the effects browser, like every other picture-shaped
-														    question the wizard asks. The popover grid was the wrong
-														    control here: it is the editor's, sized for a field with a
-														    label above it, and the wizard's whole bargain is that
-														    choosing a picture happens in the real browser — its search,
-														    its filters, the animation at the client's own rate.
-
-														    Which row asked is held in `summonFx`: the trip out and back
-														    keeps nothing but "an effect was chosen", and unlike the spell
-														    designer there is no single open card for the answer to fall
-														    back to — every summon row is on screen at once. */}
-														{engine.summonEffects && (
-															<>
-																<span className="mx-wiz-summon-num">
-																	<span className="mx-wiz-mini">{t('Effect')}</span>
-																	<EffectBrowse
-																		kind="area"
-																		value={entry.effect}
-																		engine={engine.key}
-																		emptyLabel={t('Pick effect')}
-																		onBrowse={() => {
-																			setSummonFx({ index: i, field: 'effect' });
-																			onBrowse('effect');
-																		}}
-																		onClear={() => update({ effect: null })}
-																	/>
+															<span className="mx-wiz-summon-num">
+																<span
+																	className="mx-wiz-mini"
+																	title={t('Played on the summoner as it calls, rather than on what it called.')}
+																>
+																	{t('On caster')}
 																</span>
-																<span className="mx-wiz-summon-num">
-																	<span
-																		className="mx-wiz-mini"
-																		title={t('Played on the summoner as it calls, rather than on what it called.')}
-																	>
-																		{t('On caster')}
-																	</span>
-																	<EffectBrowse
-																		kind="area"
-																		value={entry.masterEffect}
-																		engine={engine.key}
-																		emptyLabel={t('Pick effect')}
-																		onBrowse={() => {
-																			setSummonFx({ index: i, field: 'masterEffect' });
-																			onBrowse('effect');
-																		}}
-																		onClear={() => update({ masterEffect: null })}
-																	/>
-																</span>
-															</>
-														)}
-														<span className="mx-wiz-item-from">
-															{s.item.from
-																? t('from {{name}}', { name: s.item.from })
-																: s.item.corpusCount > 0
-																	? t('{{count}} monster summons it', { count: s.item.corpusCount })
-																	: t('yours')}
-														</span>
-														<button
-															className="ss-btn ss-btn-ghost ss-ed-mini"
-															title={t('Remove')}
-															onClick={() => {
-																mark('summons');
-																setSummons(summons.filter((_, j) => j !== i));
-															}}
-														>
-															<Trash2 size={13} />
-														</button>
-													</div>
-												);
-											})}
-										</div>
-										<div className="mx-wiz-rowend">
-											<label className="mx-wiz-field mx-wiz-summon-max">
-												<span title={t('Total across all entries — zero means it never summons, whatever the rows say.')}>
-													{t('Max live summons')}
-												</span>
-												<NumberField
-													value={maxSummons}
-													onChange={v => {
-														mark('summons');
-														setMaxSummons(v);
-													}}
-													min={0}
-													max={100}
-													width={64}
-												/>
-											</label>
-										</div>
+																<EffectBrowse
+																	kind="area"
+																	value={entry.masterEffect}
+																	engine={engine.key}
+																	emptyLabel={t('Pick effect')}
+																	onBrowse={() => {
+																		setSummonFx({ index: i, field: 'masterEffect' });
+																		onBrowse('effect');
+																	}}
+																	onClear={() => update({ masterEffect: null })}
+																/>
+															</span>
+														</>
+													)}
+												</div>
+											</div>
+										);
+									})}
+								</div>
 								{staleNotice('summons', t('the summons'))}
 							</Step>
 						)}

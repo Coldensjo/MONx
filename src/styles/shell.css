@@ -2655,6 +2655,82 @@
 	height: 26px;
 }
 
+/* ---- The summon detail step ---- */
+/* One card per summon. As a single line it held a name, three numbers and two
+   64px effect pickers, which is a row taller than it is readable and one that
+   only ever grew sideways; four summons ran off the dialog. The card grows
+   downward instead, which is the axis the step has to spare. */
+
+.mx-wiz-summon-cards {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: min(46vh, 420px);
+	overflow-y: auto;
+	margin: 10px 0;
+}
+
+.mx-wiz-summon-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-alt, var(--bg));
+	font-size: 12px;
+}
+
+/* Who it is: the tick, its own sprite, its name, where the row came from, and
+   the way to drop it. The provenance is pushed to the end so the name always
+   starts at the same place down the stack. */
+.mx-wiz-summon-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.mx-wiz-summon-head .mx-wiz-summon-name {
+	flex: 0 1 auto;
+	min-width: 0;
+	height: auto;
+	font-weight: 600;
+}
+
+.mx-wiz-summon-head .mx-wiz-item-from {
+	margin-left: auto;
+}
+
+/* Sized whether or not the sprite loads, so a corpse-less or unknown monster
+   leaves the row aligned with the ones above it rather than collapsing. */
+.mx-wiz-summon-look {
+	width: 32px;
+	height: 32px;
+	flex: 0 0 auto;
+	background: var(--sprite-bg);
+	border-radius: 3px;
+	image-rendering: pixelated;
+	object-fit: contain;
+}
+
+/* The numbers and the two effects. Wraps as whole label-and-field units, so a
+   narrow dialog drops an effect onto its own line rather than stranding a word
+   from the box it names. Aligned to the bottom because the effect pickers are
+   twice the height of a number field, and a row of small fields floating in
+   the middle of them reads as unrelated. */
+.mx-wiz-summon-body {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 6px 14px;
+}
+
+.mx-wiz-summon-body .mx-wiz-summon-num {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 3px;
+}
+
 /* A label and the box it names, one unit — so a row that wraps wraps between
    the numbers rather than dropping a field away from its own word. */
 .mx-wiz-summon-num {
@@ -2665,8 +2741,10 @@
 	white-space: nowrap;
 }
 
-/* The section total, beside the button that adds to what it caps — a row, not
-   a stacked field, and shoved left so the Add button keeps the end. */
+/* The section total, above the list it governs rather than under it. A control
+   that overrides every row — zero here means it summons nothing whatever the
+   rows say — reads as a footnote when it follows them. A row, not a stacked
+   field, so it does not look like the first entry in the list. */
 .mx-wiz-summon-max {
 	flex: 0 0 auto;
 	flex-direction: row;
