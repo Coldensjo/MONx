@@ -452,7 +452,10 @@ const pt: Record<string, string> = {
 	'Read off the band at its {{p}}th percentile.': 'Lido da faixa no percentil {{p}}.',
 	'Draw again': 'Sortear de novo',
 
-	'How does it fight?': 'Como ele luta?',
+	'How does it attack?': 'Como ele ataca?',
+	'What attacks can it use?': 'Que ataques ele pode usar?',
+	'Does it summon help?': 'Ele invoca ajuda?',
+	'Pick the monsters it calls for above.': 'Escolha acima os monstros que ele invoca.',
 	'Fights in melee': 'Luta corpo a corpo',
 	'Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.':
 		'Derivado: ceil(skill × ataque × 0,05 + ataque × 0,5). O loader calcula, então não há campo para isso.',
@@ -549,7 +552,8 @@ const pt: Record<string, string> = {
 		'Total de todas as entradas — zero significa que ele nunca invoca, digam o que disserem as linhas.',
 	'Add a summon': 'Adicionar uma invocação',
 
-	'How does it defend itself?': 'Como ele se defende?',
+	'How tough is it to hurt?': 'Quão difícil é feri-lo?',
+	'How does it protect itself?': 'Como ele se protege?',
 	'Name a monster or two on the second step and this fills itself in.':
 		'Indique um monstro ou dois na segunda etapa e isto se preenche sozinho.',
 	'100 resists everything — an immunity. Negative takes extra damage.':

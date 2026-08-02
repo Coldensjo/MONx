@@ -14,8 +14,9 @@ for each step, has been cut — it is in `git log` (`git log --oneline` between
 ### `CreateWizard.tsx` — 2,469 lines, ~1,930 in one component
 
 It already names its seams as constants — `KIND_STEP`, `SIMILAR_STEP`,
-`LOOK_STEP`, `NAME_STEP`, `STATS_STEP`, `FIGHT_STEP`, `DEFEND_STEP`,
-`SAY_STEP`, `DROP_STEP`. Steps are the obvious components.
+`LOOK_STEP`, `NAME_STEP`, `STATS_STEP`, `ATTACK_STEP`, `ABILITY_STEP`,
+`SUMMON_STEP`, `RESIST_STEP`, `DEFEND_STEP`, `SAY_STEP`, `DROP_STEP`. Twelve
+steps, twelve obvious components.
 
 **Blocked on §3, and not urgent.** Unlike the backend files this was never
 dangerous — it is long, not subtle. Split it when it is next being changed for

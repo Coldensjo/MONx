@@ -97,7 +97,6 @@ import {
 	median,
 	newSeed,
 	pickAttacksStats,
-	pickDonors,
 	pickMelee,
 	sampleLoot,
 	sampleLook,
@@ -160,17 +159,26 @@ interface Ticked<T> {
 /** The questions, in the order a monster is imagined. Named rather than counted
  *  because they are referred to from a dozen places — the width of the dialog,
  *  the focus, what Enter does, which button is primary — and a step inserted in
- *  the middle used to mean finding every one of them. */
+ *  the middle used to mean finding every one of them.
+ *
+ *  **One question per step, and a short step is not a fault.** The wizard exists
+ *  to walk someone through a monster rather than hand them the editor's wall of
+ *  fields, and three steps that each ask one thing beat one step that asks
+ *  three. Attacking, summoning and surviving were bundled that way and read as
+ *  a form; they are separate questions and are asked separately. */
 const KIND_STEP = 0;
 const SIMILAR_STEP = 1;
 const LOOK_STEP = 2;
 const NAME_STEP = 3;
 const STATS_STEP = 4;
-const FIGHT_STEP = 5;
-const DEFEND_STEP = 6;
-const SAY_STEP = 7;
-const DROP_STEP = 8;
-const STEP_COUNT = 9;
+const ATTACK_STEP = 5;
+const ABILITY_STEP = 6;
+const SUMMON_STEP = 7;
+const RESIST_STEP = 8;
+const DEFEND_STEP = 9;
+const SAY_STEP = 10;
+const DROP_STEP = 11;
+const STEP_COUNT = 12;
 
 /** As many neighbours as are worth naming. Past this the picks stop describing
  *  one family and start describing the corpus, which is what the drawn default
@@ -258,7 +266,8 @@ export default function CreateWizard({
 
 	// ---- Answers ----
 	const [name, setName] = useState('');
-	const [nameStyle, setNameStyle] = useState<NameStyle>('classic');
+	// One style. The corpus-derived generator was removed with its radio row.
+	const nameStyle: NameStyle = 'classic';
 	const [file, setFile] = useState('');
 	const [group, setGroup] = useState(groups[0] ?? '');
 	const [showFile, setShowFile] = useState(false);
@@ -432,24 +441,18 @@ export default function CreateWizard({
 	// and makes the whole step honest — the list is never empty by accident, so
 	// clearing it can legitimately mean "no family", and the lead is a real
 	// choice rather than an artefact of click order.
-	// Keyed on what it drew from rather than latched: the kind, the band and the
-	// seed are the question this draw answers, so changing any of them draws a new
-	// family. The band belongs in the key because it arrives a render late — the
-	// effect above is what sets it — and a set latched before it landed was drawn
-	// from the whole corpus while the stats came off a band it never saw.
-	// `mine` is what keeps the two promises above: once the user has touched the
-	// list it is theirs, so clearing it still means "no family" and a set they
-	// named is never replaced under them.
-	const seeded = useRef<string | null>(null);
-	const mine = useRef(true);
-	useEffect(() => {
-		const key = `${kind}|${seed}|${band?.label ?? ''}`;
-		if (seeded.current === key || !mine.current || monsters.length === 0 || bands.length === 0) return;
-		const drawn = pickDonors(makeRng(seed ^ 0x5f3a), monsters, band, kind, 3);
-		if (drawn.length === 0) return;
-		seeded.current = key;
-		setSimilar(drawn);
-	}, [monsters, bands, band, kind, seed]);
+	// Nothing is drawn here, deliberately.
+	//
+	// This step used to open with three monsters already picked, chosen at random
+	// from the kind and band. It read as a suggestion and was not one: asked to
+	// make a human, it would answer "similar to a scorpion, a dragon and a demon"
+	// — three names with nothing to do with each other or with the question, and
+	// the user's first job became undoing them.
+	//
+	// The step is a question the user may decline. Nothing is selected until they
+	// select it, and an empty set is a complete answer: everything downstream
+	// falls back to the whole kind pool, which is what the random three were
+	// approximating anyway.
 
 	useEffect(() => {
 		if (similar.length === 0) {
@@ -691,9 +694,6 @@ export default function CreateWizard({
 	 *  slider afterwards stays moved. The kind buttons make the same bargain. */
 	const toggleSimilar = useCallback(
 		(m: MonsterSummary) => {
-			// The list stops being the wizard's the moment it is touched, or the
-			// band this very click computes would draw a new family over it.
-			mine.current = false;
 			setSimilar(prev => {
 				const on = prev.some(x => x.file === m.file);
 				if (!on && prev.length >= MAX_SIMILAR) return prev;
@@ -758,10 +758,29 @@ export default function CreateWizard({
 	 *  a row you typed is one you meant — and both are what Enter does inside
 	 *  their fields, so a list is written by typing rather than by reaching for
 	 *  the button between every entry. */
-	const addSummon = useCallback(() => {
-		mark('summons');
-		setSummons(prev => [...prev, { item: { entry: blankSummon(''), from: null, corpusCount: 0 }, on: true }]);
-	}, [mark]);
+	/** The summon rows as monsters, so the picker can show what is already
+	 *  chosen. Matched by name because that is what the format stores — a summon
+	 *  is a name, not a file — and lower-cased because the loader's own lookup is
+	 *  case-insensitive. */
+	const summonPicks = useMemo(() => {
+		const names = new Set(summons.map(s => s.item.entry.name.trim().toLowerCase()).filter(Boolean));
+		return monsters.filter(m => names.has(m.name.trim().toLowerCase()));
+	}, [summons, monsters]);
+
+	/** Picking a monster adds a summon row for it; picking it again removes it.
+	 *  New rows arrive ticked and carry the engine's own defaults, so a summon is
+	 *  one click and the numbers are there to adjust rather than to invent. */
+	const toggleSummon = useCallback(
+		(m: MonsterSummary) => {
+			mark('summons');
+			setSummons(prev => {
+				const at = prev.findIndex(s => s.item.entry.name.trim().toLowerCase() === m.name.trim().toLowerCase());
+				if (at >= 0) return prev.filter((_, i) => i !== at);
+				return [...prev, { item: { entry: blankSummon(m.name), from: null, corpusCount: 0 }, on: true }];
+			});
+		},
+		[mark]
+	);
 
 	const addVoice = useCallback(() => {
 		mark('voices');
@@ -1058,14 +1077,16 @@ export default function CreateWizard({
 	// to design, and the picker steps are grids whose names need somewhere to be.
 	// Everything else is one thing to answer and reads better narrow.
 	const width =
-		(step === FIGHT_STEP && abilities.length > 0) || (step === DEFEND_STEP && defenses.length > 0)
+		(step === ABILITY_STEP && abilities.length > 0) || (step === DEFEND_STEP && defenses.length > 0)
 			? ' mx-wiz-wide'
-			: // A summon row is a name and three numbers, which is a table's worth of
-				// fields on a step that is otherwise one question wide.
+			: // A summon step is a monster grid over a table of rows, so it needs the
+				// same room the other picker steps do.
 				step === SIMILAR_STEP ||
-				  step === DEFEND_STEP ||
+				  step === RESIST_STEP ||
 				  step === SAY_STEP ||
-				  (step === FIGHT_STEP && summonsOn) ||
+				  step === ABILITY_STEP ||
+				  step === DEFEND_STEP ||
+				  (step === SUMMON_STEP && summonsOn) ||
 				  (step === DROP_STEP && lootStep)
 				? ' mx-wiz-mid'
 				: '';
@@ -1276,26 +1297,14 @@ export default function CreateWizard({
 										<Dices size={14} />
 									</button>
 								</div>
-								<div className="mx-wiz-styles">
-									{(['classic', 'corpus'] as NameStyle[]).map(s => (
-										<label key={s} className="mx-wiz-style">
-											<input
-												type="radio"
-												checked={nameStyle === s}
-												onChange={() => {
-													setNameStyle(s);
-													redraw('name');
-												}}
-											/>
-											{s === 'classic' ? t('Classic') : t('Corpus style')}
-										</label>
-									))}
-								</div>
-								<div className="ss-modal-desc">
-									{nameStyle === 'classic'
-										? t('Drawn from the generator’s own word tables.')
-										: t('Built from the names this corpus already uses.')}
-								</div>
+								{/* One generator, no style switch. "Corpus style" rebuilt names
+								    out of the fragments this corpus already used, which sounds
+								    useful and is not: the corpus is where the name has to *not*
+								    already exist, so its output was either a near-duplicate of a
+								    monster that is already there or the same word tables with
+								    extra steps. Nobody picked it twice. The dice stay — a name
+								    you did not have to think of is the point. */}
+								<div className="ss-modal-desc">{t('Drawn from the generator’s own word tables.')}</div>
 
 								<button className="ss-btn ss-btn-ghost mx-wiz-disclose" onClick={() => setShowFile(v => !v)}>
 									{showFile ? t('Hide file and group') : t('File and group')}
@@ -1384,8 +1393,8 @@ export default function CreateWizard({
 							</Step>
 						)}
 
-						{step === FIGHT_STEP && (
-							<Step question={t('How does it fight?')}>
+						{step === ATTACK_STEP && (
+							<Step question={t('How does it attack?')}>
 								{/* Melee is asked first and asked as a yes or no, because it is the
 								    one attack a monster either has or does not. Its damage is not a
 								    number you write: the loader derives it from skill and attack, so
@@ -1491,13 +1500,21 @@ export default function CreateWizard({
 									</div>
 								)}
 								{staleNotice('melee', t('the melee'))}
+							</Step>
+						)}
 
-								{/* The ability designer. One ability on screen, the rail above it
-								    the whole kit — and the card is the editor's own SpellCard, so
-								    the fields offered are the ones the chosen spell family actually
-								    reads, spelled the way this engine spells them, with the same
-								    live re-enactment behind its eye. */}
-								<div className="mx-wiz-sub">{t('Attacks')}</div>
+						{step === ABILITY_STEP && (
+							// The ability designer, on its own. It was the second half of "How
+							// does it fight?" and is the largest single control in the wizard —
+							// a rail, a full SpellCard and a live re-enactment — sitting under
+							// two number fields that had already been answered. One question
+							// per step: the melee numbers are how it swings, this is what else
+							// it can do.
+							<Step question={t('What attacks can it use?')}>
+								{/* The card is the editor's own SpellCard, so the fields offered
+								    are the ones the chosen spell family actually reads, spelled
+								    the way this engine spells them, with the same live
+								    re-enactment behind its eye. */}
 								<SpellRail
 									blocks={abilities}
 									openIndex={openIndex}
@@ -1542,19 +1559,19 @@ export default function CreateWizard({
 									</button>
 								</div>
 
-								{/* Summoning is not a question of its own: 78-89% of every corpus
-								    answers no, nothing can propose an answer to a yes/no, and 89%
-								    of the monsters that do summon carry exactly one entry. One
-								    name and two numbers is a row, not a step.
+							</Step>
+						)}
 
-								    The proposal is a ranking of what this family already summons,
-								    but every part of a row is typed over: a corpus is a suggestion
-								    about names, never a limit on them, and "summons three of my
-								    own thing" is the commonest reason anyone opens this step at
-								    all. Which is also why the tick is not disabled on an empty
-								    list — a corpus that summons nothing is a corpus with nothing
-								    to propose, not a monster that may not summon. */}
-								<div className="mx-wiz-sub">{t('Calls for help')}</div>
+						{step === SUMMON_STEP && (
+							// Its own question, not a footnote to attacking.
+							//
+							// It used to live at the bottom of the fight step on the reasoning
+							// that most monsters answer no and one name plus two numbers is a
+							// row rather than a step. Both facts are true and the conclusion was
+							// wrong: a step you answer "no" to in one click costs nothing, while
+							// a question buried under the ability designer is one you scroll
+							// past. Cheap to decline beats hidden.
+							<Step question={t('Does it summon help?')}>
 								<label className="mx-wiz-card-tick">
 									<input
 										type="checkbox"
@@ -1568,9 +1585,31 @@ export default function CreateWizard({
 								</label>
 								{summonsOn && (
 									<>
+										{/* The monsters are picked from the corpus, the same way an
+										    outfit is picked — not typed, and not chosen from "what
+										    other monsters already summon".
+
+										    That ranking was there to keep the wizard from proposing
+										    a name the server cannot find: `summon.unknown` is a
+										    *silent* lint, so a summon naming an unknown monster is
+										    dropped without a word. Picking from the corpus is a
+										    stronger guarantee than the ranking was, not a weaker
+										    one — every name on the list demonstrably exists — and
+										    it answers the question people actually arrive with,
+										    which is "it summons three of these", about a monster
+										    nothing else has ever summoned. */}
+										<MonsterPicker
+											monsters={monsters}
+											kind={kind}
+											band={band}
+											picked={summonPicks}
+											lead={null}
+											onToggle={toggleSummon}
+											onLead={null}
+										/>
 										<div className="mx-wiz-summons">
 											{summons.length === 0 && (
-												<div className="ss-modal-desc">{t('Nothing in this corpus summons anything — name one yourself below.')}</div>
+												<div className="ss-modal-desc">{t('Pick the monsters it calls for above.')}</div>
 											)}
 											{summons.map((s, i) => {
 												const entry = s.item.entry;
@@ -1593,19 +1632,21 @@ export default function CreateWizard({
 																setSummons(summons.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
 															}}
 														/>
-														<input
-															className={unknown ? 'mx-wiz-input mx-wiz-summon-name ss-ed-invalid' : 'mx-wiz-input mx-wiz-summon-name'}
-															list="mx-wiz-summon-pool"
-															value={entry.name}
-															placeholder={t('Monster name')}
+														{/* A name, not a field: it came from the corpus picker, so
+														    there is nothing to type and nothing to get wrong. The
+														    invalid styling stays for the one case that can still
+														    occur — a row inherited from a donor naming a monster
+														    this corpus does not have. */}
+														<span
+															className={unknown ? 'mx-wiz-summon-name ss-ed-invalid' : 'mx-wiz-summon-name'}
 															title={
 																unknown
 																	? t('No monster with this name is registered — the server summons nothing and says nothing.')
-																	: t('Monster name')
+																	: entry.name
 															}
-															onChange={e => update({ name: e.target.value })}
-															onKeyDown={addOnEnter(addSummon)}
-														/>
+														>
+															{entry.name}
+														</span>
 														{/* Each label glued to its own field: three numbers on a row
 														    wrap on a narrow dialog, and they have to wrap as pairs
 														    rather than stranding a label above the box it names. */}
@@ -1664,13 +1705,6 @@ export default function CreateWizard({
 												);
 											})}
 										</div>
-										{/* Every name the corpus already summons, as suggestions rather
-										    than as the menu — the field takes anything typed. */}
-										<datalist id="mx-wiz-summon-pool">
-											{pool.map(p => (
-												<option key={p.name} value={p.name} />
-											))}
-										</datalist>
 										<div className="mx-wiz-rowend">
 											<label className="mx-wiz-field mx-wiz-summon-max">
 												<span title={t('Total across all entries — zero means it never summons, whatever the rows say.')}>
@@ -1687,10 +1721,6 @@ export default function CreateWizard({
 													width={64}
 												/>
 											</label>
-											<button className="ss-btn" onClick={addSummon}>
-												<Plus size={14} />
-												{t('Add a summon')}
-											</button>
 										</div>
 									</>
 								)}
@@ -1698,12 +1728,13 @@ export default function CreateWizard({
 							</Step>
 						)}
 
-						{step === DEFEND_STEP && (
-							// Armour, defence, the defensive spells and the resistance table
-							// are one question — how it survives being hit — and the corpus
-							// agrees: a monster with defensive spells declares immunities
-							// 88-99% of the time against 49-89% for one without.
-							<Step question={t('How does it defend itself?')}>
+						{step === RESIST_STEP && (
+							// The passive half of surviving: what it is wearing and what hurts
+							// it less. The corpus link that once argued for keeping this with
+							// the defensive spells — a monster with defensive spells declares
+							// immunities 88-99% of the time — is a correlation between two
+							// answers, not an argument for asking them in one breath.
+							<Step question={t('How tough is it to hurt?')}>
 								<div className="mx-wiz-stats">
 									{stats &&
 										(
@@ -1766,8 +1797,14 @@ export default function CreateWizard({
 									)}
 								</div>
 								{staleNotice('resist', t('the resistances'))}
+							</Step>
+						)}
 
-								<div className="mx-wiz-sub">{t('Defenses')}</div>
+						{step === DEFEND_STEP && (
+							// The active half: what it *does* to stay alive. Same shape as the
+							// attack step — a rail, one card, a re-enactment — and for the same
+							// reason it is not sharing a step with the numbers above it.
+							<Step question={t('How does it protect itself?')}>
 								<SpellRail
 									blocks={defenses}
 									openIndex={openDefenseIndex}
