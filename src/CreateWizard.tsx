@@ -197,6 +197,7 @@ const MAX_SUMMON_CANDIDATES = 12;
 type Field =
 	| 'name'
 	| 'stats'
+	| 'armor'
 	| 'look'
 	| 'race'
 	| 'corpse'
@@ -242,6 +243,7 @@ export default function CreateWizard({
 	const [nonce, setNonce] = useState<Record<Field, number>>({
 		name: 0,
 		stats: 0,
+		armor: 0,
 		look: 0,
 		race: 0,
 		corpse: 0,
@@ -424,14 +426,24 @@ export default function CreateWizard({
 	// and makes the whole step honest — the list is never empty by accident, so
 	// clearing it can legitimately mean "no family", and the lead is a real
 	// choice rather than an artefact of click order.
-	const seeded = useRef(false);
+	// Keyed on what it drew from rather than latched: the kind, the band and the
+	// seed are the question this draw answers, so changing any of them draws a new
+	// family. The band belongs in the key because it arrives a render late — the
+	// effect above is what sets it — and a set latched before it landed was drawn
+	// from the whole corpus while the stats came off a band it never saw.
+	// `mine` is what keeps the two promises above: once the user has touched the
+	// list it is theirs, so clearing it still means "no family" and a set they
+	// named is never replaced under them.
+	const seeded = useRef<string | null>(null);
+	const mine = useRef(true);
 	useEffect(() => {
-		if (seeded.current || monsters.length === 0 || bands.length === 0 || similar.length > 0) return;
+		const key = `${kind}|${seed}|${band?.label ?? ''}`;
+		if (seeded.current === key || !mine.current || monsters.length === 0 || bands.length === 0) return;
 		const drawn = pickDonors(makeRng(seed ^ 0x5f3a), monsters, band, kind, 3);
 		if (drawn.length === 0) return;
-		seeded.current = true;
+		seeded.current = key;
 		setSimilar(drawn);
-	}, [monsters, bands, band, kind, seed, similar.length]);
+	}, [monsters, bands, band, kind, seed]);
 
 	useEffect(() => {
 		if (similar.length === 0) {
@@ -546,9 +558,23 @@ export default function CreateWizard({
 	}, [lootDonors, lootIds, dropped, itemIndex, corpseCandidates, seed]);
 
 	// ---- Derive every untouched answer ----
+	// The five figures are two answers on two steps — worth (experience, health,
+	// speed) and armour — so each half keeps the half the user typed and lets the
+	// band redraw the other. One key for both meant typing an armour value on the
+	// defend step silently froze the worth step's slider.
 	useEffect(() => {
-		if (!band || touched.has('stats')) return;
-		setStats(sampleStats(makeRng((seed ^ 0x1234) + nonce.stats), band));
+		if (!band || (touched.has('stats') && touched.has('armor'))) return;
+		setStats(prev => {
+			const drawn = sampleStats(makeRng((seed ^ 0x1234) + nonce.stats), band);
+			if (!prev) return drawn;
+			return {
+				...drawn,
+				...(touched.has('stats')
+					? { experience: prev.experience, health: prev.health, speed: prev.speed, percentile: prev.percentile }
+					: null),
+				...(touched.has('armor') ? { armor: prev.armor, defense: prev.defense } : null)
+			};
+		});
 	}, [band, seed, nonce.stats, touched]);
 
 	// The look comes off the lead, colours included — and the colours are only
@@ -608,7 +634,7 @@ export default function CreateWizard({
 	}, [donors, stats, kind, touched, engine.meleeOnAttacks, sig, noteDerived]);
 
 	useEffect(() => {
-		if (touched.has('resist') || donors.length === 0) return;
+		if (touched.has('resist')) return;
 		setResist(inferResistances(donors, engine.key));
 		noteDerived('resist', sig);
 	}, [donors, engine.key, touched, nonce.resist, sig, noteDerived]);
@@ -658,6 +684,9 @@ export default function CreateWizard({
 	 *  slider afterwards stays moved. The kind buttons make the same bargain. */
 	const toggleSimilar = useCallback(
 		(m: MonsterSummary) => {
+			// The list stops being the wizard's the moment it is touched, or the
+			// band this very click computes would draw a new family over it.
+			mine.current = false;
 			setSimilar(prev => {
 				const on = prev.some(x => x.file === m.file);
 				if (!on && prev.length >= MAX_SIMILAR) return prev;
@@ -1529,7 +1558,7 @@ export default function CreateWizard({
 													type="number"
 													value={stats[key]}
 													onChange={e => {
-														mark('stats');
+														mark('armor');
 														setStats({ ...stats, [key]: Number(e.target.value) });
 													}}
 												/>
