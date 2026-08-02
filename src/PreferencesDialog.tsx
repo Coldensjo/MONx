@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EyeOff } from 'lucide-react';
 import { DEFAULT_PREFS, visibleSectionIds, type Prefs } from './prefs';
@@ -18,6 +18,8 @@ interface Props {
 	hidden: string[];
 	hiddenMonsters: MonsterSummary[];
 	onHiddenChange: (files: string[]) => void;
+	/** The section this was opened for, if it was opened for one. */
+	focus?: 'filter' | null;
 	onClose: () => void;
 }
 
@@ -33,10 +35,20 @@ export default function PreferencesDialog({
 	hidden,
 	hiddenMonsters,
 	onHiddenChange,
+	focus,
 	onClose
 }: Props) {
 	const { t } = useTranslation();
 	const [query, setQuery] = useState('');
+	// Opened from its own menu entry, the filter section brings itself into view
+	// and takes the caret: the dialog is taller than most windows, and landing at
+	// the top of it is how the section came to be reported missing.
+	const searchRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		if (focus !== 'filter') return;
+		searchRef.current?.scrollIntoView({ block: 'center' });
+		searchRef.current?.focus();
+	}, [focus]);
 	const visible = visibleSectionIds(prefs);
 	const isDefault =
 		prefs.defaultSection === DEFAULT_PREFS.defaultSection &&
@@ -127,6 +139,7 @@ export default function PreferencesDialog({
 							})}
 				</div>
 				<input
+					ref={searchRef}
 					className="ss-ed-input mx-prefs-hidden-search"
 					value={query}
 					onChange={e => setQuery(e.target.value)}

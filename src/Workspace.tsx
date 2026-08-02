@@ -213,6 +213,8 @@ export default function Workspace({
 	/** Editor tab preferences; the dialog writes them straight through to storage. */
 	const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
 	const [prefsOpen, setPrefsOpen] = useState(false);
+	/** Which section the dialog should open on, when it was opened for one. */
+	const [prefsFocus, setPrefsFocus] = useState<'filter' | null>(null);
 	/** A tab the editor should show, set from outside it (Loot → Edit). Cleared as
 	 *  soon as the editor honours it. */
 	const [jumpRequest, setJumpRequest] = useState<SectionId | null>(null);
@@ -1915,7 +1917,30 @@ export default function Workspace({
 			run: () => toggleLintSeverity(s)
 		})),
 
-		{ id: 'open-prefs', label: t('Editor tabs…'), group: t('Preferences'), run: () => setPrefsOpen(true) },
+		// Named for the dialog rather than for its first section: it carries the
+		// language, the editor tabs and the corpus filter, and "Editor tabs…" was
+		// a menu that hid two of the three.
+		{
+			id: 'open-prefs',
+			label: t('Preferences…'),
+			group: t('Preferences'),
+			run: () => {
+				setPrefsFocus(null);
+				setPrefsOpen(true);
+			}
+		},
+		// Its own entry, because a setting nobody can find in the menu is one
+		// nobody has. Opens the same dialog with that section scrolled to and its
+		// search focused.
+		{
+			id: 'open-filtered-monsters',
+			label: t('Filtered monsters…'),
+			group: t('Preferences'),
+			run: () => {
+				setPrefsFocus('filter');
+				setPrefsOpen(true);
+			}
+		},
 		{ id: 'open-hotkeys', label: t('Hotkeys…'), group: t('Preferences'), run: () => setHotkeysOpen(true) },
 		{
 			id: 'open-custom-effects',
@@ -2962,6 +2987,7 @@ export default function Workspace({
 					hidden={hidden}
 					hiddenMonsters={hiddenMonsters}
 					onHiddenChange={updateHidden}
+					focus={prefsFocus}
 					onClose={() => setPrefsOpen(false)}
 				/>
 			)}
