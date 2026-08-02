@@ -20,19 +20,27 @@ proved. Do not relax it without saying so in the commit.
 | `867a4ee` | `engine.rs` (2,306) → `engine/`, 6 modules |
 | `5931476` | `monster/write.rs` (1,758) → `write/`, 7 modules |
 | `3ddba8e` | `lib.rs` (1,680) → `commands/`, 6 modules + `mod.rs` |
-| this one | `WorkspaceContext` — `MonsterEditor` 19 props → 6, `SectionProps` 13 → 4 |
+| `306bdfd` | `WorkspaceContext` — `MonsterEditor` 19 props → 6, `SectionProps` 13 → 4 |
+| `5028118` | `bun run commands` gate + `bun test` over the pure modules |
+| this one | `history.ts` / `tabs.ts` — §4.3's two riskiest seams, extracted and covered |
 
-Version is at `0.1.100`. No Rust file is now over 900 lines outside the frozen
+Version is at `0.1.101`. No Rust file is now over 900 lines outside the frozen
 `dat.rs` / `spr.rs`, and `lib.rs` is 98 lines: the module list, the
 `CustomEffectsState` type, and `run()`.
 
-Two new gates exist and are documented in AGENTS.md. Run both on every change
-that touches what they cover:
+Four gates exist beyond `bun run build` and the probes, all documented in
+AGENTS.md. Run each on every change that touches what it covers:
 
 ```sh
 bun run i18n        # every t() key is carried by pl.ts and pt.ts
 bun run catalog     # catalog.rs ↔ catalog.ts, engine/ ↔ engine.ts
+bun run commands    # the shell command table ↔ hotkeys.ts DEFAULT_BINDINGS
+bun test            # the pure frontend modules
 ```
+
+None of the four needed a dependency, which is the reason they exist rather
+than being proposed. The i18n and catalog checks were each written after the
+drift they detect had already happened; `commands` found its on the first run.
 
 ---
 
@@ -210,6 +218,24 @@ effects that cannot show them. Fix it on its own, where it can be seen.
 
 ### 4.3 `Workspace.tsx` — 3,036 lines, 2,836 of them in one component
 
+**Groundwork done.** The decisions inside two of the four seams are now pure
+modules with tests, so the hooks that will wrap them have nothing left in them
+that can be silently wrong:
+
+- `history.ts` — undo/redo over a pair of stacks. Was two refs mutated in place
+  (`from.pop()`, `to.push()`) inside the callback that also committed the
+  result.
+- `tabs.ts` — `openTab`, `pinTab`, `closeTabs`, `stepTab`. Was an effect body
+  and two `setState` updaters, one of which called `setSelected` from *inside* a
+  `setTabs` updater — a side effect riding on a function React may invoke more
+  than once per commit.
+
+That is the pattern for the rest of this section: **take the decision out, leave
+the timing in.** What remains in the component after such a move is refs,
+effects and commits — the things that genuinely need to be there — and the part
+that was worth testing is somewhere a test can reach. `useEditorTabs` and
+`useUndoRedo` are now thin enough to be lifted whole.
+
 54 `useState` calls in a single function body. It marks its own seams:
 
 ```
@@ -253,19 +279,35 @@ because it is the ceiling of what is available today:
 That was enough for §4.2 because it moves no logic. It is **not** enough for
 §4.3 or §4.4, which move state and effects — a `useEffect` with the wrong
 dependency list after a hook extraction compiles perfectly and misbehaves at
-runtime. Those still need one of:
+runtime.
+
+Since then two gates have been added that close part of it, both without a
+dependency:
+
+- **`bun run commands`** — the command table against `hotkeys.ts`. This is the
+  one that guards §4.3's most delicate part: a command dropped during a hook
+  extraction fails no build and no type check, it just stops being in a menu.
+  It found real drift the first time it ran.
+- **`bun test`** — the pure modules. §4.3's answer is not to test hooks but to
+  make them thin: `history.ts` and `tabs.ts` hold what could be wrong, and
+  they are covered.
+
+What is still missing is anything that exercises a *rendered* component. Before
+§4.4, or before moving an effect rather than the decision inside it, one of: 
 
 - A headless render harness. The earlier note pointed at a memory entry named
   "Headless UI harness"; **that memory does not exist on this machine**, so
   treat it as unwritten rather than as something to go and find. Building one
-  means a DOM implementation and a test runner, which is a dependency decision
-  and an explicit exception to "do not add tests" in AGENTS.md — ask first.
+  means a DOM implementation — Bun's own test runner is already in use, so that
+  half is free — which is a dependency decision. Ask first.
 - Manual exercise through `./monx.sh` (or `bun run tauri:dev`) against the real
   corpus, with a written checklist per section. The hotkey/menu/command surface
   is where a mistake would hide, and it is the part no type check reaches: the
   command table is read by three consumers and a dropped entry compiles.
 
-Do not start §4.3 or §4.4 until one of those is actually in place.
+Do not start §4.4 until one of those is in place. §4.3 may proceed seam by seam
+provided each one is taken out as a decision first, the way history.ts and
+	abs.ts were — an effect moved wholesale into a hook is still unverifiable.
 
 ### 4.6 Not worth splitting — decided, do not revisit without a reason
 

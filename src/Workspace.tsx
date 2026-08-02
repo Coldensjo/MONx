@@ -112,6 +112,8 @@ import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
 import { PreviewProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 import { WorkspaceProvider, type WorkspaceFacts } from './workspacectx';
+import { emptyHistory, recordEdit, redo as redoStep, undo as undoStep, type History } from './history';
+import { closeTabs as closeTabsIn, openTab, pinTab as pinTabIn, stepTab as stepTabIn, type TabState } from './tabs';
 
 /** The speed the Outfits grid animates at, having no creature to read one from.
  *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
@@ -352,7 +354,7 @@ export default function Workspace({
 	dirtyFilesRef.current = dirtyFiles;
 
 	const pinTab = useCallback((file: string) => {
-		setPreviewTab(prev => (prev === file ? null : prev));
+		setPreviewTab(prev => pinTabIn({ tabs: tabsRef.current, preview: prev }, file).preview);
 	}, []);
 
 	const activeDirty = selected !== null && dirtyFiles.has(selected);
@@ -382,44 +384,29 @@ export default function Workspace({
 			setDoc(null);
 			setMonsterLints([]);
 			onOpenFile(null);
-			undoRef.current = [];
-			redoRef.current = [];
+			historyRef.current = emptyHistory();
 			return;
 		}
 		saveSetting(lastMonsterKey(info.paths.monsters), selected);
 		onOpenFile(selected);
 		// A fresh buffer starts a fresh history — undo must never cross files.
-		undoRef.current = [];
-		redoRef.current = [];
+		historyRef.current = emptyHistory();
 		if (!tabsRef.current.includes(selected)) {
-			// A clean preview tab gives way to the new one; anything pinned or
-			// dirty stays and the new tab appends.
-			const preview = previewRef.current;
-			const replaces =
-				preview !== null &&
-				preview !== selected &&
-				tabsRef.current.includes(preview) &&
-				!dirtyFilesRef.current.has(preview);
-			if (replaces) buffersRef.current.delete(preview);
-			const next = replaces
-				? tabsRef.current.map(f => (f === preview ? selected : f))
-				: [...tabsRef.current, selected];
-			// The ref is written through rather than left to the next render: this
-			// effect can run twice for one selection (StrictMode double-invokes it,
-			// and so does a dev reload), and a stale tabsRef made the second run
+			// Which tab gives way, and which buffer goes with it, is `openTab` —
+			// see tabs.ts. What has to stay here is everything about *when*: the
+			// refs are written through rather than left to the next render, because
+			// this effect can run twice for one selection (StrictMode double-invokes
+			// it, and so does a dev reload) and a stale `tabsRef` made the second run
 			// append the same file again — the duplicate tabs.
-			tabsRef.current = next;
-			previewRef.current = selected;
+			const from: TabState = { tabs: tabsRef.current, preview: previewRef.current };
+			const { state, evicted } = openTab(from, selected, f => dirtyFilesRef.current.has(f));
+			if (evicted) buffersRef.current.delete(evicted);
+			tabsRef.current = state.tabs;
+			previewRef.current = state.preview;
 			// Still an updater, so a close that landed in the same batch is not
 			// clobbered, and still idempotent, so a repeated run is a no-op.
-			setTabs(prev =>
-				prev.includes(selected)
-					? prev
-					: replaces && prev.includes(preview)
-						? prev.map(f => (f === preview ? selected : f))
-						: [...prev, selected]
-			);
-			setPreviewTab(selected);
+			setTabs(prev => (prev.includes(selected) ? prev : openTab({ tabs: prev, preview: from.preview }, selected, f => dirtyFilesRef.current.has(f)).state.tabs));
+			setPreviewTab(state.preview);
 		}
 		// A corpus tool rewrote files on disk: every buffer is stale. Tools are
 		// blocked while anything is dirty, so nothing is lost by dropping them.
@@ -468,25 +455,15 @@ export default function Workspace({
 			}
 			const closing = new Set(files);
 			for (const f of files) buffersRef.current.delete(f);
-			setPreviewTab(prev => (prev !== null && closing.has(prev) ? null : prev));
+			// Decided once, outside the updaters. The survivor used to be picked
+			// inside the `setTabs` updater, which also called `setSelected` from
+			// within it — React may invoke an updater more than once per commit, so
+			// that was a side effect riding on a function contracted to be pure.
+			const after = closeTabsIn({ tabs: tabsRef.current, preview: previewRef.current }, files, selected);
+			setPreviewTab(after.state.preview);
 			setDirtyFiles(prev => new Set([...prev].filter(f => !closing.has(f))));
-			setTabs(prev => {
-				const next = prev.filter(f => !closing.has(f));
-				if (selected && closing.has(selected)) {
-					// The nearest survivor takes over; closing the last tab leaves
-					// nothing open, which is a legitimate place to be.
-					const idx = prev.indexOf(selected);
-					let fallback: string | null = null;
-					for (let d = 1; d < prev.length && fallback === null; d++) {
-						const right = prev[idx + d];
-						const left = prev[idx - d];
-						if (right !== undefined && !closing.has(right)) fallback = right;
-						else if (left !== undefined && !closing.has(left)) fallback = left;
-					}
-					setSelected(fallback ?? next[0] ?? null);
-				}
-				return next;
-			});
+			setTabs(prev => prev.filter(f => !closing.has(f)));
+			if (selected !== null && closing.has(selected)) setSelected(after.selected);
 		},
 		[dirtyFiles, selected, t]
 	);
@@ -496,10 +473,8 @@ export default function Workspace({
 	/** Cycles the open tabs, wrapping at both ends. */
 	const stepTab = useCallback(
 		(delta: number) => {
-			if (tabs.length === 0) return;
-			const at = selected ? tabs.indexOf(selected) : -1;
-			const from = at === -1 ? 0 : at;
-			setSelected(tabs[(((from + delta) % tabs.length) + tabs.length) % tabs.length]);
+			const next = stepTabIn(tabs, selected, delta);
+			if (next !== null) setSelected(next);
 		},
 		[tabs, selected]
 	);
@@ -712,12 +687,12 @@ export default function Workspace({
 
 	// ---- Undo / redo ----
 	// The editor already works in whole-doc immutable updates, so history is a
-	// stack of previous docs. Cleared whenever a monster is (re)loaded.
+	// stack of previous docs. Cleared whenever a monster is (re)loaded. The
+	// stacks and the rules over them live in history.ts; what is left here is
+	// the ref that holds them and the commit they drive.
 	const docRef = useRef<MonsterDoc | null>(doc);
 	docRef.current = doc;
-	const undoRef = useRef<MonsterDoc[]>([]);
-	const redoRef = useRef<MonsterDoc[]>([]);
-	const HISTORY_CAP = 100;
+	const historyRef = useRef<History<MonsterDoc>>(emptyHistory());
 
 	/** Puts `next` in the active buffer, marks it dirty and re-lints it. */
 	const commitDoc = useCallback((next: MonsterDoc) => {
@@ -737,27 +712,25 @@ export default function Workspace({
 
 	const editDoc = useCallback(
 		(next: MonsterDoc) => {
-			if (docRef.current) {
-				undoRef.current.push(docRef.current);
-				if (undoRef.current.length > HISTORY_CAP) undoRef.current.shift();
-				redoRef.current = [];
-			}
+			if (docRef.current) historyRef.current = recordEdit(historyRef.current, docRef.current);
 			commitDoc(next);
 		},
 		[commitDoc]
 	);
 
 	const applyHistory = useCallback(
-		(from: MonsterDoc[], to: MonsterDoc[]) => {
-			const target = from.pop();
-			if (!target || !docRef.current) return;
-			to.push(docRef.current);
-			commitDoc(target);
+		(step: typeof undoStep) => {
+			const current = docRef.current;
+			if (!current) return;
+			const taken = step(historyRef.current, current);
+			if (!taken) return;
+			historyRef.current = taken.history;
+			commitDoc(taken.doc);
 		},
 		[commitDoc]
 	);
-	const undoEdit = useCallback(() => applyHistory(undoRef.current, redoRef.current), [applyHistory]);
-	const redoEdit = useCallback(() => applyHistory(redoRef.current, undoRef.current), [applyHistory]);
+	const undoEdit = useCallback(() => applyHistory(undoStep), [applyHistory]);
+	const redoEdit = useCallback(() => applyHistory(redoStep), [applyHistory]);
 
 	// The backend linter needs the declarations too, or the drawer keeps
 	// reporting an effect the picker has just started showing. Pushed on mount
@@ -1176,8 +1149,7 @@ export default function Workspace({
 			// active file is re-read here. A document replaced wholesale from disk
 			// starts a fresh history, for the same reason opening one does.
 			const fresh = await getMonster(active);
-			undoRef.current = [];
-			redoRef.current = [];
+			historyRef.current = emptyHistory();
 			buffersRef.current.set(active, { doc: fresh, lints: [] });
 			setDoc(fresh);
 			const lints = await lintMonster(fresh).catch(() => []);
@@ -1791,7 +1763,7 @@ export default function Workspace({
 			id: 'undo',
 			label: t('Undo'),
 			group: t('Edit'),
-			enabled: undoRef.current.length > 0,
+			enabled: historyRef.current.past.length > 0,
 			notWhileTyping: true,
 			run: undoEdit
 		},
@@ -1799,7 +1771,7 @@ export default function Workspace({
 			id: 'redo',
 			label: t('Redo'),
 			group: t('Edit'),
-			enabled: redoRef.current.length > 0,
+			enabled: historyRef.current.future.length > 0,
 			notWhileTyping: true,
 			run: redoEdit
 		},
