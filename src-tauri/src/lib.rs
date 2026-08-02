@@ -252,7 +252,7 @@ fn get_thing(
 
 use items::ItemInfo;
 use monster::{
-    apply_target, matches_filter, BalanceBand, BatchFilter, BatchTarget, Lint, MonsterDoc,
+    apply_target, matches_filter, BalanceBand, BandFilter, BatchFilter, BatchTarget, Lint, MonsterDoc,
     MonsterSummary, SpellName,
 };
 use workspace::{WorkspaceInfo, WorkspacePaths, WorkspaceProbe};
@@ -795,9 +795,17 @@ fn list_monster_groups(state: State<WorkspaceState>) -> Result<Vec<String>, Stri
 }
 
 #[tauri::command]
-fn balance_bands(state: State<WorkspaceState>) -> Result<Vec<BalanceBand>, String> {
+fn balance_bands(
+    state: State<WorkspaceState>,
+    filter: Option<BandFilter>,
+) -> Result<Vec<BalanceBand>, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    Ok(monster::balance_bands(&ws.docs))
+    // No filter is the whole corpus, which is what every other caller — the
+    // create wizard, the preview panel — asks for and must keep getting.
+    Ok(monster::balance_bands(
+        &ws.docs,
+        &filter.unwrap_or_default(),
+    ))
 }
 
 /// Corpus-wide loot pin (§13). `apply = false` is the preview the Tools menu

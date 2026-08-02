@@ -107,6 +107,14 @@ pub struct MonsterSummary {
     /// loading every document.
     pub boss: bool,
     pub summonable: bool,
+    /// `<flag hostile="0" />` — the flag **written and false**, not merely
+    /// absent. TVP's corpus omits `hostile` on monsters that plainly are, so
+    /// "no flag" says nothing and only an explicit zero is a statement.
+    pub passive: bool,
+    /// Immune to every damage type this engine offers, by immunity or by a
+    /// 100% element. Nothing can hurt it, so its armour and defence are not
+    /// comparable with anything — which is what the balance overview needs.
+    pub damage_immune: bool,
     pub has_loot: bool,
     pub lint_counts: LintCounts,
 }
@@ -3793,6 +3801,54 @@ fn flag_is_true(doc: &MonsterDoc, names: &[&str]) -> bool {
     })
 }
 
+/// True when `name` is written as a boolean flag and is false. Distinct from
+/// `!flag_is_true`, which is also true for a flag nobody wrote — and a flag
+/// nobody wrote is not a statement about the monster (see `passive`).
+fn flag_is_false(doc: &MonsterDoc, name: &str) -> bool {
+    doc.flags
+        .iter()
+        .any(|(k, v)| matches!(v, FlagValue::Bool(false)) && k.eq_ignore_ascii_case(name))
+}
+
+/// Immune to everything this engine can hurt it with.
+///
+/// Both spellings count, because the two tables are the same statement written
+/// differently: `<immunity fire="1"/>` and `firePercent="100"` are one monster
+/// that does not burn. The damage types asked about are the engine's own — a
+/// Crystal monster is not un-immune because it says nothing about agony on an
+/// Ironcore corpus that has no agony.
+fn is_damage_immune(doc: &MonsterDoc) -> bool {
+    let profile = crate::engine::by_key(&doc.engine).unwrap_or_else(crate::engine::default_profile);
+    // Every combat type this engine has a spelling for, either way round.
+    let mut types: Vec<&'static str> = Vec::new();
+    for name in profile.immunities {
+        if let Some(t) = crate::catalog::immunity_combat_type(name) {
+            if !types.contains(&t) {
+                types.push(t);
+            }
+        }
+    }
+    for attr in profile.elements {
+        if let Some(t) = crate::catalog::element_combat_type(attr) {
+            if !types.contains(&t) {
+                types.push(t);
+            }
+        }
+    }
+    if types.is_empty() {
+        return false;
+    }
+    types.iter().all(|combat| {
+        let immune = doc.immunities.iter().any(|(name, on)| {
+            *on && crate::catalog::immunity_combat_type(name) == Some(*combat)
+        });
+        let resisted = doc.elements.iter().any(|(attr, percent)| {
+            *percent >= 100 && crate::catalog::element_combat_type(attr) == Some(*combat)
+        });
+        immune || resisted
+    })
+}
+
 /// The list-view projection of a document (README §5). Lint counts are filled
 /// in by the caller, which owns the workspace-wide context.
 pub fn summarise(doc: &MonsterDoc) -> MonsterSummary {
@@ -3819,6 +3875,8 @@ pub fn summarise(doc: &MonsterDoc) -> MonsterSummary {
         // them got a badge or answered the list's boss filter.
         boss: flag_is_true(doc, &["isboss", "boss"]),
         summonable: flag_is_true(doc, &["summonable"]),
+        passive: flag_is_false(doc, "hostile"),
+        damage_immune: is_damage_immune(doc),
         has_loot: !doc.loot.is_empty(),
         lint_counts: LintCounts::default(),
     }
@@ -4410,7 +4468,35 @@ fn pin_entries(
 /// Recomputed from the live corpus rather than transcribed, **excluding
 /// `experience = 0`** so training dummies and statues don't poison the medians
 /// (§26). Band edges are the reference's.
-pub fn balance_bands(docs: &[MonsterDoc]) -> Vec<BalanceBand> {
+/// What the balance overview may leave out of the medians.
+///
+/// A filter rather than a fixed rule, because every one of these is arguable:
+/// a corpus of nothing but bosses wants them counted, and a server whose
+/// summons are ordinary monsters would lose half its corpus to the third box.
+/// The bands are recomputed against whatever is left, so the medians a monster
+/// is judged by are the medians of the set the user says it belongs to.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BandFilter {
+    pub exclude_bosses: bool,
+    pub exclude_passive: bool,
+    pub exclude_summonable: bool,
+    pub exclude_immune: bool,
+}
+
+impl BandFilter {
+    /// Kept out of the bands. Mirrored on the summary — `boss`, `summonable`,
+    /// `passive` and `damageImmune` — so the member list the dialog shows is
+    /// filtered by the same four answers without loading a document.
+    pub fn excludes(&self, doc: &MonsterDoc) -> bool {
+        (self.exclude_bosses && flag_is_true(doc, &["isboss", "boss"]))
+            || (self.exclude_passive && flag_is_false(doc, "hostile"))
+            || (self.exclude_summonable && flag_is_true(doc, &["summonable"]))
+            || (self.exclude_immune && is_damage_immune(doc))
+    }
+}
+
+pub fn balance_bands(docs: &[MonsterDoc], filter: &BandFilter) -> Vec<BalanceBand> {
     // The top of the range used to be one open-ended `10000+`, which on a modern
     // corpus is the *largest* band and the least informative: 262 of Canary's
     // 1,320 scored monsters landed in it, spanning 25,000 to 250,000 health at
@@ -4441,7 +4527,12 @@ pub fn balance_bands(docs: &[MonsterDoc]) -> Vec<BalanceBand> {
         .map(|(label, min, max)| {
             let band: Vec<&MonsterDoc> = docs
                 .iter()
-                .filter(|d| d.experience > 0 && d.experience >= *min && d.experience <= *max)
+                .filter(|d| {
+                    d.experience > 0
+                        && d.experience >= *min
+                        && d.experience <= *max
+                        && !filter.excludes(d)
+                })
                 .collect();
             BalanceBand {
                 label: (*label).to_string(),

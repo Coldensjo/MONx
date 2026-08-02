@@ -165,7 +165,15 @@ const en: Record<string, string> = {
 	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._one':
 		'What {{count}} named monster resists. 100 is immunity; negative takes extra.',
 	'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra._other':
-		'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra.'
+		'The middle of what {{count}} named monsters resist. 100 is immunity; negative takes extra.',
+
+	// --- Balance overview --------------------------------------------------
+	'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server._one':
+		'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server.',
+	'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server._other':
+		'{{count}} monsters with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server.',
+	'{{count}} monster left out_one': '{{count}} monster left out',
+	'{{count}} monster left out_other': '{{count}} monsters left out'
 };
 
 export default en;

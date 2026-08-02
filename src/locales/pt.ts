@@ -1465,7 +1465,29 @@ const pt: Record<string, string> = {
 
 	// --- Landing credit -------------------------------------------------------------------------------------------------------------------------------
 	by: 'por',
-	'built with Claude': 'construído com Claude'
+	'built with Claude': 'construído com Claude',
+	// --- Balance overview -------------------------------------------------------------------
+	'Balance overview': 'Visão geral do balanceamento',
+	'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server._one':
+		'{{count}} monstro com experiência acima de zero, agrupado pelo que vale uma morte. As medianas são deste corpus — nada aqui é comparado com outro servidor.',
+	'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server._other':
+		'{{count}} monstros com experiência acima de zero, agrupados pelo que vale uma morte. As medianas são deste corpus — nada aqui é comparado com outro servidor.',
+	Bosses: 'Chefes',
+	'Monsters flagged isboss': 'Monstros com a flag isboss',
+	Passive: 'Passivos',
+	'Monsters that write hostile="0". A monster with no hostile flag at all is not counted as passive — most of TVP’s corpus omits it.':
+		'Monstros que escrevem hostile="0". Um monstro sem nenhuma flag hostile não conta como passivo — a maior parte do corpus do TVP a omite.',
+	'Monsters flagged summonable, which is what a summon is': 'Monstros com a flag summonable, que é o que uma invocação é',
+	'Immune to damage': 'Imunes a dano',
+	'Immune to every damage type this engine offers, by immunity or by a 100% element — nothing can hurt it':
+		'Imune a todos os tipos de dano que este engine oferece, por imunidade ou por um elemento de 100% — nada consegue feri-lo',
+	'{{count}} monster left out_one': '{{count}} monstro de fora',
+	'{{count}} monster left out_other': '{{count}} monstros de fora',
+	Band: 'Faixa',
+	'Show the monsters in this band, furthest from the middle first': 'Mostrar os monstros desta faixa, os mais distantes do meio primeiro',
+	'Too few to draw a median from': 'Poucos demais para tirar uma mediana',
+	'No monsters in this band.': 'Nenhum monstro nesta faixa.',
+	'{{label}} {{value}} — {{pct}}% of the band is at or below it': '{{label}} {{value}} — {{pct}}% da faixa está nesse valor ou abaixo',
 };
 
 export default pt;

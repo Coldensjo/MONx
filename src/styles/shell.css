@@ -434,6 +434,35 @@
 	color: var(--text-muted);
 }
 
+/* What is left out of the medians. A row above the table rather than a menu:
+   there are four of them, they are all one word, and which are ticked is the
+   first thing to read when a median looks wrong. */
+.mx-bal-filters {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px 14px;
+	margin: 0 0 12px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--border);
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.mx-bal-filter {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.mx-bal-excluded {
+	margin-left: auto;
+	font-size: 11px;
+	opacity: 0.8;
+}
+
 .mx-bal-table {
 	max-height: 60vh;
 	overflow-y: auto;

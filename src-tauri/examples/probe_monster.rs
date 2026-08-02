@@ -306,7 +306,7 @@ fn main() {
             "  {:<14} {:>5} {:>8} {:>8} {:>8} {:>7} {:>7} {:>9}",
             "band", "n", "hp p10", "hp med", "hp p90", "speed", "armor", "defense"
         );
-        for b in monster::balance_bands(&docs) {
+        for b in monster::balance_bands(&docs, &Default::default()) {
             // p10/p90 are the edges the panel calls low and high. Printing them
             // beside the median is what makes a band's *width* visible, which is
             // the thing a median alone hides.

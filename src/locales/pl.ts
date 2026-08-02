@@ -1545,7 +1545,32 @@ const pl: Record<string, string> = {
 
 	// --- Landing credit ---------------------------------------------------------------------
 	by: 'autor:',
-	'built with Claude': 'zbudowane z Claude'
+	'built with Claude': 'zbudowane z Claude',
+	// --- Balance overview -------------------------------------------------------------------
+	'Balance overview': 'Przegląd balansu',
+	'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server._one':
+		'{{count}} potwór z doświadczeniem powyżej zera, pogrupowany według wartości zabicia. Mediany pochodzą z tego korpusu — nic nie jest porównywane z innym serwerem.',
+	'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server._few':
+		'{{count}} potwory z doświadczeniem powyżej zera, pogrupowane według wartości zabicia. Mediany pochodzą z tego korpusu — nic nie jest porównywane z innym serwerem.',
+	'{{count}} monster with experience above zero, grouped by what a kill is worth. Medians are this corpus’s own — nothing here is compared against another server._many':
+		'{{count}} potworów z doświadczeniem powyżej zera, pogrupowanych według wartości zabicia. Mediany pochodzą z tego korpusu — nic nie jest porównywane z innym serwerem.',
+	Bosses: 'Bossowie',
+	'Monsters flagged isboss': 'Potwory z flagą isboss',
+	Passive: 'Pasywne',
+	'Monsters that write hostile="0". A monster with no hostile flag at all is not counted as passive — most of TVP’s corpus omits it.':
+		'Potwory, które zapisują hostile="0". Potwór bez flagi hostile w ogóle nie liczy się jako pasywny — większość korpusu TVP jej nie zapisuje.',
+	'Monsters flagged summonable, which is what a summon is': 'Potwory z flagą summonable, czyli to, czym jest przywołaniec',
+	'Immune to damage': 'Odporne na obrażenia',
+	'Immune to every damage type this engine offers, by immunity or by a 100% element — nothing can hurt it':
+		'Odporne na każdy typ obrażeń tego silnika, przez odporność albo element 100% — nic nie może go zranić',
+	'{{count}} monster left out_one': 'pominięto {{count}} potwora',
+	'{{count}} monster left out_few': 'pominięto {{count}} potwory',
+	'{{count}} monster left out_many': 'pominięto {{count}} potworów',
+	Band: 'Przedział',
+	'Show the monsters in this band, furthest from the middle first': 'Pokaż potwory w tym przedziale, najdalsze od środka na początku',
+	'Too few to draw a median from': 'Za mało, by wyznaczyć medianę',
+	'No monsters in this band.': 'Brak potworów w tym przedziale.',
+	'{{label}} {{value}} — {{pct}}% of the band is at or below it': '{{label}} {{value}} — {{pct}}% przedziału jest na tym poziomie lub niżej',
 };
 
 export default pl;

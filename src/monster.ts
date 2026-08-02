@@ -114,6 +114,13 @@ export interface MonsterSummary {
 	/** `<flag isboss="1" />`. Carried on the summary so the list can filter without loading every doc. */
 	boss: boolean;
 	summonable: boolean;
+	/** `<flag hostile="0" />` — written and false. A missing flag is not a
+	 *  statement: TVP's corpus omits it on monsters that plainly are hostile. */
+	passive: boolean;
+	/** Immune to every damage type its engine offers, by immunity or by a 100%
+	 *  element. Nothing can hurt it, so its armour and defence compare to
+	 *  nothing — which is why the balance overview can leave it out. */
+	damageImmune: boolean;
 	hasLoot: boolean;
 	lintCounts: { error: number; warning: number; silent: number };
 }
@@ -722,8 +729,37 @@ export function writeTextFile(path: string, content: string): Promise<void> {
 	return invoke<void>('write_text_file', { path, content });
 }
 
-export function balanceBands(): Promise<BalanceBand[]> {
-	return invoke<BalanceBand[]>('balance_bands', {});
+/** What the balance overview may leave out of the medians. Every field
+ *  defaults to false, which is the whole corpus — what the create wizard and
+ *  the preview panel ask for. */
+export interface BandFilter {
+	excludeBosses: boolean;
+	excludePassive: boolean;
+	excludeSummonable: boolean;
+	excludeImmune: boolean;
+}
+
+export const noBandFilter = (): BandFilter => ({
+	excludeBosses: false,
+	excludePassive: false,
+	excludeSummonable: false,
+	excludeImmune: false
+});
+
+/** True for a monster the filter leaves out. The backend applies the same four
+ *  answers to the documents when it recomputes the bands; this is the summary
+ *  half, so the member list and the medians never disagree. */
+export function bandExcludes(filter: BandFilter, m: MonsterSummary): boolean {
+	return (
+		(filter.excludeBosses && m.boss) ||
+		(filter.excludePassive && m.passive) ||
+		(filter.excludeSummonable && m.summonable) ||
+		(filter.excludeImmune && m.damageImmune)
+	);
+}
+
+export function balanceBands(filter?: BandFilter): Promise<BalanceBand[]> {
+	return invoke<BalanceBand[]>('balance_bands', { filter: filter ?? null });
 }
 
 /**

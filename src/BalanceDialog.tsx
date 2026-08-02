@@ -1,7 +1,15 @@
 import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useState } from 'react';
 import { Scale } from 'lucide-react';
-import { balanceBands, MIN_BAND_N, type BalanceBand, type MonsterSummary } from './monster';
+import {
+	balanceBands,
+	bandExcludes,
+	noBandFilter,
+	MIN_BAND_N,
+	type BalanceBand,
+	type BandFilter,
+	type MonsterSummary
+} from './monster';
 import { percentileIn } from './derive';
 import { n as fmt } from './i18n';
 
@@ -19,6 +27,23 @@ const STATS = [
 	{ key: 'armor', label: 'Armor', of: (m: MonsterSummary) => m.armor },
 	{ key: 'defense', label: 'Defense', of: (m: MonsterSummary) => m.defense }
 ] as const;
+
+/** The four exclusions, each naming the flag or the table it reads — a box
+ *  whose rule the user cannot see is one they cannot trust their corpus to. */
+const FILTERS = [
+	{ key: 'excludeBosses', label: 'Bosses', title: 'Monsters flagged isboss' },
+	{
+		key: 'excludePassive',
+		label: 'Passive',
+		title: 'Monsters that write hostile="0". A monster with no hostile flag at all is not counted as passive — most of TVP’s corpus omits it.'
+	},
+	{ key: 'excludeSummonable', label: 'Summonable', title: 'Monsters flagged summonable, which is what a summon is' },
+	{
+		key: 'excludeImmune',
+		label: 'Immune to damage',
+		title: 'Immune to every damage type this engine offers, by immunity or by a 100% element — nothing can hurt it'
+	}
+] as const satisfies readonly { key: keyof BandFilter; label: string; title: string }[];
 
 /** How far from the middle of its band a monster sits, over all four stats.
  *  The maximum rather than the mean: one stat far out is what makes a monster
@@ -47,15 +72,20 @@ export default function BalanceDialog({ monsters, onOpen, onClose }: Props) {
 	// Fetched here rather than handed down: the preview panel holds its own copy
 	// for one monster at a time, and this is the only other reader.
 	const [bands, setBands] = useState<BalanceBand[]>([]);
+	/** What is left out of the medians. Held here and sent to the backend rather
+	 *  than applied to the rows on the way out: a median with the bosses still in
+	 *  it is the thing the filter exists to get rid of, so the bands are
+	 *  recomputed against what is left instead of being drawn once and sieved. */
+	const [filter, setFilter] = useState<BandFilter>(noBandFilter);
 	useEffect(() => {
 		let live = true;
-		balanceBands()
+		balanceBands(filter)
 			.then(b => live && setBands(b))
 			.catch(() => undefined);
 		return () => {
 			live = false;
 		};
-	}, []);
+	}, [filter]);
 
 	// Bands with nothing in them are not rows — an engine whose corpus stops at
 	// 10,000 experience should not be shown four empty tiers.
@@ -65,12 +95,19 @@ export default function BalanceDialog({ monsters, onOpen, onClose }: Props) {
 		const band = populated.find(b => b.label === openBand);
 		if (!band) return [];
 		return monsters
-			.filter(m => m.experience > 0 && m.experience >= band.min && m.experience <= band.max)
+			.filter(m => m.experience > 0 && m.experience >= band.min && m.experience <= band.max && !bandExcludes(filter, m))
 			.map(m => ({ monster: m, deviation: deviation(m, band), band }))
 			.sort((a, b) => b.deviation - a.deviation || a.monster.name.localeCompare(b.monster.name));
-	}, [populated, monsters, openBand]);
+	}, [populated, monsters, openBand, filter]);
 
 	const scored = populated.reduce((sum, b) => sum + b.count, 0);
+
+	// What the boxes cost, in monsters. A filter whose effect is invisible is one
+	// nobody can tell they left ticked.
+	const excluded = useMemo(
+		() => monsters.filter(m => m.experience > 0 && bandExcludes(filter, m)).length,
+		[monsters, filter]
+	);
 
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
@@ -85,6 +122,22 @@ export default function BalanceDialog({ monsters, onOpen, onClose }: Props) {
 						count: scored
 					})}
 				</p>
+
+				{/* Four boxes rather than a fixed rule, because each of them is
+				    arguable: a corpus of nothing but bosses wants them counted, and a
+				    server whose summons are ordinary monsters would lose half its
+				    corpus to the third one. Ticking any of them recomputes the bands,
+				    so the medians are the medians of the set the user says the
+				    monster belongs to. */}
+				<div className="mx-bal-filters">
+					{FILTERS.map(f => (
+						<label key={f.key} className="mx-bal-filter" title={t(f.title)}>
+							<input type="checkbox" checked={filter[f.key]} onChange={e => setFilter({ ...filter, [f.key]: e.target.checked })} />
+							{t(f.label)}
+						</label>
+					))}
+					{excluded > 0 && <span className="mx-bal-excluded">{t('{{count}} monster left out', { count: excluded })}</span>}
+				</div>
 
 				<div className="mx-bal-table" role="table">
 					<div className="mx-bal-head" role="row">
