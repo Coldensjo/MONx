@@ -623,6 +623,17 @@ fn copy_tree(source: &Path, target: &Path, ext: &str) -> Result<(), String> {
     for entry in std::fs::read_dir(source).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
         if path.is_dir() {
+            // Skip dot-directories, exactly as `monster::monster_files` does.
+            // `.monx-backup` is the one that matters: any corpus MONx has been
+            // opened and saved in once already has it, so mirroring it seeded
+            // the copy with backups this run never wrote and the count below
+            // read them as saves. That made the gate fail on precisely the
+            // corpora worth pointing it at — a real 386-file tree reported
+            // "392 backups for 386 saved files" and the save pipeline was
+            // fine. `.git` and an editor's own would do the same.
+            if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
             copy_tree(&path, &target.join(entry.file_name()), ext)?;
         } else if path
             .extension()
