@@ -1,7 +1,7 @@
 {
 	"name": "monx",
 	"private": true,
-	"version": "0.1.100",
+	"version": "0.1.101",
 	"license": "MIT",
 	"type": "module",
 	"packageManager": "bun@1.3.14",
@@ -10,6 +10,8 @@
 		"build": "tsc && vite build",
 		"i18n": "node scripts/check-i18n.mjs",
 		"catalog": "node scripts/check-catalog.mjs",
+		"commands": "node scripts/check-commands.mjs",
+		"test": "bun test",
 		"tauri": "tauri",
 		"tauri:dev": "tauri dev",
 		"tauri:build": "tauri build",

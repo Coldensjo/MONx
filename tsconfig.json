@@ -16,5 +16,9 @@
 		"noUnusedParameters": true,
 		"noFallthroughCasesInSwitch": true
 	},
-	"include": ["src"]
+	"include": ["src"],
+	// Tests import from "bun:test", whose types would need @types/bun. They are
+	// type-stripped and run by "bun test" instead, which keeps the suite at zero
+	// added dependencies — and keeps "bun run build" checking the app alone.
+	"exclude": ["src/**/*.test.ts"]
 }

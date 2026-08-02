@@ -26,13 +26,17 @@ MONx is a fork of **SPRx**, a sprite browser for the same client formats. The sp
 | Package manager | Bun (`packageManager: bun@1.3.14`) |
 | Icons | lucide-react |
 
-No test suite, no linter config beyond TypeScript strict mode.
+No linter config beyond TypeScript strict mode. The frontend has a small `bun test`
+suite over the pure modules — see below; the backend is covered by the probes rather
+than by tests.
 
 **Verifying changes**
 
 - Frontend: `bun run build` (runs `tsc` then Vite) or `bun run tauri:dev`.
 - Frontend strings: `bun run i18n` — fails naming any string `pl.ts` or `pt.ts` is missing. Run it on every change that touches `src/`; see [Text the user reads](#text-the-user-reads).
 - Catalogue mirrors: `bun run catalog` — fails when `catalog.rs` and `catalog.ts`, or `engine/` and `engine.ts`, stop agreeing. Run it on every change to any of the four.
+- Command table: `bun run commands` — fails when a shell `Command` has no `DEFAULT_BINDINGS` row, a binding names a command that no longer exists, an id is duplicated, or two commands ship on one chord. Run it on every change to `Workspace.tsx`'s command table or `hotkeys.ts`.
+- Frontend unit tests: `bun test` — the pure modules only (`lintfix`, `blocks`, `diff`, `lootsim`). No DOM, no test dependencies: they are excluded from `tsconfig.json` and run by Bun's own runner, so `bun run build` still type-checks the app alone. `lintfix` is the one that matters most — it is the only place the frontend rewrites a monster the user did not type, and its tests assert the `--mutate` property: **a fix changes its own path and nothing else.**
 - Backend compile: `cargo check` in `src-tauri/`.
 - Backend behavior: `probe_monster` is the fastest end-to-end check — it reads and rewrites the whole monster corpus and diffs the bytes, so a round-trip regression fails across every file at once instead of arriving as a bug report. `probe_dat` does the same for sprite composition.
 
@@ -359,4 +363,7 @@ The trap is that a feature arrives over many commits and the words feel like cle
 - Do not write `items.otb` or any client file. MONx reads them.
 - Do not add dependencies beyond the ones already in `Cargo.toml` unless there are huge benefits in so, ask first.
 - Keep changes minimal. No new abstractions unless the pattern repeats 3+ times.
-- Do not add tests, docs, or config files unless explicitly requested.
+- Do not add tests, docs, or config files unless explicitly requested. The `bun test`
+  suite that exists was requested; extending it to another **pure** module is in the
+  spirit of it, but a rendering/DOM harness is a new dependency and a new decision —
+  ask.

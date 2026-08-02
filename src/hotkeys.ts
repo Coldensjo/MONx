@@ -130,6 +130,7 @@ export const DEFAULT_BINDINGS: Bindings = {
 	'scale-loot': bind(null),
 	'batch-edit': bind(null),
 	'compare-monsters': bind(null),
+	'balance-overview': bind(null),
 	'export-lints': bind(null),
 	'export-patch-notes': bind(null),
 	'set-patch-cutoff': bind(null),
@@ -137,6 +138,7 @@ export const DEFAULT_BINDINGS: Bindings = {
 	'open-prefs': bind('Ctrl+,'),
 	'open-hotkeys': bind('Ctrl+Shift+K'),
 	'open-custom-effects': bind(null),
+	'open-filtered-monsters': bind(null),
 	'show-all-tabs': bind(null)
 };
 
