@@ -621,10 +621,10 @@ const pt: Record<string, string> = {
 	'Show errors': 'Mostrar erros',
 	'Show warnings': 'Mostrar avisos',
 	'Show silent findings': 'Mostrar achados silenciosos',
-	'Apply every automatic fix for this monster':
-		'Aplicar todas as correções automáticas deste monstro',
-	'Apply every automatic fix across the corpus — writes those files directly':
-		'Aplicar todas as correções automáticas em todo o corpus — grava esses arquivos diretamente',
+	'Review every automatic fix for this monster':
+		'Revisar todas as correções automáticas deste monstro',
+	'Review every automatic fix across the corpus before it is written':
+		'Revisar todas as correções automáticas em todo o corpus antes de gravá-las',
 	'Close lints': 'Fechar apontamentos',
 	'No problems found.': 'Nenhum problema encontrado.',
 	'Nothing matches the current filter.': 'Nada corresponde ao filtro atual.',
@@ -641,9 +641,34 @@ const pt: Record<string, string> = {
 	'Fixed {{code}} in {{file}}': '{{code}} corrigido em {{file}}',
 	'Ignoring {{code}} — restore it from the Linter menu':
 		'Ignorando {{code}} — restaure pelo menu Linter',
-	'Save your open changes first — these fixes write files directly':
-		'Salve suas alterações abertas primeiro — estas correções gravam arquivos diretamente',
 	'Nothing here has an automatic fix': 'Nada aqui tem correção automática',
+
+	// --- Prévia das correções -----------------------------------------------------------
+	'Review fixes': 'Revisar correções',
+	'Show the diff': 'Mostrar as diferenças',
+	'Hide the diff': 'Ocultar as diferenças',
+	'Rendering…': 'Renderizando…',
+	'No change to the file.': 'Nenhuma alteração no arquivo.',
+	'Fixing…': 'Corrigindo…',
+	manual: 'manual',
+	'{{count}} fix_one': '{{count}} correção',
+	'{{count}} fix_other': '{{count}} correções',
+	'Apply {{count}} fix_one': 'Aplicar {{count}} correção',
+	'Apply {{count}} fix_other': 'Aplicar {{count}} correções',
+	'{{count}} fix in {{files}} — expand a file to see exactly what changes._one':
+		'{{count}} correção em {{files}} — expanda um arquivo para ver exatamente o que muda.',
+	'{{count}} fix in {{files}} — expand a file to see exactly what changes._other':
+		'{{count}} correções em {{files}} — expanda um arquivo para ver exatamente o que muda.',
+	'{{count}} needs a manual fix and is left alone._one':
+		'{{count}} precisa de correção manual e fica intacta.',
+	'{{count}} needs a manual fix and is left alone._other':
+		'{{count}} precisam de correção manual e ficam intactas.',
+	'{{count}} file has unsaved changes and is left out — save it first. First: {{list}}._one':
+		'{{count}} arquivo tem alterações não salvas e ficou de fora — salve-o primeiro. Primeiro: {{list}}.',
+	'{{count}} file has unsaved changes and is left out — save it first. First: {{list}}._other':
+		'{{count}} arquivos têm alterações não salvas e ficaram de fora — salve-os primeiro. Primeiros: {{list}}.',
+	'{{count}} unchanged line_one': '{{count}} linha inalterada',
+	'{{count}} unchanged line_other': '{{count}} linhas inalteradas',
 	'Could not store the cut-off point': 'Não foi possível armazenar o ponto de corte',
 
 	// --- Browsers -----------------------------------------------------------------------

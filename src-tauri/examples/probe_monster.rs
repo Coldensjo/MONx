@@ -6,7 +6,18 @@
 //! cargo run --release --example probe_monster -- ../assets/monsters --lint
 //! cargo run --release --example probe_monster -- ../assets/monsters --canonical
 //! cargo run --release --example probe_monster -- ../sources/TVP-main/data/monster --engine tvp
+//!
+//! # As a check in a datapack repository
+//!
+//! cargo run --release --example probe_monster -- data/monster \
+//!     --format sarif --out monx.sarif --fail-on error,silent
 //! ```
+//!
+//! `--format json|sarif` writes a machine report (to `--out <path>`, else
+//! stdout, in which case the human summary moves to stderr) and implies
+//! `--lint`. `--fail-on` takes a *set* of severities, not a threshold — the
+//! three are not a ranking, and `silent` is the one worth failing on even when
+//! warnings are tolerated. Nothing fails by default.
 //!
 //! The default pass is the acceptance gate for the whole format stream: read
 //! every file, write the unmodified document straight back, and diff bytes.
@@ -29,6 +40,27 @@ use monx_lib::monster;
 use monx_lib::registry::Registry;
 use monx_lib::spells::SpellIndex;
 
+/// Set when a machine-readable report is going to stdout. Everything a person
+/// reads then moves to stderr, so `--format json` stays pipeable into `jq` with
+/// the human summary still visible in the terminal. With `--out <path>` the
+/// report goes to the file instead and stdout is left alone.
+static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+macro_rules! say {
+    ($($t:tt)*) => {
+        if QUIET.load(std::sync::atomic::Ordering::Relaxed) {
+            eprintln!($($t)*)
+        } else {
+            println!($($t)*)
+        }
+    };
+}
+
+/// The three severities, in the order every summary prints them. Not a ranking:
+/// `silent` is the loudest of the three (see `lint.rs`), which is why
+/// `--fail-on` takes a set rather than a threshold.
+const SEVERITIES: [&str; 3] = ["error", "warning", "silent"];
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // The only positional argument is the monsters folder; `--items <dir>`
@@ -36,8 +68,19 @@ fn main() {
     let valued = |i: usize| {
         matches!(
             args.get(i.wrapping_sub(1)).map(String::as_str),
-            Some("--items") | Some("--engine") | Some("--crud")
+            Some("--items")
+                | Some("--engine")
+                | Some("--crud")
+                | Some("--format")
+                | Some("--out")
+                | Some("--fail-on")
         )
+    };
+    let value = |name: &str| {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+            .map(String::as_str)
     };
     let dir = args
         .iter()
@@ -48,7 +91,35 @@ fn main() {
         // first populating the (gitignored) `assets/` workspaces. They are a
         // smoke test, not coverage — see fixtures/README.md.
         .unwrap_or_else(|| PathBuf::from("fixtures/engines/ironcore/monsters"));
-    let want_lint = args.iter().any(|a| a == "--lint");
+    // The CI surface. `--format` is what makes this usable as a check in a
+    // datapack repository: a machine document on stdout (or in a file), and an
+    // exit code the author chooses rather than one this probe decides for them.
+    let format = value("--format").unwrap_or("text");
+    if !matches!(format, "text" | "json" | "sarif") {
+        eprintln!("unknown --format: {format} (text, json, sarif)");
+        std::process::exit(2);
+    }
+    let out_path = value("--out").map(PathBuf::from);
+    let machine = format != "text";
+    if machine && out_path.is_none() {
+        QUIET.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    // A set, not a threshold — see SEVERITIES. `--fail-on error,silent` is the
+    // useful default for a repository: refuse what the server refuses, and
+    // refuse what it accepts and then quietly gets wrong, while letting the
+    // clamps through.
+    let fail_on: Vec<&str> = match value("--fail-on") {
+        None => Vec::new(),
+        Some("any") => SEVERITIES.to_vec(),
+        Some(list) => list.split(',').map(str::trim).filter(|s| !s.is_empty()).collect(),
+    };
+    if let Some(bad) = fail_on.iter().find(|s| !SEVERITIES.contains(s)) {
+        eprintln!("unknown --fail-on severity: {bad} (error, warning, silent, any)");
+        std::process::exit(2);
+    }
+
+    // Asking for a report is asking for the lint pass; nobody types both.
+    let want_lint = args.iter().any(|a| a == "--lint") || machine || !fail_on.is_empty();
     let want_mutate = args.iter().any(|a| a == "--mutate");
     let want_canonical = args.iter().any(|a| a == "--canonical");
     let verbose = args.iter().any(|a| a == "--verbose");
@@ -76,7 +147,7 @@ fn main() {
             let samples: Vec<Vec<u8>> = files.iter().filter_map(|p| std::fs::read(p).ok()).collect();
             let d = engine::detection(engine::detect(&samples));
             let p = engine::by_key(&d.best).unwrap_or_else(engine::default_profile);
-            println!(
+            say!(
                 "engine   {} ({})",
                 p.label,
                 if d.confident { "detected" } else { "low confidence" }
@@ -191,7 +262,7 @@ fn main() {
     }
 
     let elapsed = started.elapsed();
-    println!(
+    say!(
         "parsed {} files in {}ms · round-trip identical: {} · differing: {}",
         parsed_ok,
         elapsed.as_millis(),
@@ -199,51 +270,52 @@ fn main() {
         differing.len()
     );
     if !failed.is_empty() {
-        println!("failed to parse: {}", failed.len());
+        say!("failed to parse: {}", failed.len());
         for (name, err) in &failed {
-            println!("  {name}: {err}");
+            say!("  {name}: {err}");
         }
     }
     for (name, detail) in differing.iter().take(if verbose { usize::MAX } else { 20 }) {
-        println!("  DIFF {name}: {detail}");
+        say!("  DIFF {name}: {detail}");
     }
     if want_canonical {
-        println!(
+        say!(
             "canonical re-render identical: {canonical_ok}/{parsed_ok} \
              (informational — the gate is the round-trip number above)"
         );
-        println!(
+        say!(
             "canonical re-read equal: {}/{parsed_ok} ({} failed) — this one is a gate: \
              it is what create_monster writes",
             parsed_ok - canonical_bad.len(),
             canonical_bad.len()
         );
         for why in canonical_bad.iter().take(if verbose { usize::MAX } else { 15 }) {
-            println!("  CANON {why}");
+            say!("  CANON {why}");
         }
-        println!(
+        say!(
             "canonical normalisation: {} documents drop something the engine already ignores",
             canonical_normalised.len()
         );
         for what in canonical_normalised.iter().take(if verbose { usize::MAX } else { 15 }) {
-            println!("  NORM  {what}");
+            say!("  NORM  {what}");
         }
     }
     if want_mutate {
-        println!(
+        say!(
             "edit round-trip: {mutate_ok}/{parsed_ok} files re-read equal after an edit \
              · {mutate_lines} lines changed in total ({} failed)",
             mutate_bad.len()
         );
-        println!(
+        say!(
             "pacifist/leash voices: {voice_ok}/{parsed_ok} files survive set → edit → clear"
         );
-        println!("clearing: {clear_ok}/{parsed_ok} files survive a field being emptied");
+        say!("clearing: {clear_ok}/{parsed_ok} files survive a field being emptied");
         for why in mutate_bad.iter().take(if verbose { usize::MAX } else { 20 }) {
-            println!("  MUTATE {why}");
+            say!("  MUTATE {why}");
         }
     }
 
+    let mut lint_failed = false;
     if want_lint {
         // All three scopes, so a regression in any one of them shows up here.
         let mut report = source_lints;
@@ -265,7 +337,7 @@ fn main() {
                 .filter(|l| l.severity == severity)
                 .count()
         };
-        println!(
+        say!(
             "lints: {} errors · {} warnings · {} silent",
             count("error"),
             count("warning"),
@@ -282,11 +354,11 @@ fn main() {
         }
         by_code.sort_by(|a, b| b.2.cmp(&a.2).then(a.0.cmp(&b.0)));
         for (code, severity, n) in &by_code {
-            println!("  {n:>5}  {severity:<8} {code}");
+            say!("  {n:>5}  {severity:<8} {code}");
         }
         if verbose {
             for l in &report {
-                println!(
+                say!(
                     "    {} [{}] {}{} — {}",
                     l.severity,
                     l.code,
@@ -296,13 +368,58 @@ fn main() {
                 );
             }
         }
+
+        if machine {
+            let text = match format {
+                "sarif" => sarif(&report, profile.key, &dir),
+                _ => serde_json::json!({
+                    "tool": "probe_monster",
+                    "engine": profile.key,
+                    "root": dir.display().to_string(),
+                    "files": files.len(),
+                    "counts": {
+                        "error": count("error"),
+                        "warning": count("warning"),
+                        "silent": count("silent"),
+                    },
+                    "lints": report,
+                }),
+            };
+            let text = serde_json::to_string_pretty(&text).unwrap_or_default();
+            match &out_path {
+                Some(p) => {
+                    if let Err(e) = std::fs::write(p, text) {
+                        eprintln!("could not write {}: {e}", p.display());
+                        std::process::exit(2);
+                    }
+                    say!("report: {}", p.display());
+                }
+                // Deliberately `println!`: this is the document, not commentary,
+                // and QUIET is exactly the flag that moved the commentary away
+                // to keep this stream clean.
+                None => println!("{text}"),
+            }
+        }
+
+        // The author says what counts as a failure. A corpus with three hundred
+        // `loot.unknown-id` warnings it has lived with for years should still be
+        // able to gate on errors, so nothing here is failed by default.
+        let hit: Vec<String> = fail_on
+            .iter()
+            .filter(|s| count(s) > 0)
+            .map(|s| format!("{} {s}", count(s)))
+            .collect();
+        if !hit.is_empty() {
+            say!("FAIL --fail-on {}: {}", fail_on.join(","), hit.join(" · "));
+            lint_failed = true;
+        }
     }
 
     if args.iter().any(|a| a == "--bands") {
         // Reference §26 transcribes these from the corpus; recomputing them
         // here is how we know the reader agrees with whoever wrote that table.
-        println!("balance bands (experience = 0 excluded):");
-        println!(
+        say!("balance bands (experience = 0 excluded):");
+        say!(
             "  {:<14} {:>5} {:>8} {:>8} {:>8} {:>7} {:>7} {:>9}",
             "band", "n", "hp p10", "hp med", "hp p90", "speed", "armor", "defense"
         );
@@ -317,7 +434,7 @@ fn main() {
                     v[(((v.len() - 1) as f64) * p).round() as usize]
                 }
             };
-            println!(
+            say!(
                 "  {:<14} {:>5} {:>8} {:>8} {:>8} {:>7} {:>7} {:>9}{}",
                 b.label,
                 b.count,
@@ -344,9 +461,9 @@ fn main() {
         .map(PathBuf::from)
     {
         match crud_check(profile, &dir, &scratch) {
-            Ok(summary) => println!("crud: {summary}"),
+            Ok(summary) => say!("crud: {summary}"),
             Err(e) => {
-                println!("crud: FAILED — {e}");
+                say!("crud: FAILED — {e}");
                 crud_failed = true;
             }
         }
@@ -357,8 +474,85 @@ fn main() {
         || !mutate_bad.is_empty()
         || !canonical_bad.is_empty()
         || crud_failed
+        || lint_failed
     {
         std::process::exit(1);
+    }
+}
+
+/// The lint report as SARIF 2.1.0, which is what a CI service reads to annotate
+/// a pull request line by line.
+///
+/// `silent` has no SARIF equivalent — the format's levels are error, warning,
+/// note and none — so it maps to `note` and keeps its real name in
+/// `properties.severity`. Anything consuming this should sort on that, not on
+/// the level: a note here is the class of finding the server never reports and
+/// a human cannot otherwise discover.
+fn sarif(report: &[monster::Lint], engine: &str, root: &Path) -> serde_json::Value {
+    let mut rules: Vec<serde_json::Value> = Vec::new();
+    let mut seen: Vec<&str> = Vec::new();
+    for l in report {
+        if seen.contains(&l.code.as_str()) {
+            continue;
+        }
+        seen.push(&l.code);
+        rules.push(serde_json::json!({
+            "id": l.code,
+            "name": l.code,
+            "shortDescription": { "text": l.code },
+            "defaultConfiguration": { "level": sarif_level(&l.severity) },
+            "properties": { "severity": l.severity },
+        }));
+    }
+
+    let results: Vec<serde_json::Value> = report
+        .iter()
+        .map(|l| {
+            let mut result = serde_json::json!({
+                "ruleId": l.code,
+                "level": sarif_level(&l.severity),
+                "message": { "text": l.message },
+                "properties": { "severity": l.severity },
+            });
+            // A workspace-scope finding belongs to no file. SARIF allows a
+            // result with no location; inventing one on monsters.xml would put
+            // a duplicate-raceid annotation on a line that has nothing to do
+            // with it.
+            if let Some(file) = &l.file {
+                result["locations"] = serde_json::json!([{
+                    "physicalLocation": {
+                        "artifactLocation": { "uri": file.replace('\\', "/") }
+                    }
+                }]);
+            }
+            if let Some(path) = &l.path {
+                result["properties"]["path"] = serde_json::Value::String(path.clone());
+            }
+            result
+        })
+        .collect();
+
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": { "driver": {
+                "name": "MONx probe_monster",
+                "informationUri": "https://github.com/Coldensjo/MONx",
+                "rules": rules,
+            }},
+            "originalUriBaseIds": { "SRCROOT": { "uri": root.display().to_string() } },
+            "properties": { "engine": engine },
+            "results": results,
+        }],
+    })
+}
+
+fn sarif_level(severity: &str) -> &'static str {
+    match severity {
+        "error" => "error",
+        "warning" => "warning",
+        _ => "note",
     }
 }
 

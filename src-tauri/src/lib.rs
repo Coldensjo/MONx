@@ -837,6 +837,14 @@ fn lint_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<Vec<Lin
     Ok(lint::lint_monster(ws.profile, &doc, &ws.spells, &ws.items, &ws.custom_effects))
 }
 
+/// The text `save_monster` would write for this document, without writing it.
+/// The fix preview asks for one per side of the diff.
+#[tauri::command]
+fn render_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> Result<String, String> {
+    let ws = state.read().map_err(|e| format!("lock: {e}"))?;
+    monster::render(ws.profile, &ws.monsters_dir(), &doc)
+}
+
 #[tauri::command]
 fn next_free_raceid(state: State<WorkspaceState>) -> Result<i64, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
@@ -1647,6 +1655,7 @@ pub fn run() {
             lint_workspace,
             lint_monster,
             next_free_raceid,
+            render_monster,
             list_spell_names,
             list_monster_scripts,
             list_monster_groups,

@@ -705,9 +705,9 @@ const pl: Record<string, string> = {
 	'Show errors': 'Pokaż błędy',
 	'Show warnings': 'Pokaż ostrzeżenia',
 	'Show silent findings': 'Pokaż ciche znaleziska',
-	'Apply every automatic fix for this monster': 'Zastosuj każdą automatyczną poprawkę dla tego potwora',
-	'Apply every automatic fix across the corpus — writes those files directly':
-		'Zastosuj każdą automatyczną poprawkę w całym korpusie — zapisuje te pliki bezpośrednio',
+	'Review every automatic fix for this monster': 'Przejrzyj każdą automatyczną poprawkę dla tego potwora',
+	'Review every automatic fix across the corpus before it is written':
+		'Przejrzyj każdą automatyczną poprawkę w całym korpusie, zanim zostanie zapisana',
 	'Close lints': 'Zamknij uwagi',
 	'No problems found.': 'Nie znaleziono problemów.',
 	'Nothing matches the current filter.': 'Nic nie pasuje do bieżącego filtra.',
@@ -724,9 +724,43 @@ const pl: Record<string, string> = {
 	'Fixed {{code}} in {{file}}': 'Naprawiono {{code}} w {{file}}',
 	'Ignoring {{code}} — restore it from the Linter menu':
 		'Ignorowanie {{code}} — przywrócisz je z menu Linter',
-	'Save your open changes first — these fixes write files directly':
-		'Najpierw zapisz otwarte zmiany — te poprawki zapisują pliki bezpośrednio',
 	'Nothing here has an automatic fix': 'Nic tutaj nie ma automatycznej poprawki',
+
+	// --- Podgląd poprawek ----------------------------------------------------
+	'Review fixes': 'Przejrzyj poprawki',
+	'Show the diff': 'Pokaż różnice',
+	'Hide the diff': 'Ukryj różnice',
+	'Rendering…': 'Renderowanie…',
+	'No change to the file.': 'Brak zmian w pliku.',
+	'Fixing…': 'Naprawianie…',
+	manual: 'ręcznie',
+	'{{count}} fix_one': '{{count}} poprawka',
+	'{{count}} fix_few': '{{count}} poprawki',
+	'{{count}} fix_many': '{{count}} poprawek',
+	'Apply {{count}} fix_one': 'Zastosuj {{count}} poprawkę',
+	'Apply {{count}} fix_few': 'Zastosuj {{count}} poprawki',
+	'Apply {{count}} fix_many': 'Zastosuj {{count}} poprawek',
+	'{{count}} fix in {{files}} — expand a file to see exactly what changes._one':
+		'{{count}} poprawka w {{files}} — rozwiń plik, aby zobaczyć dokładnie, co się zmienia.',
+	'{{count}} fix in {{files}} — expand a file to see exactly what changes._few':
+		'{{count}} poprawki w {{files}} — rozwiń plik, aby zobaczyć dokładnie, co się zmienia.',
+	'{{count}} fix in {{files}} — expand a file to see exactly what changes._many':
+		'{{count}} poprawek w {{files}} — rozwiń plik, aby zobaczyć dokładnie, co się zmienia.',
+	'{{count}} needs a manual fix and is left alone._one':
+		'{{count}} wymaga ręcznej poprawki i pozostaje nietknięta.',
+	'{{count}} needs a manual fix and is left alone._few':
+		'{{count}} wymagają ręcznej poprawki i pozostają nietknięte.',
+	'{{count}} needs a manual fix and is left alone._many':
+		'{{count}} wymaga ręcznej poprawki i pozostaje nietkniętych.',
+	'{{count}} file has unsaved changes and is left out — save it first. First: {{list}}._one':
+		'{{count}} plik ma niezapisane zmiany i został pominięty — najpierw go zapisz. Pierwszy: {{list}}.',
+	'{{count}} file has unsaved changes and is left out — save it first. First: {{list}}._few':
+		'{{count}} pliki mają niezapisane zmiany i zostały pominięte — najpierw je zapisz. Pierwsze: {{list}}.',
+	'{{count}} file has unsaved changes and is left out — save it first. First: {{list}}._many':
+		'{{count}} plików ma niezapisane zmiany i zostało pominiętych — najpierw je zapisz. Pierwsze: {{list}}.',
+	'{{count}} unchanged line_one': '{{count}} niezmieniony wiersz',
+	'{{count}} unchanged line_few': '{{count}} niezmienione wiersze',
+	'{{count}} unchanged line_many': '{{count}} niezmienionych wierszy',
 	'Could not store the cut-off point': 'Nie udało się zapisać punktu odcięcia',
 
 	// --- Browsers -------------------------------------------------------------

@@ -42,6 +42,24 @@ const en: Record<string, string> = {
 	'Exported {{count}} lint_one': 'Exported {{count}} lint',
 	'Exported {{count}} lint_other': 'Exported {{count}} lints',
 
+	// --- Fix preview -------------------------------------------------------
+	'{{count}} fix_one': '{{count}} fix',
+	'{{count}} fix_other': '{{count}} fixes',
+	'Apply {{count}} fix_one': 'Apply {{count}} fix',
+	'Apply {{count}} fix_other': 'Apply {{count}} fixes',
+	'{{count}} fix in {{files}} — expand a file to see exactly what changes._one':
+		'{{count}} fix in {{files}} — expand a file to see exactly what changes.',
+	'{{count}} fix in {{files}} — expand a file to see exactly what changes._other':
+		'{{count}} fixes in {{files}} — expand a file to see exactly what changes.',
+	'{{count}} needs a manual fix and is left alone._one': '{{count}} needs a manual fix and is left alone.',
+	'{{count}} needs a manual fix and is left alone._other': '{{count}} need a manual fix and are left alone.',
+	'{{count}} file has unsaved changes and is left out — save it first. First: {{list}}._one':
+		'{{count}} file has unsaved changes and is left out — save it first. First: {{list}}.',
+	'{{count}} file has unsaved changes and is left out — save it first. First: {{list}}._other':
+		'{{count}} files have unsaved changes and are left out — save them first. First: {{list}}.',
+	'{{count}} unchanged line_one': '{{count}} unchanged line',
+	'{{count}} unchanged line_other': '{{count}} unchanged lines',
+
 	// --- Generic units -----------------------------------------------------
 	'{{count}} file_one': '{{count}} file',
 	'{{count}} file_other': '{{count}} files',

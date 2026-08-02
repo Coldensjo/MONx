@@ -630,6 +630,12 @@ export function lintMonster(doc: MonsterDoc): Promise<Lint[]> {
 	return invoke<Lint[]>('lint_monster', { doc });
 }
 
+/** The text a save of this document would write, without writing it. Both sides
+ *  of the fix preview's diff come from here. */
+export function renderMonster(doc: MonsterDoc): Promise<string> {
+	return invoke<string>('render_monster', { doc });
+}
+
 export function nextFreeRaceid(): Promise<number> {
 	return invoke<number>('next_free_raceid', {});
 }

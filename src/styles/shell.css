@@ -2704,3 +2704,182 @@
 	background: var(--accent-dim);
 	font-size: 11px;
 }
+
+/* ---------- Fix preview (FixPreviewDialog.tsx) ----------
+   Wider than the other dialogs on purpose: the diff is the content, and an XML
+   line that wraps stops being comparable to the one above it. */
+
+.mx-fix-modal {
+	width: 820px;
+	max-width: calc(100vw - 64px);
+}
+
+.mx-fix-list {
+	max-height: 46vh;
+	overflow: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface-2);
+}
+
+.mx-fix-file + .mx-fix-file {
+	border-top: 1px solid var(--border);
+}
+
+.mx-fix-file-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 10px;
+}
+
+.mx-fix-toggle {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex: 1 1 auto;
+	min-width: 0;
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--text);
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+
+.mx-fix-file-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+}
+
+.mx-fix-stat {
+	flex: 0 0 auto;
+	font-size: 11px;
+}
+
+.mx-fix-all {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.mx-fix-lints {
+	padding: 0 10px 6px 26px;
+}
+
+.mx-fix-lint {
+	display: flex;
+	align-items: baseline;
+	gap: 7px;
+	padding: 2px 0;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.mx-fix-lint-msg {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.mx-fix-lint-code {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-size: 10px;
+}
+
+.mx-fix-rendering {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 10px 10px 26px;
+	color: var(--text-muted);
+	font-size: 11px;
+}
+
+@keyframes mx-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.mx-spin {
+	animation: mx-spin 1s linear infinite;
+}
+
+/* ---- The diff itself ---- */
+
+.mx-diff {
+	margin: 0 10px 10px 26px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	overflow-x: auto;
+	font-size: 11px;
+	line-height: 1.55;
+	user-select: text;
+}
+
+.mx-diff-skip {
+	padding: 1px 8px;
+	background: var(--surface-2);
+	color: var(--text-muted);
+	font-size: 10px;
+}
+
+.mx-diff-line {
+	display: flex;
+	gap: 0;
+	white-space: pre;
+}
+
+/* Both line numbers, before and after, so a spliced insert is legible as one. */
+.mx-diff-no {
+	flex: 0 0 34px;
+	padding-right: 6px;
+	text-align: right;
+	color: var(--text-muted);
+	opacity: 0.6;
+	user-select: none;
+}
+
+.mx-diff-sign {
+	flex: 0 0 14px;
+	text-align: center;
+	user-select: none;
+}
+
+.mx-diff-text {
+	flex: 1 1 auto;
+	padding-right: 8px;
+}
+
+.mx-diff-add {
+	background: var(--accent-dim);
+}
+
+.mx-diff-add .mx-diff-sign {
+	color: var(--accent);
+}
+
+.mx-diff-remove {
+	background: var(--destructive-dim);
+}
+
+.mx-diff-remove .mx-diff-sign {
+	color: var(--destructive);
+}
+
+.mx-diff-add-fg {
+	color: var(--accent);
+}
+
+.mx-diff-remove-fg {
+	color: var(--destructive);
+}

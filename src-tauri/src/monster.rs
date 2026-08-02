@@ -3948,6 +3948,29 @@ pub fn save(
     Ok(lints)
 }
 
+/// Exactly what [`save`] would write, without touching the disk.
+///
+/// The fix preview diffs two of these — the document as it stands and the same
+/// document with its repairs applied — so what the dialog shows is what the
+/// write does. Rendering both sides through the same splice is the point: the
+/// on-disk bytes are not the left-hand side, because a buffer with unsaved
+/// edits would then diff as those edits plus the fix, and a `Fix all` that
+/// appears to be about to rewrite half the file is one nobody presses.
+pub fn render(
+    profile: &'static EngineProfile,
+    dir: &Path,
+    doc: &MonsterDoc,
+) -> Result<String, String> {
+    let bytes = match std::fs::read(dir.join(&doc.file)) {
+        Ok(original) => {
+            let parsed = read_bytes(profile, &doc.file, &original, doc.registered)?;
+            write_bytes(profile, &parsed, doc)
+        }
+        Err(_) => write_new(profile, doc),
+    };
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 /// Copies the original aside the first time this session touches the file.
 /// Subsequent saves don't re-copy: the point is to preserve the state the
 /// session started from, not every intermediate.

@@ -53,6 +53,15 @@ cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --cru
 
 `--mutate` is the one that proves the writer is driven by the model rather than copying bytes: it edits several fields in every file, writes, re-reads, and checks the document that comes back is the one that went in. It also budgets the diff — a handful of field edits that rewrite more than 12 lines fail, because the writer is meant to splice. A change that *inserts or removes* a node moves every line under it and can never meet that budget, so it belongs in a pass of its own (see `voice_extras_survive`). Add `--verbose` to any of them to list every finding, `--items <dir>` to point loot resolution at a database that is not the monsters folder's sibling, and `--bands` to print the corpus's balance bands.
 
+`--lint` also has a CI shape, so a datapack repository can gate on the linter without opening MONx:
+
+```sh
+cargo run --release --example probe_monster -- data/monster \
+    --format sarif --out monx.sarif --fail-on error,silent
+```
+
+`--format json|sarif` implies `--lint` and writes the report to `--out <path>`, or to stdout with the human summary moved to stderr so the stream stays pipeable. `--fail-on` takes a **set** of severities, not a threshold — the three are not a ranking, and `silent` is the one worth failing a build on even where warnings are tolerated. `--fail-on any` is all three; without the flag the lint pass never fails the run, which is what keeps `--lint` usable on a corpus that has lived with three hundred warnings for years.
+
 `--engine <key>` picks the profile (`ironcore`, `tfs`, `tvp`, `nostalrius`, `canary`, `crystal`, `blacktek`); without it the corpus is sniffed exactly as the Landing dialog sniffs it, and the guess is printed. **Run every gate against all seven engines' own corpora when touching the reader, writer or a profile** — an over-declared `known_attrs` drops data, and `--mutate` is the only thing that catches it:
 
 ```sh
@@ -183,6 +192,8 @@ src/
   PreviewPanel.tsx     Right-hand preview + derived math
   LintPanel.tsx        Lint drawer
   PinLootDialog.tsx    Corpus-wide loot id pinning (Tools menu)
+  FixPreviewDialog.tsx Fix all, as a reviewable plan: the fixes per file,
+                       tickable, with the diff each one would write
   ScaleLootDialog.tsx  Corpus-wide loot chance scaling, per item or corpus-wide
   BatchEditDialog.tsx  Filter the corpus, then set/scale/clear one field (Tools menu)
   CompareDialog.tsx    Two monsters side by side (Tools menu)
@@ -210,6 +221,7 @@ src/
   blocks.ts            Section-block clipboard + merge rules (monx.blockClipboard)
   compare.ts           Two docs → grouped rows with deltas
   lintfix.ts           The one unambiguous repair behind each Fix button
+  diff.ts              Line diff (LCS) + hunks, for the fix preview
   favourites.ts        Starred item ids (monx.favourites)
   hidden.ts            Monsters filtered out of a corpus (monx.hidden.<folder>) —
                        stored per corpus, pushed to the backend before the open

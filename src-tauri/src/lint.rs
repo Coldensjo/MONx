@@ -1100,6 +1100,98 @@ pub fn lint_workspace(
         }
     }
 
+    // monsters.xml is itself a corpus-scope document, and nothing else ever
+    // reads the whole of it: the loader walks it top to bottom, registering as
+    // it goes, so every contradiction inside it resolves by overwrite.
+    let mut reg_by_name: BTreeMap<String, (String, Vec<String>)> = BTreeMap::new();
+    let mut reg_by_entry: BTreeMap<(String, String), usize> = BTreeMap::new();
+    for e in &registry.entries {
+        reg_by_name
+            .entry(e.name.to_lowercase())
+            .or_insert_with(|| (e.name.clone(), Vec::new()))
+            .1
+            .push(e.file.clone());
+        *reg_by_entry
+            .entry((e.name.to_lowercase(), e.file.to_lowercase()))
+            .or_default() += 1;
+    }
+    // An overwrite in a name → type map is by nature silent: the second
+    // registration replaces the first and nothing is logged. The loser is then
+    // unreachable by every mechanism that resolves a monster by name — summons,
+    // outfit spells, spawns — while its file still parses cleanly, which is why
+    // this cannot be found by reading one file.
+    for (_, (name, files)) in reg_by_name.iter().filter(|(_, (_, f))| f.len() > 1) {
+        // Two lines naming one file are a duplicated entry, not a collision
+        // between two monsters; that is the rule below.
+        let distinct: std::collections::BTreeSet<String> =
+            files.iter().map(|f| f.to_lowercase()).collect();
+        if distinct.len() < 2 {
+            continue;
+        }
+        r.add(SILENT, "registry.duplicate-name", None, false,
+            format!("monsters.xml registers \"{name}\" {} times ({}) — the last one wins and the rest can never be summoned, spawned or targeted by name",
+                files.len(), files.join(", ")));
+    }
+    for ((_, file), n) in reg_by_entry.iter().filter(|(_, n)| **n > 1) {
+        r.add(WARNING, "registry.duplicate-entry", None, false,
+            format!("monsters.xml lists {file} {n} times — the server parses it once per line for the same result"));
+    }
+
+    // The registry's name is the key the server looks a monster up by; the
+    // file's own `name` is what the creature is called once loaded. When they
+    // disagree the monster loads, plays and displays under one name and answers
+    // to another, so `<summon name="…">` and an outfit spell naming it both
+    // fail against whichever half the author had in mind.
+    //
+    // Not fixable, for the reason `raceid.duplicate` is not: which of the two
+    // names is the right one is a decision, not a repair. A corpus really does
+    // hold a `gobbler elite.xml` registered as "gobbler elite" whose monster
+    // calls itself "Gobbler" — syncing the registry to the file would collide
+    // with the actual gobbler and take a second monster down with it.
+    for doc in docs {
+        let Some(entry) = registry.entry_for_file(&doc.file) else { continue };
+        if entry.name.eq_ignore_ascii_case(&doc.name) || doc.name.trim().is_empty() {
+            continue;
+        }
+        r.file = Some(doc.file.clone());
+        r.add(SILENT, "registry.name-mismatch", Some("name"), false,
+            format!("monsters.xml registers this file as \"{}\", but the monster calls itself \"{}\" — it is summoned by the first name and displays the second",
+                entry.name, doc.name));
+    }
+    r.file = None;
+
+    // Two monsters claiming one name. What that costs depends on whether the
+    // engine has a registry: without one (the Lua engines autoload every file
+    // and key the type on the table's own name) the second load overwrites the
+    // first outright, which is silent. With one, both still load under their
+    // own registry keys — but nothing in the game, the client or this editor
+    // can tell them apart, and the pair is almost always a copy that was never
+    // renamed.
+    let mut by_name: BTreeMap<String, Vec<&MonsterDoc>> = BTreeMap::new();
+    for doc in docs.iter().chain(filtered.iter()) {
+        let key = doc.name.trim().to_lowercase();
+        if !key.is_empty() {
+            by_name.entry(key).or_default().push(doc);
+        }
+    }
+    let name_severity = if profile.has_registry { WARNING } else { SILENT };
+    for doc in docs {
+        let Some(group) = by_name.get(&doc.name.trim().to_lowercase()) else { continue };
+        if group.len() < 2 {
+            continue;
+        }
+        let others: Vec<&str> = group
+            .iter()
+            .filter(|d| d.file != doc.file)
+            .map(|d| d.file.as_str())
+            .collect();
+        r.file = Some(doc.file.clone());
+        r.add(name_severity, "name.duplicate", Some("name"), false,
+            format!("\"{}\" is also the name in {}{}", doc.name, others.join(", "),
+                if profile.has_registry { "" } else { " — only one of them survives the load, and nothing says which" }));
+    }
+    r.file = None;
+
     // §24: raceid must be unique across the whole corpus.
     let mut by_raceid: BTreeMap<i64, Vec<&MonsterDoc>> = BTreeMap::new();
     for doc in docs {

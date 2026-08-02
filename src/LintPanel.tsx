@@ -191,7 +191,7 @@ export default function LintPanel({
 					<button
 						className="ss-lint-fix"
 						onClick={onFixAll}
-						title={t('Apply every automatic fix for this monster')}
+						title={t('Review every automatic fix for this monster')}
 					>
 						{t('Fix all ({{count}})', { count: monsterLints.filter(l => l.fixable).length })}
 					</button>
@@ -200,7 +200,7 @@ export default function LintPanel({
 					<button
 						className="ss-lint-fix"
 						onClick={onFixAllWorkspace}
-						title={t('Apply every automatic fix across the corpus — writes those files directly')}
+						title={t('Review every automatic fix across the corpus before it is written')}
 					>
 						{t('Fix all ({{count}})', {
 							count: workspaceLints.filter(l => l.fixable && l.file).length

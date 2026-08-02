@@ -54,6 +54,7 @@ import {
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 import { applyLintFix } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
+import FixPreviewDialog, { type FixTarget } from './FixPreviewDialog';
 import { listHidden, loadHidden, pushHidden, saveHidden } from './hidden';
 import PreferencesDialog from './PreferencesDialog';
 import CustomEffectsDialog from './CustomEffectsDialog';
@@ -106,7 +107,7 @@ const lastMonsterKey = (monstersPath: string) => `monx.lastMonster.${monstersPat
 import MonsterList, { type ListActions } from './MonsterList';
 import CreateWizard from './CreateWizard';
 import PreviewPanel from './PreviewPanel';
-import LintPanel, { LintStatus } from './LintPanel';
+import LintPanel, { LintStatus, type LintTab } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
 import { PreviewProvider, ThingAnimProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
@@ -210,6 +211,8 @@ export default function Workspace({
 	const { t } = useTranslation();
 	const [view, setView] = useState<View>('monsters');
 	const [tool, setTool] = useState<PinScope | null>(null);
+	/** Which drawer tab asked for Fix all, and so which lints the preview covers. */
+	const [fixScope, setFixScope] = useState<LintTab | null>(null);
 	/** Editor tab preferences; the dialog writes them straight through to storage. */
 	const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
 	const [prefsOpen, setPrefsOpen] = useState(false);
@@ -908,73 +911,70 @@ export default function Workspace({
 		[lintPrefs, updateLintPrefs, showToast, t]
 	);
 
-	/** Fix all, for the Workspace tab: every fixable lint, grouped by its file. */
-	const fixAllWorkspaceLints = useCallback(async () => {
-		if (dirtyFiles.size > 0) {
-			showToast('error', t('Save your open changes first — these fixes write files directly'));
-			return;
-		}
-		const byFile = new Map<string, Lint[]>();
-		for (const l of visibleWorkspaceLints) {
-			if (!l.fixable || !l.file) continue;
-			const list = byFile.get(l.file);
-			if (list) list.push(l);
-			else byFile.set(l.file, [l]);
-		}
-		const applied = new Set<Lint>();
-		const files: string[] = [];
-		try {
-			for (const [file, lints] of byFile) {
-				const done = await fixInFile(file, lints);
-				if (done.length > 0) {
-					done.forEach(l => applied.add(l));
-					files.push(file);
+	/** The lints a Fix all covers, for whichever tab asked. The dialog is handed
+	 *  these and does the grouping, the applying and the diffing. */
+	const fixScopeLints = useMemo(() => {
+		if (fixScope === null) return [];
+		const source = fixScope === 'monster' ? visibleMonsterLints : visibleWorkspaceLints;
+		return source.filter(l => l.fixable && (fixScope === 'monster' || l.file));
+	}, [fixScope, visibleMonsterLints, visibleWorkspaceLints]);
+
+	/**
+	 * Writes what the preview showed. A target on the open monster goes through
+	 * the buffer — it stays undoable and is saved with Ctrl+S, as a fix applied
+	 * one at a time always has been; every other file is written directly, which
+	 * is why the dialog leaves out anything with an unsaved buffer.
+	 *
+	 * Never stops at the first failure, for the reason `save_all` gives on the
+	 * backend: a half-written batch that reports one error is worse than a whole
+	 * one that reports several.
+	 */
+	const applyFixes = useCallback(
+		async (targets: FixTarget[], applied: Lint[], manual: Lint[]) => {
+			setFixScope(null);
+			let wrote = 0;
+			const failed: string[] = [];
+			for (const target of targets) {
+				if (doc && target.file === doc.file) {
+					editDoc(target.doc);
+					wrote++;
+					continue;
+				}
+				try {
+					await saveMonster(target.doc);
+					wrote++;
+				} catch (e) {
+					failed.push(`${target.file}: ${String(e)}`);
 				}
 			}
-		} catch (e) {
-			showToast('error', String(e));
-			return;
-		}
-		if (applied.size === 0) {
-			showToast('ok', t('Nothing here has an automatic fix'));
-			return;
-		}
-		// Source lints are only computed at open, so the panel is corrected in
-		// place rather than re-fetched.
-		setWorkspaceLints(prev => prev.filter(l => !applied.has(l)));
-		onMonstersChanged(null);
-		setReloadKey(k => k + 1);
-		// Two counts in one sentence, so the inner noun phrase is translated on its
-		// own and passed in — i18next carries one `count` per message.
-		showToast(
-			'ok',
-			t('Fixed {{count}} lint across {{files}}', {
-				count: applied.size,
-				files: t('{{count}} file', { count: files.length })
-			})
-		);
-	}, [dirtyFiles, fixInFile, onMonstersChanged, showToast, visibleWorkspaceLints, t]);
-
-	const fixAllLints = useCallback(() => {
-		if (!doc) return;
-		let d = doc;
-		let fixed = 0;
-		let manual = 0;
-		for (const l of visibleMonsterLints.filter(l => l.fixable)) {
-			const next = applyLintFix(d, l, { nextRaceid });
-			if (next) {
-				d = next;
-				fixed++;
-			} else manual++;
-		}
-		if (fixed > 0) editDoc(d);
-		showToast(
-			'ok',
-			manual > 0
-				? t('Fixed {{count}} lint, {{manual}} need a manual fix', { count: fixed, manual })
-				: t('Fixed {{count}} lint', { count: fixed })
-		);
-	}, [doc, visibleMonsterLints, editDoc, nextRaceid, showToast, t]);
+			if (applied.length === 0) {
+				showToast('ok', t('Nothing here has an automatic fix'));
+				return;
+			}
+			// Source lints are only computed when the workspace opens, so the panel
+			// is corrected in place rather than re-fetched.
+			const done = new Set(applied);
+			setWorkspaceLints(prev => prev.filter(l => !done.has(l)));
+			onMonstersChanged(null);
+			setReloadKey(k => k + 1);
+			if (failed.length > 0) {
+				showToast('error', partialWrite(t, wrote, failed));
+				return;
+			}
+			// Two counts in one sentence, so the inner noun phrase is translated on
+			// its own and passed in — i18next carries one `count` per message.
+			showToast(
+				'ok',
+				manual.length > 0
+					? t('Fixed {{count}} lint, {{manual}} need a manual fix', { count: applied.length, manual: manual.length })
+					: t('Fixed {{count}} lint across {{files}}', {
+							count: applied.length,
+							files: t('{{count}} file', { count: targets.length })
+						})
+			);
+		},
+		[doc, editDoc, onMonstersChanged, showToast, t]
+	);
 
 	// Undo/redo used to have their own listener here. They are commands now, like
 	// everything else — see the command table below — and they carry
@@ -1807,7 +1807,7 @@ export default function Workspace({
 			label: t('Fix every fixable lint'),
 			group: t('Edit'),
 			enabled: !!doc,
-			run: fixAllLints
+			run: () => setFixScope('monster')
 		},
 		{
 			id: 'add-tray-loot',
@@ -2979,6 +2979,18 @@ export default function Workspace({
 				/>
 			)}
 
+			{fixScope !== null && (
+				<FixPreviewDialog
+					lints={fixScopeLints}
+					openDoc={doc}
+					nextRaceid={nextRaceid}
+					dirtyFiles={dirtyFiles}
+					onClose={() => setFixScope(null)}
+					onApply={(targets, applied, manual) => void applyFixes(targets, applied, manual)}
+					onError={m => showToast('error', m)}
+				/>
+			)}
+
 			{prefsOpen && (
 				<PreferencesDialog
 					prefs={prefs}
@@ -3007,8 +3019,8 @@ export default function Workspace({
 				monsterLints={visibleMonsterLints}
 				workspaceLints={visibleWorkspaceLints}
 				onFix={lint => void fixLint(lint)}
-				onFixAll={fixAllLints}
-				onFixAllWorkspace={() => void fixAllWorkspaceLints()}
+				onFixAll={() => setFixScope('monster')}
+				onFixAllWorkspace={() => setFixScope('workspace')}
 				file={doc?.file ?? null}
 				onJump={lint => {
 					if (lint.file && lint.file !== selected) setSelected(lint.file);
