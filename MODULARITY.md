@@ -1,347 +1,45 @@
-# Modularity — what has been done, and what is left
+# Modularity — what is left, and what was learned
 
-A working document for an in-progress effort to make MONx easier to change. Read
-it before continuing that effort; delete it when the list at the bottom is empty.
+A working document for an effort that is mostly finished. **Delete this file
+when §1 is empty**; everything else here is the part worth keeping until then.
 
-Everything here is a **refactor with no behaviour change**. That constraint is
-what makes the work safe to do in large steps, and §2 is how each step was
-proved. Do not relax it without saying so in the commit.
-
----
-
-## 1. Done
-
-| commit | what |
-|---|---|
-| `027bba9` | 34 untranslated strings across three dialogs, plus `bun run i18n` |
-| `919601c` | `bun run catalog` — drift check for the Rust↔TS enum mirrors |
-| `2a2f39c` | `monster.rs` (4,890) → `monster/`, 8 modules |
-| `5e53a2c` | `probe_monster --crud` mirrored `.monx-backup` and counted it as its own work |
-| `867a4ee` | `engine.rs` (2,306) → `engine/`, 6 modules |
-| `5931476` | `monster/write.rs` (1,758) → `write/`, 7 modules |
-| `3ddba8e` | `lib.rs` (1,680) → `commands/`, 6 modules + `mod.rs` |
-| `306bdfd` | `WorkspaceContext` — `MonsterEditor` 19 props → 6, `SectionProps` 13 → 4 |
-| `5028118` | `bun run commands` gate + `bun test` over the pure modules |
-| `13aeae9` | `history.ts` / `tabs.ts` — §4.3's two riskiest seams, extracted and covered |
-| `669afc7` | `buffers.ts` + `useUndoRedo` — §4.3's enabling cut; the other three seams assessed and declined |
-| this one | `PreviewProvider` hoisted to the shell — the `CustomEffectsDialog` sprite bug §4.2 recorded |
-
-Version is at `0.1.103`. No Rust file is now over 900 lines outside the frozen
-`dat.rs` / `spr.rs`, and `lib.rs` is 98 lines: the module list, the
-`CustomEffectsState` type, and `run()`.
-
-Four gates exist beyond `bun run build` and the probes, all documented in
-AGENTS.md. Run each on every change that touches what it covers:
-
-```sh
-bun run i18n        # every t() key is carried by pl.ts and pt.ts
-bun run catalog     # catalog.rs ↔ catalog.ts, engine/ ↔ engine.ts
-bun run commands    # the shell command table ↔ hotkeys.ts DEFAULT_BINDINGS
-bun test            # the pure frontend modules
-```
-
-None of the four needed a dependency, which is the reason they exist rather
-than being proposed. The i18n and catalog checks were each written after the
-drift they detect had already happened; `commands` found its on the first run.
+The long history of what was split, in what order, and the line-by-line proof
+for each step, has been cut — it is in `git log` (`git log --oneline` between
+`2a2f39c` and `3f31d55`), and each commit body carries its own verification.
 
 ---
 
-## 2. How a split is verified
+## 1. Left to do
 
-This is the part worth keeping. Each of the three splits was proved two ways,
-and both are cheap to repeat.
+### `CreateWizard.tsx` — 2,469 lines, ~1,930 in one component
 
-### 2a. A recorded baseline, diffed
+It already names its seams as constants — `KIND_STEP`, `SIMILAR_STEP`,
+`LOOK_STEP`, `NAME_STEP`, `STATS_STEP`, `FIGHT_STEP`, `DEFEND_STEP`,
+`SAY_STEP`, `DROP_STEP`. Steps are the obvious components.
 
-Record the output of every gate **before** touching anything, then diff after.
-The only acceptable difference is the timing numbers.
+**Blocked on §3, and not urgent.** Unlike the backend files this was never
+dangerous — it is long, not subtle. Split it when it is next being changed for
+another reason, not as an errand of its own.
 
-```sh
-# scripts are throwaway; keep them out of the repo
-cat > /tmp/gates.sh <<'SH'
-#!/bin/sh
-B=<path to a real monster workspace>          # see §3 — machine-specific
-cd <repo>/src-tauri || exit 1
-echo "##### REAL CORPUS #####"
-for flags in "" "--canonical --mutate" "--lint --verbose" "--bands"; do
-  echo "--- probe_monster $flags ---"
-  cargo run --release --quiet --example probe_monster -- "$B/monsters" --items "$B/items" $flags 2>&1
-done
-echo "--- probe_monster --crud ---"
-S=$(mktemp -d); cargo run --release --quiet --example probe_monster -- "$B/monsters" --items "$B/items" --crud "$S" 2>&1; rm -rf "$S"
-echo "##### FIXTURES #####"
-for e in ironcore tfs tvp nostalrius canary crystal blacktek; do
-  d=$(ls -d fixtures/engines/$e/monster* 2>/dev/null | head -1)
-  echo "--- $e (explicit profile) ---"
-  cargo run --release --quiet --example probe_monster -- "$d" --engine "$e" --mutate --canonical --lint --verbose 2>&1
-  echo "--- $e (sniffed) ---"
-  cargo run --release --quiet --example probe_monster -- "$d" 2>&1 | head -1
-  S=$(mktemp -d); cargo run --release --quiet --example probe_monster -- "$d" --engine "$e" --crud "$S" 2>&1 | tail -1; rm -rf "$S"
-done
-for e in canary blacktek crystal; do
-  d=$(ls -d fixtures/engines/$e/monster* 2>/dev/null | head -1)
-  echo "--- probe_lua $e ---"
-  cargo run --release --quiet --example probe_lua -- "$d" 2>&1
-done
-SH
-chmod +x /tmp/gates.sh
-/tmp/gates.sh > /tmp/base.txt 2>&1        # before
-/tmp/gates.sh > /tmp/after.txt 2>&1       # after
-diff /tmp/base.txt /tmp/after.txt | grep -v "parsed .* files in .*ms"
-```
+### The one combined document-state hook — optional
 
-Running each fixture **twice — once with `--engine`, once sniffed** — is not
-redundant. The sniffed run is the only thing covering the detection path, which
-is why it caught nothing when `engine/detect.rs` moved: because it was watching.
+`Workspace.tsx` is ~2,980 lines. Its dangerous parts are already out and
+covered (`history.ts`, `tabs.ts`, `buffers.ts`, `hooks/useUndoRedo.ts`); what
+remains is bulk.
 
-### 2b. A multiset reconstruction diff
+Two seams are left and **neither should be lifted alone**: `useEditorTabs` and
+`useExternalChanges` both bottom out in the same four pieces of state — the
+buffer map, the dirty set, the active document and its lints. Taking either one
+on its own means passing all four plus five setters into it, which is
+prop-drilling with extra steps. They want to be one hook owning all four, or
+neither.
 
-Stronger than the gates, and it is what actually proves a split was mechanical.
-Compare the original file against the concatenation of the new ones **as a
-multiset of code lines**, ignoring blank lines and section-marker comments. A
-faithful split differs only by the visibility keywords you deliberately added.
+`useCommands` should **not** exist. The command table is 210 lines of
+declarative data whose entries close over some forty locals; a hook taking a
+forty-field dependency object is harder to read than the table inline, and what
+actually protects that table is `bun run commands`.
 
-Do not try to reconstruct the original *order* — the interleave is fiddly to get
-right and proves nothing extra. Counting is enough.
-
-Results so far, each with **zero unexplained lines in either direction**:
-
-| split | lines in → out | differences |
-|---|---|---|
-| `monster/` | 4,552 → 4,552 | 15, all `pub(crate)` on helpers crossing a module line |
-| `engine/` | 2,145 → 2,145 | 43, all `pub(crate)` on table consts |
-| `write/` | 1,668 → 1,667 | 47 `pub(super)` on methods; the odd line is the `impl` closing brace, which became six |
-| `commands/` | 1,560 → 1,639 | 44 handler entries gaining a `commands::` prefix, 44 `fn` → `pub(crate) fn`, 8 wire structs and the `CustomEffectsState` type the same, the moved `use` lines, 6 × `use super::*`, 7 `mod` declarations, and ~70 lines of new `//!` module docs |
-
-A Python sketch of the comparison is in the `write/` commit's working notes; it
-is ~30 lines of `collections.Counter` and quicker to rewrite than to find.
-
-### 2c. The mechanical recipe
-
-1. `grep -n "^// =\{20,\}\|^\s*// -\{10\}"` — **the file almost always already
-   marks its own seams.** All three splits followed existing banner comments.
-   If a file has none, that is a signal the boundaries are not obvious yet.
-2. `awk` the ranges into new files; check the line count adds up.
-3. `mod.rs` gets the header doc comment, `mod`/`pub use` declarations, and a
-   layout table. Each submodule gets `use super::*;`.
-4. Compile. Every error will be visibility. Bump only what the compiler names.
-5. Trim unused imports until `cargo check --all-targets` is warning-free — it
-   was warning-free before, and that is a property worth keeping.
-6. Run 2a and 2b.
-7. Update every doc that names the old path (`grep -rn "oldname\.rs"` across
-   `*.md`, `src/`, `src-tauri/`) **and `scripts/check-catalog.mjs`**, which
-   reads Rust paths directly.
-
----
-
-## 3. Machine-specific: the test corpus
-
-The gates above need a real monster workspace. **This path is from the machine
-the work was done on and will not exist elsewhere:**
-
-```
-/home/support/Tilera/data/user/data/live_cache/8.00/
-    monsters/   386 Ironcore XML monsters (flat) + monsters.xml + .monx-backup/
-    items/      items.xml + items.otb
-    client/     Tibia.dat, Tibia.spr, Tibia.otfi  (8.00)
-    npcs/       110 NPC XML — unused by MONx today, relevant to NPCX.md
-```
-
-Re-point `$B` at whatever real workspace is available.
-
-**That gap is now closed.** `assets/` and `sources/` did not exist on the machine
-the first three splits were done on, so the seven-engine matrix in AGENTS.md had
-never been run against them. It has now, on a machine where both trees are
-populated, and every engine passes `--mutate` and the sniffed detection run:
-
-| engine | corpus | files |
-|---|---|---|
-| Ironcore | `assets/Ironcore/monsters` | 382 |
-| TVP | `assets/TVP/monster` | 157 |
-| Nostalrius | `assets/Nostalrius/monster` | 160 |
-| Canary | `assets/Canary/monster` | 1,655 |
-| Crystal | `assets/CrystalServer/monster` | 1,665 |
-| Crystal (repo) | `sources/crystalserver-main/data-global/monster` | 1,800 |
-| BlackTek | `assets/BlackTek/monster` | 740 |
-| TFS | `sources/forgottenserver-master/data/monster` | 1,166 |
-
-9,725 files, round-trip identical, every gate exit 0. The `gates.ps1` baseline
-used for `commands/` covers all eight corpora × five flag sets plus the seven
-fixtures and four `probe_lua` runs — 76 invocations, and the before/after diff
-was empty outside the timing lines.
-
----
-
-## 4. Left to do
-
-The mechanical Rust splits are done. Everything below is frontend, and none of
-it is provable the way they were — read §4.5 first.
-
-### 4.1 ~~`lib.rs` → `commands/`~~ — done
-
-Six modules on the banner comments the file already carried: `things` (the
-inherited `.spr`/`.dat` commands), `session`, `monsters`, `itemdb`, `batch`,
-`patchnotes`. The stale `(Agent 1)` / `(Agent 2)` provenance labels went with
-the split rather than into the new files.
-
-Two things the earlier plan got wrong, worth knowing before the next one:
-
-- **The wire structs moved with their commands, not into `lib.rs`.** The plan
-  said `ThingSummary` and `ExternalChange` were shared and should stay behind.
-  They are not shared — each is named by exactly one command, and leaving them
-  in `lib.rs` would have meant a lookup away from the only caller for nothing.
-- **`generate_handler!` needs the module path.** `use commands::*;` and a bare
-  `open_spr,` does not compile: `#[tauri::command]` also emits a `__cmd__<name>`
-  macro, which a glob re-export does not carry. The registration lists
-  `commands::open_spr` and the command functions are `pub(crate)` — which is
-  also what makes the macro `#[macro_export]`, and so re-exportable at all.
-  A private `fn` in a submodule silently fails to produce one.
-
-### 4.2 ~~`WorkspaceContext`~~ — done
-
-`src/workspacectx.tsx`. `MonsterEditor` went from 19 props to 6, and
-`SectionProps` from 13 fields to 4 — `doc`, `patch`, `lintAt`, `readOnly`, the
-only ones that are about the document rather than the folders that are open.
-Five of the twelve sections read a workspace fact; the other seven were being
-handed eight props they never used.
-
-The optional-with-default capability is kept, as a `FALLBACK` value on the
-context rather than 13 defaulted props: a subtree mounted with no provider
-degrades exactly as it did before instead of throwing. The defaults are the
-same ones the props carried, which is half of why the change is invisible.
-
-**`PreviewProvider` deliberately did not move — at first.** It looked
-shell-wide and was not: it was mounted inside `MonsterEditor` and again around
-the create wizard, and `CustomEffectsDialog` sits outside both, which is why
-that dialog drew effect ids as numbers rather than sprites. Hoisting it into
-`WorkspaceProvider` would have fixed a real bug as a side effect of a refactor
-that is supposed to change nothing, so it was left alone and written down here
-instead. **Fixed since, on its own, where it could be seen** — the provider is
-in `WorkspaceProvider` now and both inner mounts are gone.
-
-The pattern is worth keeping: a refactor that trips over a bug should record
-it, not absorb it. A fix buried in a no-behaviour-change commit is a fix nobody
-reviewed and a claim that is no longer true.
-
-### 4.3 `Workspace.tsx` — 3,036 lines, 2,836 of them in one component
-
-Three pure modules and one hook are out. The pattern throughout is **take the
-decision out, leave the timing in**: what stays in the component is refs,
-effects and commits, and what was worth testing is somewhere a test can reach.
-
-- `history.ts` — undo/redo over a pair of stacks. Was two refs mutated in place
-  (`from.pop()`, `to.push()`) inside the callback that also committed the
-  result.
-- `tabs.ts` — `openTab`, `pinTab`, `closeTabs`, `stepTab`. Was an effect body
-  and two `setState` updaters, one of which called `setSelected` from *inside* a
-  `setTabs` updater — a side effect riding on a function React may invoke more
-  than once per commit.
-- `buffers.ts` — the open-monster store. Was raw `Map` surgery and hand-rolled
-  `Set` rebuilds at eight call sites. The property it now carries a test for is
-  **identity on a no-op**: `dirtyFiles` is read by the titlebar, the close
-  guards, the tab strip and much of the command table, so an updater returning
-  a fresh Set where nothing changed re-renders all of it — over a virtualized
-  list of hundreds of rows. That rule was five separate inline `return prev`
-  checks, each easy to drop and impossible to notice having dropped.
-- `hooks/useUndoRedo.ts` — the first hook lifted, now that its rules had left.
-  It takes `commit` as a parameter rather than owning it: restoring a document
-  means writing a tab buffer, marking a file dirty and re-linting, none of
-  which is the history's business.
-
-**The remaining three seams do not have good boundaries, and should not be
-forced.** This was measured, not assumed:
-
-- `useEditorTabs` and `useExternalChanges` both bottom out in the same four
-  pieces of state — the buffer map, the dirty set, the active document and its
-  lints. Lifting either one alone means passing all four plus five setters into
-  it, which is prop-drilling with extra steps: exactly what §4.2 was about, one
-  level down. They want to be **one** hook owning all four, or neither.
-- `useCommands` should not exist. The table is 210 lines of declarative data
-  whose entries close over some forty locals — `t`, `doc`, `selected`,
-  `saving`, `dirtyFiles`, `prefs`, `listActions`, the view setters, half the
-  dialogs. A hook taking a forty-field dependency object is worse to read than
-  the table inline, and the thing that actually protects it is
-  `bun run commands`, which already exists.
-
-So the honest state of §4.3 is: the parts that were dangerous are out and
-covered; what is left is bulk, not risk. `Workspace.tsx` is still ~3,000 lines
-and moving another 200 into a ten-parameter hook would not make it easier to
-change. Do the one combined document-state hook if it is done at all.
-
-54 `useState` calls in a single function body. It marks its own seams:
-
-```
-331   // ---- Editor tabs ----
-712   // ---- Undo / redo ----
-1141  // ---- Files changed outside MONx ----
-1743  // ---- Commands ----
-```
-
-Those are four custom hooks — `useEditorTabs`, `useUndoRedo`,
-`useExternalChanges`, `useCommands`. The command table at the bottom is the
-shell's whole action surface (see AGENTS.md "Every shell action is a `Command`")
-and is the most delicate part: menus, hotkeys and the manager all read it.
-
-### 4.4 `CreateWizard.tsx` — 2,469 lines, ~1,930 in one component
-
-Same disease. It already names its seams as constants — `KIND_STEP`,
-`SIMILAR_STEP`, `LOOK_STEP`, `NAME_STEP`, `STATS_STEP`, `FIGHT_STEP`,
-`DEFEND_STEP`, `SAY_STEP`, `DROP_STEP`. Nine steps, nine components.
-
-### 4.5 Verification for the frontend work
-
-**There is no probe behind any of §4.2–4.4.** The recorded-baseline and
-reconstruction-diff methods that made the Rust splits safe do not apply: React
-components have no byte-exact output to diff.
-
-§4.2 was done without one, and what it was verified by is worth writing down
-because it is the ceiling of what is available today:
-
-- `bun run build` — `tsc` under `noUnusedLocals`. For a prop-to-context move
-  this is most of it: every consumer still destructuring a removed prop is a
-  compile error, and so is every import left behind.
-- **A parity audit.** Each moved value was checked against the call site it
-  came from — same expression, same default, same provider placement. The two
-  things tsc cannot see are a fact wired to the wrong source and a consumer
-  mounted outside the provider, and both are answerable by reading if you
-  actually enumerate them rather than assume.
-- `bun run i18n` reporting the same 931 strings before and after, which is a
-  cheap check that no user-visible text was lost in the move.
-
-That was enough for §4.2 because it moves no logic. It is **not** enough for
-§4.3 or §4.4, which move state and effects — a `useEffect` with the wrong
-dependency list after a hook extraction compiles perfectly and misbehaves at
-runtime.
-
-Since then two gates have been added that close part of it, both without a
-dependency:
-
-- **`bun run commands`** — the command table against `hotkeys.ts`. This is the
-  one that guards §4.3's most delicate part: a command dropped during a hook
-  extraction fails no build and no type check, it just stops being in a menu.
-  It found real drift the first time it ran.
-- **`bun test`** — the pure modules. §4.3's answer is not to test hooks but to
-  make them thin: `history.ts` and `tabs.ts` hold what could be wrong, and
-  they are covered.
-
-What is still missing is anything that exercises a *rendered* component. Before
-§4.4, or before moving an effect rather than the decision inside it, one of: 
-
-- A headless render harness. The earlier note pointed at a memory entry named
-  "Headless UI harness"; **that memory does not exist on this machine**, so
-  treat it as unwritten rather than as something to go and find. Building one
-  means a DOM implementation — Bun's own test runner is already in use, so that
-  half is free — which is a dependency decision. Ask first.
-- Manual exercise through `./monx.sh` (or `bun run tauri:dev`) against the real
-  corpus, with a written checklist per section. The hotkey/menu/command surface
-  is where a mistake would hide, and it is the part no type check reaches: the
-  command table is read by three consumers and a dropped entry compiles.
-
-Do not start §4.4 until one of those is in place. §4.3 may proceed seam by seam
-provided each one is taken out as a decision first, the way history.ts and
-	abs.ts were — an effect moved wholesale into a hook is still unverifiable.
-
-### 4.6 Not worth splitting — decided, do not revisit without a reason
+### Decided against — do not revisit without a reason
 
 - `spr.rs`, `dat.rs` — frozen by policy.
 - `ThingBrowser.tsx`, `MonsterList.tsx` — long, but already have extracted,
@@ -352,45 +50,92 @@ provided each one is taken out as a decision first, the way history.ts and
 
 ---
 
-## 5. Things learned that are not obvious
+## 2. How a split is verified
 
-- **The files mark their own seams.** Every split so far followed banner
-  comments that were already there. Look before deciding where to cut.
-- **`.monx-backup` is a trap for anything that walks a corpus.** It bit the app
-  once (phantom monsters in the sidebar, linted `registry.orphan`) and the CRUD
-  probe once. Any new corpus walker must skip dot-directories.
-- **A gate that only passes on fixtures is not a gate.** The CRUD probe failed on
-  every real corpus and passed on the fixtures, because fixtures have no backup
-  folder — nothing has ever edited them. Backwards, and it went unnoticed.
-- **`check-catalog.mjs` reads Rust source by path.** It reads the whole
-  `engine/` directory rather than one file, deliberately: a move inside the
-  module would otherwise leave an empty key list comparing clean against an
-  empty key list. Silent agreement is the failure it exists to prevent, so it
-  must not be able to fail that way itself.
-- **The i18n rule fails invisibly.** The key *is* the English source, so a
-  missing entry renders as perfect English and no reviewer sees it. This is why
-  `bun run i18n` exists rather than more emphatic prose. It had already been
-  broken twice.
-- **Engine detection is only covered by the sniffed probe run.** An explicit
-  `--engine` run will not notice detection breaking.
-- **A macro-generating attribute changes what a split costs.** `#[tauri::command]`
-  emits two `macro_rules!` beside the function, and macros do not travel through
-  `pub use module::*` the way functions do. Moving such a function into a
-  submodule is not the same operation as moving a plain one — see §4.1. Anything
-  else in this codebase that generates items beside a function will behave the
-  same way.
+Two methods, both cheap to repeat, and the reason every split so far landed
+without a regression.
+
+**A recorded baseline, diffed.** Run every gate *before* touching anything,
+save the output, run them again after, diff. The only acceptable difference is
+the timing numbers. For backend work that means `probe_monster` across all
+eight corpora × five flag sets, the seven fixtures both explicitly and sniffed,
+and `probe_lua` — 76 invocations, all of which must stay byte-identical. Run
+each fixture **twice, once with `--engine` and once sniffed**: the sniffed run
+is the only thing covering the detection path.
+
+**A multiset reconstruction diff.** Compare the original file against the
+concatenation of the new ones as a *bag of code lines*, ignoring blanks and
+banner comments. A faithful split differs only by the visibility keywords you
+deliberately added. Do not try to reconstruct the original order — counting is
+enough, and the interleave proves nothing extra. Every Rust split was checked
+this way with zero unexplained lines in either direction.
+
+The recipe: the file almost always already marks its own seams with banner
+comments (if it has none, the boundaries are not obvious yet — stop). Cut on
+them, compile, and bump only the visibility the compiler names. Then update
+every doc that names the old path, **and `scripts/check-catalog.mjs`**, which
+reads Rust paths directly.
 
 ---
 
-## 6. Corpus findings — not MONx defects, for the datapack's owner
+## 3. Frontend verification — the standing gap
 
-From `--lint` on the 386-file Ironcore corpus (311 errors, 61 warnings,
-27 silent):
+**Nothing exercises a rendered component.** The methods above do not apply:
+React components have no byte-exact output to diff. What is available is
+`tsc` under `noUnusedLocals`, a parity audit of each moved value against the
+call site it came from, and the four gates. That is enough for a change that
+moves no logic, and **not** enough for one that moves state and effects — a
+`useEffect` with a wrong dependency list compiles perfectly and misbehaves at
+runtime.
 
-- **306 × `loot.ambiguous-name`** — dominates the run. This is what the Pin loot
-  dialog (Tools menu) exists to resolve.
-- 24 × `name.duplicate`, 14 × `raceid.duplicate`, 10 × `registry.orphan`,
-  5 × `script.missing-file`.
-- The `150000+` balance band holds 3 monsters with HP p10 500 and p90 3,500,000.
-  Flagged `too few to judge` so nothing is called unusual today, but the median
-  there is drawn from a genuinely bimodal set if that band ever fills out.
+The working rule, which is what made `Workspace.tsx` safe to touch: **take the
+decision out first, leave the timing in.** Pull the rules into a pure module
+with tests (`history.ts`, `tabs.ts`, `buffers.ts`), and what remains in the
+component is refs, effects and commits. An effect moved wholesale into a hook
+is still unverifiable.
+
+Closing the gap properly needs a headless render harness. Bun's test runner is
+already in use, so the only new dependency is a DOM implementation — but that
+is a dependency decision and an explicit exception to "do not add tests" in
+AGENTS.md. **Ask first.** It has been judged not worth it so far: the failure
+modes it would catch are ones you see the first time you open the app, while
+the invisible ones — round-trip corruption, lint/fix wrongness, catalogue
+drift, missing translations, dropped commands — are all behind gates already.
+
+---
+
+## 4. Things learned that are not obvious
+
+- **The files mark their own seams.** Every split followed banner comments that
+  were already there. Look before deciding where to cut.
+- **`.monx-backup` is a trap for anything that walks a corpus.** It bit the app
+  once (phantom monsters in the sidebar, linted `registry.orphan`) and the CRUD
+  probe once. Any new corpus walker must skip dot-directories.
+- **A gate that only passes on fixtures is not a gate.** The CRUD probe failed
+  on every real corpus and passed on the fixtures, because fixtures have no
+  backup folder — nothing has ever edited them. Backwards, and unnoticed.
+- **`check-catalog.mjs` reads Rust source by path**, and reads the whole
+  `engine/` directory rather than one file on purpose: a move inside the module
+  would otherwise leave an empty key list comparing clean against an empty key
+  list. Silent agreement is the failure it exists to prevent, so it must not be
+  able to fail that way itself. Every gate needs that property — `check-commands.mjs`
+  fails if either side parses to nothing, for the same reason.
+- **The i18n rule fails invisibly.** The key *is* the English source, so a
+  missing entry renders as perfect English and no reviewer sees it. This is why
+  `bun run i18n` exists rather than more emphatic prose. It had been broken
+  twice before the gate.
+- **Engine detection is only covered by the sniffed probe run.** An explicit
+  `--engine` run will not notice detection breaking.
+- **A macro-generating attribute changes what a split costs.**
+  `#[tauri::command]` emits two `macro_rules!` beside the function, and macros
+  do not travel through `pub use module::*` the way functions do. Moving such a
+  function into a submodule is not the same operation as moving a plain one.
+- **A refactor that trips over a bug should record it, not absorb it.** The
+  `CustomEffectsDialog` preview bug was found during the context refactor and
+  fixed two commits later, on its own. A fix buried in a no-behaviour-change
+  commit is a fix nobody reviewed, inside a claim that is no longer true.
+- **Identity is behaviour, not micro-optimisation.** `dirtyFiles` is read by the
+  titlebar, the close guards, the tab strip and much of the command table; an
+  updater returning a fresh `Set` where nothing changed re-renders all of it.
+  That kind of rule stays correct while getting slower, which is why it is the
+  thing `buffers.ts` has tests for.
