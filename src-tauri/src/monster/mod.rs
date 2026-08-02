@@ -37,7 +37,7 @@
 //! | [`model`] | the document model — `MonsterDoc` and everything it holds |
 //! | [`dom`] | the span-preserving DOM the splice depends on |
 //! | [`read`] | DOM → `MonsterDoc`, per engine profile |
-//! | [`write`] | `MonsterDoc` → bytes, splicing (see above) and `write_new` |
+//! | [`write`] | `MonsterDoc` → bytes, splicing (see above) and `write_new` — itself a module, split by what it emits |
 //! | [`corpus`] | folder-level reads — the whole monster tree at open time |
 //! | [`crud`] | the save pipeline, create, duplicate, delete, rename |
 //! | [`pinloot`] | corpus-wide loot id pinning (§13) |

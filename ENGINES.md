@@ -52,7 +52,7 @@ dead on Canary.
 ### Two formats, one model
 
 The deepest split in the table is `Format`. The four XML engines share the
-span-preserving DOM and splicing writer in `monster/dom.rs` and `monster/write.rs`; the three Lua engines
+span-preserving DOM and splicing writer in `monster/dom.rs` and `monster/write/`; the three Lua engines
 define monsters as Lua tables and go through `luadoc.rs` and `monster_lua.rs`
 instead. `Parsed` is an enum with an XML body and a Lua body, and
 `read_bytes`/`write_bytes` dispatch on `profile.format`.
