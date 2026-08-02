@@ -112,8 +112,9 @@ import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
 import { PreviewProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 import { WorkspaceProvider, type WorkspaceFacts } from './workspacectx';
-import { emptyHistory, recordEdit, redo as redoStep, undo as undoStep, type History } from './history';
+import { useUndoRedo } from './hooks/useUndoRedo';
 import { closeTabs as closeTabsIn, openTab, pinTab as pinTabIn, stepTab as stepTabIn, type TabState } from './tabs';
+import * as buffers from './buffers';
 
 /** The speed the Outfits grid animates at, having no creature to read one from.
  *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
@@ -333,13 +334,11 @@ export default function Workspace({
 
 	// ---- Editor tabs ----
 	// Every monster ever activated this session keeps its buffer in memory, so
-	// switching tabs never discards edits and never re-reads a dirty file.
-	interface TabBuffer {
-		doc: MonsterDoc;
-		lints: Lint[];
-	}
+	// switching tabs never discards edits and never re-reads a dirty file. The
+	// store's operations — and the identity rules the dirty set depends on —
+	// are buffers.ts; the ref that holds it is here.
 	const [tabs, setTabs] = useState<string[]>([]);
-	const buffersRef = useRef(new Map<string, TabBuffer>());
+	const buffersRef = useRef<buffers.Buffers>(buffers.NO_BUFFERS);
 	const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set());
 	const reloadKeyRef = useRef(reloadKey);
 	// Single-clicking the list opens a *preview* tab: the next selection replaces
@@ -369,11 +368,8 @@ export default function Workspace({
 		if (monsters.length === 0) return;
 		const files = new Set(monsters.map(m => m.file));
 		setTabs(prev => (prev.every(f => files.has(f)) ? prev : prev.filter(f => files.has(f))));
-		for (const k of [...buffersRef.current.keys()]) if (!files.has(k)) buffersRef.current.delete(k);
-		setDirtyFiles(prev => {
-			const next = new Set([...prev].filter(f => files.has(f)));
-			return next.size === prev.size ? prev : next;
-		});
+		buffersRef.current = buffers.keepOnly(buffersRef.current, files);
+		setDirtyFiles(prev => buffers.keepOnlyDirty(prev, files) as Set<string>);
 	}, [monsters]);
 
 	useEffect(() => {
@@ -384,13 +380,13 @@ export default function Workspace({
 			setDoc(null);
 			setMonsterLints([]);
 			onOpenFile(null);
-			historyRef.current = emptyHistory();
+			resetHistory();
 			return;
 		}
 		saveSetting(lastMonsterKey(info.paths.monsters), selected);
 		onOpenFile(selected);
 		// A fresh buffer starts a fresh history — undo must never cross files.
-		historyRef.current = emptyHistory();
+		resetHistory();
 		if (!tabsRef.current.includes(selected)) {
 			// Which tab gives way, and which buffer goes with it, is `openTab` —
 			// see tabs.ts. What has to stay here is everything about *when*: the
@@ -400,7 +396,7 @@ export default function Workspace({
 			// append the same file again — the duplicate tabs.
 			const from: TabState = { tabs: tabsRef.current, preview: previewRef.current };
 			const { state, evicted } = openTab(from, selected, f => dirtyFilesRef.current.has(f));
-			if (evicted) buffersRef.current.delete(evicted);
+			if (evicted) buffersRef.current = buffers.drop(buffersRef.current, [evicted]);
 			tabsRef.current = state.tabs;
 			previewRef.current = state.preview;
 			// Still an updater, so a close that landed in the same batch is not
@@ -412,7 +408,7 @@ export default function Workspace({
 		// blocked while anything is dirty, so nothing is lost by dropping them.
 		if (reloadKeyRef.current !== reloadKey) {
 			reloadKeyRef.current = reloadKey;
-			buffersRef.current.clear();
+			buffersRef.current = buffers.NO_BUFFERS;
 		}
 		const buffered = buffersRef.current.get(selected);
 		if (buffered) {
@@ -424,14 +420,13 @@ export default function Workspace({
 		getMonster(selected)
 			.then(d => {
 				if (cancelled) return;
-				buffersRef.current.set(selected, { doc: d, lints: [] });
+				buffersRef.current = buffers.put(buffersRef.current, selected, d, []);
 				setDoc(d);
 				setMonsterLints([]);
 				return lintMonster(d).then(l => {
 					if (cancelled) return;
 					setMonsterLints(l);
-					const buf = buffersRef.current.get(selected);
-					if (buf && buf.doc === d) buf.lints = l;
+					buffersRef.current = buffers.attachLints(buffersRef.current, selected, d, l);
 				});
 			})
 			.catch(e => showToast('error', String(e)));
@@ -454,14 +449,14 @@ export default function Workspace({
 				if (!(await confirm(msg))) return;
 			}
 			const closing = new Set(files);
-			for (const f of files) buffersRef.current.delete(f);
+			buffersRef.current = buffers.drop(buffersRef.current, files);
 			// Decided once, outside the updaters. The survivor used to be picked
 			// inside the `setTabs` updater, which also called `setSelected` from
 			// within it — React may invoke an updater more than once per commit, so
 			// that was a side effect riding on a function contracted to be pure.
 			const after = closeTabsIn({ tabs: tabsRef.current, preview: previewRef.current }, files, selected);
 			setPreviewTab(after.state.preview);
-			setDirtyFiles(prev => new Set([...prev].filter(f => !closing.has(f))));
+			setDirtyFiles(prev => buffers.markClean(prev, files) as Set<string>);
 			setTabs(prev => prev.filter(f => !closing.has(f)));
 			if (selected !== null && closing.has(selected)) setSelected(after.selected);
 		},
@@ -686,51 +681,27 @@ export default function Workspace({
 	);
 
 	// ---- Undo / redo ----
-	// The editor already works in whole-doc immutable updates, so history is a
-	// stack of previous docs. Cleared whenever a monster is (re)loaded. The
-	// stacks and the rules over them live in history.ts; what is left here is
-	// the ref that holds them and the commit they drive.
-	const docRef = useRef<MonsterDoc | null>(doc);
-	docRef.current = doc;
-	const historyRef = useRef<History<MonsterDoc>>(emptyHistory());
+	// The editor works in whole-doc immutable updates, so history is a stack of
+	// previous docs. The stacks are history.ts, the hook around them is
+	// hooks/useUndoRedo.ts, and what is left here is the commit they drive —
+	// which belongs to the tab buffers rather than to the history.
 
 	/** Puts `next` in the active buffer, marks it dirty and re-lints it. */
 	const commitDoc = useCallback((next: MonsterDoc) => {
-		buffersRef.current.set(next.file, { doc: next, lints: buffersRef.current.get(next.file)?.lints ?? [] });
-		setDirtyFiles(prev => (prev.has(next.file) ? prev : new Set(prev).add(next.file)));
+		buffersRef.current = buffers.put(buffersRef.current, next.file, next, buffersRef.current.get(next.file)?.lints ?? []);
+		setDirtyFiles(prev => buffers.markDirty(prev, next.file) as Set<string>);
 		// An edited monster is no longer a throwaway preview.
 		pinTab(next.file);
 		setDoc(next);
 		lintMonster(next)
 			.then(l => {
 				setMonsterLints(l);
-				const buf = buffersRef.current.get(next.file);
-				if (buf && buf.doc === next) buf.lints = l;
+				buffersRef.current = buffers.attachLints(buffersRef.current, next.file, next, l);
 			})
 			.catch(() => {});
 	}, [pinTab]);
 
-	const editDoc = useCallback(
-		(next: MonsterDoc) => {
-			if (docRef.current) historyRef.current = recordEdit(historyRef.current, docRef.current);
-			commitDoc(next);
-		},
-		[commitDoc]
-	);
-
-	const applyHistory = useCallback(
-		(step: typeof undoStep) => {
-			const current = docRef.current;
-			if (!current) return;
-			const taken = step(historyRef.current, current);
-			if (!taken) return;
-			historyRef.current = taken.history;
-			commitDoc(taken.doc);
-		},
-		[commitDoc]
-	);
-	const undoEdit = useCallback(() => applyHistory(undoStep), [applyHistory]);
-	const redoEdit = useCallback(() => applyHistory(redoStep), [applyHistory]);
+	const { docRef, editDoc, undoEdit, redoEdit, resetHistory, canUndo, canRedo } = useUndoRedo(doc, commitDoc);
 
 	// The backend linter needs the declarations too, or the drawer keeps
 	// reporting an effect the picker has just started showing. Pushed on mount
@@ -1043,12 +1014,8 @@ export default function Workspace({
 		try {
 			const lints = await saveMonster(doc);
 			setMonsterLints(lints);
-			buffersRef.current.set(doc.file, { doc, lints });
-			setDirtyFiles(prev => {
-				const next = new Set(prev);
-				next.delete(doc.file);
-				return next;
-			});
+			buffersRef.current = buffers.put(buffersRef.current, doc.file, doc, lints);
+			setDirtyFiles(prev => buffers.markClean(prev, [doc.file]) as Set<string>);
 			showToast('ok', t('Saved {{file}}', { file: doc.file }));
 			setWorkspaceLints(await lintWorkspace());
 			refreshDropped();
@@ -1080,13 +1047,9 @@ export default function Workspace({
 				if (!buffered) continue;
 				try {
 					const lints = await saveMonster(buffered.doc);
-					buffersRef.current.set(file, { doc: buffered.doc, lints });
+					buffersRef.current = buffers.put(buffersRef.current, file, buffered.doc, lints);
 					if (file === docRef.current?.file) setMonsterLints(lints);
-					setDirtyFiles(prev => {
-						const next = new Set(prev);
-						next.delete(file);
-						return next;
-					});
+					setDirtyFiles(prev => buffers.markClean(prev, [file]) as Set<string>);
 					saved++;
 				} catch (e) {
 					failed.push(`${file}: ${e}`);
@@ -1133,13 +1096,8 @@ export default function Workspace({
 	const adopt = useCallback(
 		async (files: string[]) => {
 			await reloadCorpus();
-			for (const file of files) buffersRef.current.delete(file);
-			setDirtyFiles(prev => {
-				if (!files.some(f => prev.has(f))) return prev;
-				const next = new Set(prev);
-				for (const file of files) next.delete(file);
-				return next;
-			});
+			buffersRef.current = buffers.drop(buffersRef.current, files);
+			setDirtyFiles(prev => buffers.markClean(prev, files) as Set<string>);
 			refreshMonsters(null);
 			refreshDropped();
 			const active = docRef.current?.file ?? null;
@@ -1149,13 +1107,12 @@ export default function Workspace({
 			// active file is re-read here. A document replaced wholesale from disk
 			// starts a fresh history, for the same reason opening one does.
 			const fresh = await getMonster(active);
-			historyRef.current = emptyHistory();
-			buffersRef.current.set(active, { doc: fresh, lints: [] });
+			resetHistory();
+			buffersRef.current = buffers.put(buffersRef.current, active, fresh, []);
 			setDoc(fresh);
 			const lints = await lintMonster(fresh).catch(() => []);
 			setMonsterLints(lints);
-			const buffered = buffersRef.current.get(active);
-			if (buffered && buffered.doc === fresh) buffered.lints = lints;
+			buffersRef.current = buffers.attachLints(buffersRef.current, active, fresh, lints);
 		},
 		[refreshDropped, refreshMonsters]
 	);
@@ -1763,7 +1720,7 @@ export default function Workspace({
 			id: 'undo',
 			label: t('Undo'),
 			group: t('Edit'),
-			enabled: historyRef.current.past.length > 0,
+			enabled: canUndo(),
 			notWhileTyping: true,
 			run: undoEdit
 		},
@@ -1771,7 +1728,7 @@ export default function Workspace({
 			id: 'redo',
 			label: t('Redo'),
 			group: t('Edit'),
-			enabled: historyRef.current.future.length > 0,
+			enabled: canRedo(),
 			notWhileTyping: true,
 			run: redoEdit
 		},

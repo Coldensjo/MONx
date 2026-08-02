@@ -22,9 +22,10 @@ proved. Do not relax it without saying so in the commit.
 | `3ddba8e` | `lib.rs` (1,680) → `commands/`, 6 modules + `mod.rs` |
 | `306bdfd` | `WorkspaceContext` — `MonsterEditor` 19 props → 6, `SectionProps` 13 → 4 |
 | `5028118` | `bun run commands` gate + `bun test` over the pure modules |
-| this one | `history.ts` / `tabs.ts` — §4.3's two riskiest seams, extracted and covered |
+| `13aeae9` | `history.ts` / `tabs.ts` — §4.3's two riskiest seams, extracted and covered |
+| this one | `buffers.ts` + `useUndoRedo` — §4.3's enabling cut; the other three seams assessed and declined |
 
-Version is at `0.1.101`. No Rust file is now over 900 lines outside the frozen
+Version is at `0.1.102`. No Rust file is now over 900 lines outside the frozen
 `dat.rs` / `spr.rs`, and `lib.rs` is 98 lines: the module list, the
 `CustomEffectsState` type, and `run()`.
 
@@ -218,9 +219,9 @@ effects that cannot show them. Fix it on its own, where it can be seen.
 
 ### 4.3 `Workspace.tsx` — 3,036 lines, 2,836 of them in one component
 
-**Groundwork done.** The decisions inside two of the four seams are now pure
-modules with tests, so the hooks that will wrap them have nothing left in them
-that can be silently wrong:
+Three pure modules and one hook are out. The pattern throughout is **take the
+decision out, leave the timing in**: what stays in the component is refs,
+effects and commits, and what was worth testing is somewhere a test can reach.
 
 - `history.ts` — undo/redo over a pair of stacks. Was two refs mutated in place
   (`from.pop()`, `to.push()`) inside the callback that also committed the
@@ -229,12 +230,37 @@ that can be silently wrong:
   and two `setState` updaters, one of which called `setSelected` from *inside* a
   `setTabs` updater — a side effect riding on a function React may invoke more
   than once per commit.
+- `buffers.ts` — the open-monster store. Was raw `Map` surgery and hand-rolled
+  `Set` rebuilds at eight call sites. The property it now carries a test for is
+  **identity on a no-op**: `dirtyFiles` is read by the titlebar, the close
+  guards, the tab strip and much of the command table, so an updater returning
+  a fresh Set where nothing changed re-renders all of it — over a virtualized
+  list of hundreds of rows. That rule was five separate inline `return prev`
+  checks, each easy to drop and impossible to notice having dropped.
+- `hooks/useUndoRedo.ts` — the first hook lifted, now that its rules had left.
+  It takes `commit` as a parameter rather than owning it: restoring a document
+  means writing a tab buffer, marking a file dirty and re-linting, none of
+  which is the history's business.
 
-That is the pattern for the rest of this section: **take the decision out, leave
-the timing in.** What remains in the component after such a move is refs,
-effects and commits — the things that genuinely need to be there — and the part
-that was worth testing is somewhere a test can reach. `useEditorTabs` and
-`useUndoRedo` are now thin enough to be lifted whole.
+**The remaining three seams do not have good boundaries, and should not be
+forced.** This was measured, not assumed:
+
+- `useEditorTabs` and `useExternalChanges` both bottom out in the same four
+  pieces of state — the buffer map, the dirty set, the active document and its
+  lints. Lifting either one alone means passing all four plus five setters into
+  it, which is prop-drilling with extra steps: exactly what §4.2 was about, one
+  level down. They want to be **one** hook owning all four, or neither.
+- `useCommands` should not exist. The table is 210 lines of declarative data
+  whose entries close over some forty locals — `t`, `doc`, `selected`,
+  `saving`, `dirtyFiles`, `prefs`, `listActions`, the view setters, half the
+  dialogs. A hook taking a forty-field dependency object is worse to read than
+  the table inline, and the thing that actually protects it is
+  `bun run commands`, which already exists.
+
+So the honest state of §4.3 is: the parts that were dangerous are out and
+covered; what is left is bulk, not risk. `Workspace.tsx` is still ~3,000 lines
+and moving another 200 into a ten-parameter hook would not make it easier to
+change. Do the one combined document-state hook if it is done at all.
 
 54 `useState` calls in a single function body. It marks its own seams:
 
