@@ -1619,6 +1619,86 @@ const pl: Record<string, string> = {
 		'{{count}} potwory są odfiltrowane z tego korpusu w całej aplikacji i pozostaną takie po restarcie.',
 	'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart._many':
 		'{{count}} potworów jest odfiltrowanych z tego korpusu w całej aplikacji i pozostanie takich po restarcie.',
+
+	// --- Custom effects ---------------------------------------------------------------------
+	'Custom effects': 'Efekty własne',
+	'Custom effects…': 'Efekty własne…',
+	'MONx knows the effects {{engine}} ships, read from its own source. Anything your server adds on top is listed here, after which it appears in the picker like any other and stops being reported as unknown. Declarations are remembered per engine.':
+		'MONx zna efekty dostarczane przez {{engine}}, odczytane z jego własnych źródeł. Wszystko, co Twój serwer dodaje ponad to, wypisujesz tutaj — potem pojawia się w wyborze jak każdy inny i przestaje być zgłaszane jako nieznane. Deklaracje są zapamiętywane osobno dla każdego silnika.',
+	'Magic effects': 'Efekty magiczne',
+	'Shoot effects': 'Efekty pocisków',
+	'Value written to the file': 'Wartość zapisywana w pliku',
+	'Client id': 'Id klienta',
+	Label: 'Etykieta',
+	'Nothing declared yet. {{engine}} ships {{count}} of these on its own._one':
+		'Nic jeszcze nie zadeklarowano. {{engine}} dostarcza {{count}} taki efekt sam z siebie.',
+	'Nothing declared yet. {{engine}} ships {{count}} of these on its own._few':
+		'Nic jeszcze nie zadeklarowano. {{engine}} dostarcza {{count}} takie efekty sam z siebie.',
+	'Nothing declared yet. {{engine}} ships {{count}} of these on its own._many':
+		'Nic jeszcze nie zadeklarowano. {{engine}} dostarcza {{count}} takich efektów sam z siebie.',
+	'(uses the value)': '(używa wartości)',
+	'{{engine}} already ships this name — the shipped entry wins and this row does nothing.':
+		'{{engine}} już dostarcza tę nazwę — wpis z silnika ma pierwszeństwo, a ten wiersz nic nie robi.',
+	'Declared twice — only the first is used.': 'Zadeklarowane dwa razy — używany jest tylko pierwszy wpis.',
+	'Declare an effect': 'Zadeklaruj efekt',
+	'An id of 0 is allowed — the effect is named and lints clean, but has no sprite to preview. Nothing here changes what MONx writes: the value was always emitted exactly as typed.':
+		'Id równe 0 jest dozwolone — efekt ma nazwę i nie zgłasza uwag, ale nie ma sprite’a do podglądu. Nic tutaj nie zmienia tego, co MONx zapisuje: wartość zawsze była zapisywana dokładnie tak, jak wpisana.',
+	"Not in this engine's catalogue — kept exactly as written. Declare it under Preferences → Custom effects to name it and stop the warning.":
+		'Nie ma tego w katalogu tego silnika — zapisane dokładnie tak, jak wpisano. Zadeklaruj to w Preferencje → Efekty własne, aby nadać temu nazwę i wyłączyć ostrzeżenie.',
+	'A custom effect you declared, not one this engine ships.':
+		'Efekt własny z Twojej deklaracji — nie jest dostarczany przez ten silnik.',
+
+	// --- Changed outside MONx ---------------------------------------------------------------
+	'Changed outside MONx': 'Zmienione poza MONx',
+	'{{count}} file has been changed by another program and also has unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk._one':
+		'{{count}} plik został zmieniony przez inny program i ma tu też niezapisane zmiany. Wczytanie odrzuci Twoje zmiany; zachowanie ich oznacza, że następny zapis nadpisze to, co jest na dysku.',
+	'{{count}} file has been changed by another program and also has unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk._few':
+		'{{count}} pliki zostały zmienione przez inny program i mają tu też niezapisane zmiany. Wczytanie odrzuci Twoje zmiany; zachowanie ich oznacza, że następny zapis nadpisze to, co jest na dysku.',
+	'{{count}} file has been changed by another program and also has unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk._many':
+		'{{count}} plików zostało zmienionych przez inny program i ma tu też niezapisane zmiany. Wczytanie odrzuci Twoje zmiany; zachowanie ich oznacza, że następny zapis nadpisze to, co jest na dysku.',
+	'Load from disk': 'Wczytaj z dysku',
+	'Keep all mine': 'Zostaw wszystkie moje',
+	'{{file}} was deleted outside MONx — unsaved changes to it are gone':
+		'Plik {{file}} został usunięty poza MONx — niezapisane zmiany w nim przepadły',
+
+	// --- Saving -----------------------------------------------------------------------------
+	'Save all': 'Zapisz wszystko',
+	'Balance overview…': 'Przegląd balansu…',
+	'Saved {{count}} file_one': 'Zapisano {{count}} plik',
+	'Saved {{count}} file_few': 'Zapisano {{count}} pliki',
+	'Saved {{count}} file_many': 'Zapisano {{count}} plików',
+	'Wrote {{count}} file, then failed on {{error}}_one': 'Zapisano {{count}} plik, potem błąd: {{error}}',
+	'Wrote {{count}} file, then failed on {{error}}_few': 'Zapisano {{count}} pliki, potem błąd: {{error}}',
+	'Wrote {{count}} file, then failed on {{error}}_many': 'Zapisano {{count}} plików, potem błąd: {{error}}',
+	'Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})_one':
+		'Zapisano {{count}} plik, potem nie udało się z {{failures}} kolejnymi (pierwszy: {{error}})',
+	'Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})_few':
+		'Zapisano {{count}} pliki, potem nie udało się z {{failures}} kolejnymi (pierwszy: {{error}})',
+	'Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})_many':
+		'Zapisano {{count}} plików, potem nie udało się z {{failures}} kolejnymi (pierwszy: {{error}})',
+	'Add {{count}} item to the new monster_one': 'Dodaj {{count}} przedmiot do nowego potwora',
+	'Add {{count}} item to the new monster_few': 'Dodaj {{count}} przedmioty do nowego potwora',
+	'Add {{count}} item to the new monster_many': 'Dodaj {{count}} przedmiotów do nowego potwora',
+
+	// --- Balance readings -------------------------------------------------------------------
+	// Polish writes an ordinal as the figure followed by a full stop, so the
+	// English "st/nd/rd/th" suffix is dropped rather than translated.
+	'{{pct}}{{suffix}}': '{{pct}}.',
+	median: 'mediana',
+	n: 'n',
+	'Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual._one':
+		'Tylko {{count}} potwór w tym przedziale — za mało, by mediana coś znaczyła, więc nic nie jest uznawane za nietypowe.',
+	'Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual._few':
+		'Tylko {{count}} potwory w tym przedziale — za mało, by mediana coś znaczyła, więc nic nie jest uznawane za nietypowe.',
+	'Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual._many':
+		'Tylko {{count}} potworów w tym przedziale — za mało, by mediana coś znaczyła, więc nic nie jest uznawane za nietypowe.',
+	'Health sits with band {{band}} — the experience may be low for it.':
+		'Punkty życia pasują do przedziału {{band}} — doświadczenie może być jak na to za niskie.',
+	'Health sits with band {{band}} — the experience may be high for it.':
+		'Punkty życia pasują do przedziału {{band}} — doświadczenie może być jak na to za wysokie.',
+
+	// --- Spells -----------------------------------------------------------------------------
+	'as written': 'jak wpisano',
 };
 
 export default pl;

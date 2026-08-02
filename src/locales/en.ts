@@ -197,7 +197,69 @@ const en: Record<string, string> = {
 	'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart._one':
 		'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart.',
 	'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart._other':
-		'{{count}} monsters are filtered out of this corpus everywhere in the app, and stay that way after a restart.'
+		'{{count}} monsters are filtered out of this corpus everywhere in the app, and stay that way after a restart.',
+
+	// --- Saving ------------------------------------------------------------
+	'Saved {{count}} file_one': 'Saved {{count}} file',
+	'Saved {{count}} file_other': 'Saved {{count}} files',
+	'Wrote {{count}} file, then failed on {{error}}_one': 'Wrote {{count}} file, then failed on {{error}}',
+	'Wrote {{count}} file, then failed on {{error}}_other': 'Wrote {{count}} files, then failed on {{error}}',
+	'Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})_one':
+		'Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})',
+	'Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})_other':
+		'Wrote {{count}} files, then failed on {{failures}} more (first: {{error}})',
+	'{{count}} file has been changed by another program and also has unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk._one':
+		'{{count}} file has been changed by another program and also has unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk.',
+	'{{count}} file has been changed by another program and also has unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk._other':
+		'{{count}} files have been changed by another program and also have unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk.',
+
+	// --- Items and loot ----------------------------------------------------
+	'{{count}} charge_one': '{{count}} charge',
+	'{{count}} charge_other': '{{count}} charges',
+	'{{count}} slot_one': '{{count}} slot',
+	'{{count}} slot_other': '{{count}} slots',
+	'Added {{count}} item to Loot_one': 'Added {{count}} item to Loot',
+	'Added {{count}} item to Loot_other': 'Added {{count}} items to Loot',
+	'Added {{count}} loot entry to {{monster}}_one': 'Added {{count}} loot entry to {{monster}}',
+	'Added {{count}} loot entry to {{monster}}_other': 'Added {{count}} loot entries to {{monster}}',
+	'Add {{count}} item to favourites_one': 'Add {{count}} item to favourites',
+	'Add {{count}} item to favourites_other': 'Add {{count}} items to favourites',
+	'Remove {{count}} item from favourites_one': 'Remove {{count}} item from favourites',
+	'Remove {{count}} item from favourites_other': 'Remove {{count}} items from favourites',
+	'Add {{count}} item to loot for {{monster}}_one': 'Add {{count}} item to loot for {{monster}}',
+	'Add {{count}} item to loot for {{monster}}_other': 'Add {{count}} items to loot for {{monster}}',
+	'Add {{count}} item to the new monster_one': 'Add {{count}} item to the new monster',
+	'Add {{count}} item to the new monster_other': 'Add {{count}} items to the new monster',
+
+	// --- Tools -------------------------------------------------------------
+	'{{count}} monster matches — none of them change at these settings._one':
+		'{{count}} monster matches — it does not change at these settings.',
+	'{{count}} monster matches — none of them change at these settings._other':
+		'{{count}} monsters match — none of them change at these settings.',
+	'Exported {{count}} change — cut-off point moved to now_one': 'Exported {{count}} change — cut-off point moved to now',
+	'Exported {{count}} change — cut-off point moved to now_other': 'Exported {{count}} changes — cut-off point moved to now',
+	'{{count}} of them are ambiguous names the server drops today._one':
+		'{{count}} of them is an ambiguous name the server drops today.',
+	'{{count}} of them are ambiguous names the server drops today._other':
+		'{{count}} of them are ambiguous names the server drops today.',
+	'{{count}} tile away — drag to move_one': '{{count}} tile away — drag to move',
+	'{{count}} tile away — drag to move_other': '{{count}} tiles away — drag to move',
+	'Across {{count}} runs, min / median / max_one': 'Across {{count}} run, min / median / max',
+	'Across {{count}} runs, min / median / max_other': 'Across {{count}} runs, min / median / max',
+	'Across {{count}} sessions, min / median / max_one': 'Across {{count}} session, min / median / max',
+	'Across {{count}} sessions, min / median / max_other': 'Across {{count}} sessions, min / median / max',
+	'Log capped at the first {{count}} kills._one': 'Log capped at the first kill.',
+	'Log capped at the first {{count}} kills._other': 'Log capped at the first {{count}} kills.',
+
+	// --- Balance and custom effects ----------------------------------------
+	'Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual._one':
+		'Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual.',
+	'Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual._other':
+		'Only {{count}} monsters in this band — too few for a median to mean anything, so nothing is called unusual.',
+	'Nothing declared yet. {{engine}} ships {{count}} of these on its own._one':
+		'Nothing declared yet. {{engine}} ships {{count}} of these on its own.',
+	'Nothing declared yet. {{engine}} ships {{count}} of these on its own._other':
+		'Nothing declared yet. {{engine}} ships {{count}} of these on its own.'
 };
 
 export default en;

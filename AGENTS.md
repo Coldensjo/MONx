@@ -29,6 +29,7 @@ No test suite, no linter config beyond TypeScript strict mode.
 **Verifying changes**
 
 - Frontend: `bun run build` (runs `tsc` then Vite) or `bun run tauri:dev`.
+- Frontend strings: `bun run i18n` — fails naming any string `pl.ts` or `pt.ts` is missing. Run it on every change that touches `src/`; see [Text the user reads](#text-the-user-reads).
 - Backend compile: `cargo check` in `src-tauri/`.
 - Backend behavior: `probe_monster` is the fastest end-to-end check — it reads and rewrites the whole monster corpus and diffs the bytes, so a round-trip regression fails across every file at once instead of arriving as a bug report. `probe_dat` does the same for sprite composition.
 
@@ -298,12 +299,23 @@ Four rules that come up constantly:
 
 **Every new user-facing string goes through `t()` and lands in `pl.ts` and `pt.ts` in the same commit.** A string added in English only is not a half-finished translation, it is a hole: the key *is* the English source, so the app keeps working and nothing reports the gap — the Polish user simply gets an English sentence in the middle of a Polish dialog, and nobody notices until they do. Label, placeholder, `title=`, toast, tooltip, empty-state, button: all of it.
 
+**This is a gate, not an aspiration. `bun run i18n` before every commit that touches `src/`:**
+
+```sh
+bun run i18n     # exits non-zero naming each string pl.ts or pt.ts is missing
+```
+
+Treat it exactly like `bun run build` — a red one is not done. It is in the repo because this rule has now been broken twice in the way it is *designed* to be broken: the feature works, the English is perfect, the reviewer sees nothing wrong, and three whole dialogs ship untranslated. A new view, dialog or section is not finished when it renders; it is finished when this passes.
+
+The trap is that a feature arrives over many commits and the words feel like cleanup to sweep up at the end. They are not — the sweep does not come. Translate each string as you write it. **Never open a new dialog, panel, wizard or section without adding its `pl.ts`/`pt.ts` entries in the same commit that adds its markup**, and if a commit ends up English-only anyway, say so in the body so the debt is visible rather than silent.
+
 - The key is the English sentence itself, so `en.ts` gets an entry **only** for what i18next cannot derive from the key — the plural forms. Every other English string needs no entry at all.
 - A string interpolating a count is pluralised, and the whole sentence is the plural unit, never a fragment. That means `en.ts` gets `_one`/`_other`, `pt.ts` the same two, and `pl.ts` gets `_one`/`_few`/`_many` — Polish has three categories and a missing one falls back to the English key.
 - Before adding a plural key, check whether one already says it: `'{{count}} monster'`, `'{{count}} item'`, `'{{count}} drop'`, `'{{count}} lint'` and friends are already carried in all three languages, and a second spelling of the same idea is three more entries to keep true.
 - Engine vocabulary stays English on purpose — `raceid`, `typeex`, flag names, `CONST_ME_*`, item names, lint codes. They are what the server reads and what the community writes, and translating them only makes the file harder to match against a corpus.
 - Interpolated nouns are a trap in inflected languages. Quote `{{kind}}` rather than declining it, or write the sentence so the noun sits in one case.
-- To find what a new view still owes: extract its `t('…')` keys and diff them against `pl.ts` and `pt.ts`. Keys that are plain identifiers are written unquoted in the locale files (`Cancel: 'Anuluj'`), so match both spellings.
+- To find what a new view still owes, run `bun run i18n` — it does the extract-and-diff and names the file each missing string came from. It also lists `{{count}}` strings with no `en.ts` plural form as an advisory that does not fail the run: plenty read correctly in English at any count (`Pin {{count}}`, `{{count}} selected`), so that list is to be read, not bulk-filled.
+- Keys are written three ways in the locale files and all three are the same key: `'quoted'`, `"double-quoted"` when the string itself has an apostrophe, and bare when it is a lone identifier (`Cancel: 'Anuluj'`). Grep for all three.
 
 ### Adding a feature
 
@@ -312,6 +324,7 @@ Four rules that come up constantly:
 3. **Frontend types + invoke** → `monster.ts` (mirror serde field names in camelCase).
 4. **UI** → the relevant view component.
 5. **Its words** → wrap in `t()`, then add the Polish and Portuguese to `src/locales/` — see above.
+6. **Verify** → `bun run i18n` and `bun run build`. Step 5 is not optional and step 6 is how you know it happened.
 
 ### Adding a protocol route
 

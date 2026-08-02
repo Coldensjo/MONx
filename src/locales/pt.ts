@@ -1525,6 +1525,75 @@ const pt: Record<string, string> = {
 		'{{count}} monstro está filtrado deste corpus em todo o aplicativo, e continua assim depois de reiniciar.',
 	'{{count}} monster is filtered out of this corpus everywhere in the app, and stays that way after a restart._other':
 		'{{count}} monstros estão filtrados deste corpus em todo o aplicativo, e continuam assim depois de reiniciar.',
+
+	// --- Custom effects ---------------------------------------------------------------------
+	'Custom effects': 'Efeitos personalizados',
+	'Custom effects…': 'Efeitos personalizados…',
+	'MONx knows the effects {{engine}} ships, read from its own source. Anything your server adds on top is listed here, after which it appears in the picker like any other and stops being reported as unknown. Declarations are remembered per engine.':
+		'O MONx conhece os efeitos que o {{engine}} traz, lidos do código dele mesmo. Tudo o que o seu servidor acrescenta por cima é listado aqui e, feito isso, aparece no seletor como qualquer outro e deixa de ser reportado como desconhecido. As declarações são lembradas por engine.',
+	'Magic effects': 'Efeitos mágicos',
+	'Shoot effects': 'Efeitos de disparo',
+	'Value written to the file': 'Valor escrito no arquivo',
+	'Client id': 'Id do cliente',
+	Label: 'Rótulo',
+	'Nothing declared yet. {{engine}} ships {{count}} of these on its own._one':
+		'Nada declarado ainda. O {{engine}} já traz {{count}} destes por conta própria.',
+	'Nothing declared yet. {{engine}} ships {{count}} of these on its own._other':
+		'Nada declarado ainda. O {{engine}} já traz {{count}} destes por conta própria.',
+	'(uses the value)': '(usa o valor)',
+	'{{engine}} already ships this name — the shipped entry wins and this row does nothing.':
+		'O {{engine}} já traz esse nome — a entrada dele prevalece e esta linha não faz nada.',
+	'Declared twice — only the first is used.': 'Declarado duas vezes — só o primeiro é usado.',
+	'Declare an effect': 'Declarar um efeito',
+	'An id of 0 is allowed — the effect is named and lints clean, but has no sprite to preview. Nothing here changes what MONx writes: the value was always emitted exactly as typed.':
+		'Um id 0 é permitido — o efeito fica nomeado e sem avisos, mas não tem sprite para pré-visualizar. Nada aqui muda o que o MONx escreve: o valor sempre foi gravado exatamente como digitado.',
+	"Not in this engine's catalogue — kept exactly as written. Declare it under Preferences → Custom effects to name it and stop the warning.":
+		'Não está no catálogo deste engine — mantido exatamente como escrito. Declare-o em Preferências → Efeitos personalizados para dar um nome a ele e parar o aviso.',
+	'A custom effect you declared, not one this engine ships.':
+		'Um efeito personalizado que você declarou, não um que este engine traz.',
+
+	// --- Changed outside MONx ---------------------------------------------------------------
+	'Changed outside MONx': 'Alterado fora do MONx',
+	'{{count}} file has been changed by another program and also has unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk._one':
+		'{{count}} arquivo foi alterado por outro programa e também tem alterações não salvas aqui. Carregar descarta suas edições; mantê-las significa que o próximo salvamento sobrescreve o que está no disco.',
+	'{{count}} file has been changed by another program and also has unsaved changes here. Loading discards your edits; keeping them means the next save overwrites what is on disk._other':
+		'{{count}} arquivos foram alterados por outro programa e também têm alterações não salvas aqui. Carregar descarta suas edições; mantê-las significa que o próximo salvamento sobrescreve o que está no disco.',
+	'Load from disk': 'Carregar do disco',
+	'Keep all mine': 'Manter todos os meus',
+	'{{file}} was deleted outside MONx — unsaved changes to it are gone':
+		'{{file}} foi apagado fora do MONx — as alterações não salvas nele se perderam',
+
+	// --- Saving -----------------------------------------------------------------------------
+	'Save all': 'Salvar tudo',
+	'Balance overview…': 'Visão geral do balanceamento…',
+	'Saved {{count}} file_one': '{{count}} arquivo salvo',
+	'Saved {{count}} file_other': '{{count}} arquivos salvos',
+	'Wrote {{count}} file, then failed on {{error}}_one': 'Gravado {{count}} arquivo, depois falhou em {{error}}',
+	'Wrote {{count}} file, then failed on {{error}}_other': 'Gravados {{count}} arquivos, depois falhou em {{error}}',
+	'Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})_one':
+		'Gravado {{count}} arquivo, depois falhou em mais {{failures}} (primeiro: {{error}})',
+	'Wrote {{count}} file, then failed on {{failures}} more (first: {{error}})_other':
+		'Gravados {{count}} arquivos, depois falhou em mais {{failures}} (primeiro: {{error}})',
+	'Add {{count}} item to the new monster_one': 'Adicionar {{count}} item ao novo monstro',
+	'Add {{count}} item to the new monster_other': 'Adicionar {{count}} itens ao novo monstro',
+
+	// --- Balance readings -------------------------------------------------------------------
+	// Portuguese forms an ordinal with a masculine indicator, not with the
+	// English "st/nd/rd/th", so the suffix is dropped rather than translated.
+	'{{pct}}{{suffix}}': '{{pct}}º',
+	median: 'mediana',
+	n: 'n',
+	'Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual._one':
+		'Só {{count}} monstro nesta faixa — poucos demais para uma mediana significar algo, então nada é apontado como fora do comum.',
+	'Only {{count}} monster in this band — too few for a median to mean anything, so nothing is called unusual._other':
+		'Só {{count}} monstros nesta faixa — poucos demais para uma mediana significar algo, então nada é apontado como fora do comum.',
+	'Health sits with band {{band}} — the experience may be low for it.':
+		'A vida está na altura da faixa {{band}} — a experiência pode estar baixa para isso.',
+	'Health sits with band {{band}} — the experience may be high for it.':
+		'A vida está na altura da faixa {{band}} — a experiência pode estar alta para isso.',
+
+	// --- Spells -----------------------------------------------------------------------------
+	'as written': 'como escrito',
 };
 
 export default pt;
