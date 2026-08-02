@@ -86,6 +86,7 @@ import {
 	KINDS,
 	applyResistances,
 	bandFor,
+	blankSummon,
 	defaultBand,
 	donorSignature,
 	drawCountFor,
@@ -294,6 +295,11 @@ export default function CreateWizard({
 	const [cadence, setCadence] = useState({ interval: 5000, chance: 10 });
 	const [summonsOn, setSummonsOn] = useState(false);
 	const [summons, setSummons] = useState<Ticked<SampledSummon>[]>([]);
+	/** How many summons may be alive at once. Drawn off the donors like the rest
+	 *  of the proposal, but typed over like the rest of it too — zero here is the
+	 *  one value that makes every entry below inert, so it is worth a field rather
+	 *  than a constant nobody can see. */
+	const [maxSummons, setMaxSummons] = useState(2);
 	const [loot, setLoot] = useState<Ticked<SampledLoot>[]>([]);
 	/** The monsters the drops come off, which need not be the ones the monster is
 	 *  like. Null follows the identity set, which is what almost every run wants;
@@ -656,6 +662,7 @@ export default function CreateWizard({
 		const drawn = sampleSummons(donors, pool, stats?.experience ?? 0, MAX_SUMMON_CANDIDATES);
 		setSummons(drawn.map(item => ({ item, on: item.from !== null })));
 		setSummonsOn(drawn.some(s => s.from !== null));
+		setMaxSummons(maxSummonsFor(donors));
 		noteDerived('summons', sig);
 	}, [donors, pool, stats, touched, nonce.summons, sig, noteDerived]);
 
@@ -747,6 +754,33 @@ export default function CreateWizard({
 		});
 	}, [mark]);
 
+	/** A summon and a voice line of the user's own. Both are appended ticked —
+	 *  a row you typed is one you meant — and both are what Enter does inside
+	 *  their fields, so a list is written by typing rather than by reaching for
+	 *  the button between every entry. */
+	const addSummon = useCallback(() => {
+		mark('summons');
+		setSummons(prev => [...prev, { item: { entry: blankSummon(''), from: null, corpusCount: 0 }, on: true }]);
+	}, [mark]);
+
+	const addVoice = useCallback(() => {
+		mark('voices');
+		setVoices(prev => [...prev, { item: { line: { sentence: '', yell: false }, from: [] }, on: true }]);
+	}, [mark]);
+
+	/** Enter inside a list field adds the next row instead of advancing the step.
+	 *  The modal's own Enter is what moves the wizard on, and it must not fire
+	 *  while someone is halfway through writing a monster's lines. */
+	const addOnEnter = useCallback(
+		(add: () => void) => (e: React.KeyboardEvent) => {
+			if (e.key !== 'Enter' || e.shiftKey) return;
+			e.stopPropagation();
+			e.preventDefault();
+			add();
+		},
+		[]
+	);
+
 	// A cell clicked in the browser lands here on the way back. Marked touched,
 	// like any other answer the user gave with their own hands: the generator
 	// must not redraw it when they step back and change the band.
@@ -821,8 +855,15 @@ export default function CreateWizard({
 	const assemble = useCallback(
 		(base: MonsterDoc): MonsterDoc => {
 			const resistance = applyResistances(resist, donors, lead, engine.key);
-			const onVoices = voicesOn ? voices.filter(v => v.on).map(v => v.item.line) : [];
-			const onSummons = summonsOn ? summons.filter(s => s.on).map(s => s.item.entry) : [];
+			// A row left blank is a row the user started and did not finish, not an
+			// answer: an empty sentence or a nameless summon is junk in the file the
+			// server would carry forever, so neither is written.
+			const onVoices = voicesOn
+				? voices.filter(v => v.on && v.item.line.sentence.trim() !== '').map(v => ({ ...v.item.line, sentence: v.item.line.sentence.trim() }))
+				: [];
+			const onSummons = summonsOn
+				? summons.filter(s => s.on && s.item.entry.name.trim() !== '').map(s => ({ ...s.item.entry, name: s.item.entry.name.trim() }))
+				: [];
 			return {
 				...base,
 				name,
@@ -846,7 +887,7 @@ export default function CreateWizard({
 				voices: { ...base.voices, interval: cadence.interval, chance: cadence.chance, lines: onVoices },
 				// Zero maxSummons means the monster never summons however many
 				// entries it carries — a warning, and one the rail used to filter out.
-				summons: { maxSummons: onSummons.length > 0 ? maxSummonsFor(donors) : base.summons.maxSummons, entries: onSummons },
+				summons: { maxSummons: onSummons.length > 0 ? maxSummons : base.summons.maxSummons, entries: onSummons },
 				loot: loot.filter(l => l.on).map(l => l.item.entry)
 			};
 		},
@@ -872,6 +913,7 @@ export default function CreateWizard({
 			cadence,
 			summonsOn,
 			summons,
+			maxSummons,
 			loot
 		]
 	);
@@ -1018,7 +1060,13 @@ export default function CreateWizard({
 	const width =
 		(step === FIGHT_STEP && abilities.length > 0) || (step === DEFEND_STEP && defenses.length > 0)
 			? ' mx-wiz-wide'
-			: step === SIMILAR_STEP || step === DEFEND_STEP || step === SAY_STEP || (step === DROP_STEP && lootStep)
+			: // A summon row is a name and three numbers, which is a table's worth of
+				// fields on a step that is otherwise one question wide.
+				step === SIMILAR_STEP ||
+				  step === DEFEND_STEP ||
+				  step === SAY_STEP ||
+				  (step === FIGHT_STEP && summonsOn) ||
+				  (step === DROP_STEP && lootStep)
 				? ' mx-wiz-mid'
 				: '';
 
@@ -1497,41 +1545,154 @@ export default function CreateWizard({
 								{/* Summoning is not a question of its own: 78-89% of every corpus
 								    answers no, nothing can propose an answer to a yes/no, and 89%
 								    of the monsters that do summon carry exactly one entry. One
-								    name and two numbers is a row, not a step. */}
+								    name and two numbers is a row, not a step.
+
+								    The proposal is a ranking of what this family already summons,
+								    but every part of a row is typed over: a corpus is a suggestion
+								    about names, never a limit on them, and "summons three of my
+								    own thing" is the commonest reason anyone opens this step at
+								    all. Which is also why the tick is not disabled on an empty
+								    list — a corpus that summons nothing is a corpus with nothing
+								    to propose, not a monster that may not summon. */}
 								<div className="mx-wiz-sub">{t('Calls for help')}</div>
 								<label className="mx-wiz-card-tick">
 									<input
 										type="checkbox"
 										checked={summonsOn}
-										disabled={summons.length === 0}
 										onChange={() => {
 											mark('summons');
 											setSummonsOn(v => !v);
 										}}
 									/>
-									{summons.length === 0 ? t('Nothing in this corpus summons anything.') : t('Summons other monsters')}
+									{t('Summons other monsters')}
 								</label>
 								{summonsOn && (
-									<div className="mx-wiz-summons">
-										{summons.map((s, i) => (
-											<label key={s.item.entry.name} className={s.on ? 'mx-wiz-summon' : 'mx-wiz-summon mx-wiz-item-off'}>
-												<input
-													type="checkbox"
-													checked={s.on}
-													onChange={() => {
+									<>
+										<div className="mx-wiz-summons">
+											{summons.length === 0 && (
+												<div className="ss-modal-desc">{t('Nothing in this corpus summons anything — name one yourself below.')}</div>
+											)}
+											{summons.map((s, i) => {
+												const entry = s.item.entry;
+												const update = (p: Partial<typeof entry>) => {
+													mark('summons');
+													setSummons(summons.map((x, j) => (j === i ? { ...x, item: { ...x.item, entry: { ...x.item.entry, ...p } } } : x)));
+												};
+												// A summon naming a monster the server cannot find is
+												// dropped without a word — `summon.unknown` is silent,
+												// and it lives on a cross-file pass the wizard's own
+												// linting never runs. So the row says so itself.
+												const unknown = entry.name.trim() !== '' && !takenNames.has(entry.name.trim().toLowerCase());
+												return (
+													<div key={i} className={s.on ? 'mx-wiz-summon' : 'mx-wiz-summon mx-wiz-item-off'}>
+														<input
+															type="checkbox"
+															checked={s.on}
+															onChange={() => {
+																mark('summons');
+																setSummons(summons.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
+															}}
+														/>
+														<input
+															className={unknown ? 'mx-wiz-input mx-wiz-summon-name ss-ed-invalid' : 'mx-wiz-input mx-wiz-summon-name'}
+															list="mx-wiz-summon-pool"
+															value={entry.name}
+															placeholder={t('Monster name')}
+															title={
+																unknown
+																	? t('No monster with this name is registered — the server summons nothing and says nothing.')
+																	: t('Monster name')
+															}
+															onChange={e => update({ name: e.target.value })}
+															onKeyDown={addOnEnter(addSummon)}
+														/>
+														{/* Each label glued to its own field: three numbers on a row
+														    wrap on a narrow dialog, and they have to wrap as pairs
+														    rather than stranding a label above the box it names. */}
+														<span className="mx-wiz-summon-num">
+															<span className="mx-wiz-mini">{t('at once')}</span>
+															<NumberField
+																value={entry.max}
+																onChange={v => update({ max: v })}
+																min={0}
+																max={100}
+																width={52}
+																title={t('How many of this one may be alive at once')}
+															/>
+														</span>
+														<span className="mx-wiz-summon-num">
+															<span className="mx-wiz-mini">{t('Chance')}</span>
+															<NumberField
+																value={entry.chance}
+																onChange={v => update({ chance: v })}
+																min={0}
+																max={100}
+																width={52}
+																title={t('Chance the summon fires on each attempt')}
+															/>
+														</span>
+														{engine.summonInterval && (
+															<span className="mx-wiz-summon-num">
+																<span className="mx-wiz-mini">{t('Interval')}</span>
+																<NumberField
+																	value={entry.interval}
+																	onChange={v => update({ interval: v })}
+																	min={1}
+																	width={68}
+																	title={t('How often it tries, in milliseconds')}
+																/>
+															</span>
+														)}
+														<span className="mx-wiz-item-from">
+															{s.item.from
+																? t('from {{name}}', { name: s.item.from })
+																: s.item.corpusCount > 0
+																	? t('{{count}} monster summons it', { count: s.item.corpusCount })
+																	: t('yours')}
+														</span>
+														<button
+															className="ss-btn ss-btn-ghost ss-ed-mini"
+															title={t('Remove')}
+															onClick={() => {
+																mark('summons');
+																setSummons(summons.filter((_, j) => j !== i));
+															}}
+														>
+															<Trash2 size={13} />
+														</button>
+													</div>
+												);
+											})}
+										</div>
+										{/* Every name the corpus already summons, as suggestions rather
+										    than as the menu — the field takes anything typed. */}
+										<datalist id="mx-wiz-summon-pool">
+											{pool.map(p => (
+												<option key={p.name} value={p.name} />
+											))}
+										</datalist>
+										<div className="mx-wiz-rowend">
+											<label className="mx-wiz-field mx-wiz-summon-max">
+												<span title={t('Total across all entries — zero means it never summons, whatever the rows say.')}>
+													{t('Max live summons')}
+												</span>
+												<NumberField
+													value={maxSummons}
+													onChange={v => {
 														mark('summons');
-														setSummons(summons.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
+														setMaxSummons(v);
 													}}
+													min={0}
+													max={100}
+													width={64}
 												/>
-												<span className="mx-wiz-item-name">{s.item.entry.name}</span>
-												{s.item.from ? (
-													<span className="mx-wiz-item-from">{t('from {{name}}', { name: s.item.from })}</span>
-												) : (
-													<span className="mx-wiz-item-from">{t('{{count}} monster summons it', { count: s.item.corpusCount })}</span>
-												)}
 											</label>
-										))}
-									</div>
+											<button className="ss-btn" onClick={addSummon}>
+												<Plus size={14} />
+												{t('Add a summon')}
+											</button>
+										</div>
+									</>
 								)}
 								{staleNotice('summons', t('the summons'))}
 							</Step>
@@ -1667,37 +1828,78 @@ export default function CreateWizard({
 									<input
 										type="checkbox"
 										checked={voicesOn}
-										disabled={voices.length === 0}
 										onChange={() => {
 											mark('voices');
 											setVoicesOn(v => !v);
 										}}
 									/>
-									{voices.length === 0 ? t('None of the monsters you named says anything.') : t('It speaks')}
+									{t('It speaks')}
 								</label>
 
+								{/* Every line is a text field, not a label: an inherited line is a
+								    starting point — half of what makes a voice the monster's own is
+								    swapping a word in it — and a monster whose family says nothing
+								    still has things to say. */}
 								{voicesOn && (
-									<div className="mx-wiz-voices">
-										{voices.map((v, i) => (
-											<label key={v.item.line.sentence} className={v.on ? 'mx-wiz-voice' : 'mx-wiz-voice mx-wiz-item-off'}>
-												<input
-													type="checkbox"
-													checked={v.on}
-													onChange={() => {
-														mark('voices');
-														setVoices(voices.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
-													}}
-												/>
-												<span className="mx-wiz-voice-text">{v.item.line.sentence}</span>
-												{v.item.line.yell && <span className="mx-wiz-mini">{t('yelled')}</span>}
-												<span className="mx-wiz-item-from">
-													{v.item.from.length > 1
-														? t('{{count}} of them say it', { count: v.item.from.length })
-														: t('from {{name}}', { name: v.item.from[0] })}
-												</span>
-											</label>
-										))}
-									</div>
+									<>
+										<div className="mx-wiz-voices">
+											{voices.length === 0 && (
+												<div className="ss-modal-desc">{t('None of the monsters you named says anything — write a line yourself below.')}</div>
+											)}
+											{voices.map((v, i) => {
+												const setLine = (p: Partial<typeof v.item.line>) => {
+													mark('voices');
+													setVoices(voices.map((x, j) => (j === i ? { ...x, item: { ...x.item, line: { ...x.item.line, ...p } } } : x)));
+												};
+												return (
+													<div key={i} className={v.on ? 'mx-wiz-voice' : 'mx-wiz-voice mx-wiz-item-off'}>
+														<input
+															type="checkbox"
+															checked={v.on}
+															onChange={() => {
+																mark('voices');
+																setVoices(voices.map((x, j) => (j === i ? { ...x, on: !x.on } : x)));
+															}}
+														/>
+														<input
+															className="mx-wiz-input mx-wiz-voice-input"
+															value={v.item.line.sentence}
+															placeholder={t('What it says')}
+															onChange={e => setLine({ sentence: e.target.value })}
+															onKeyDown={addOnEnter(addVoice)}
+														/>
+														<label className="mx-wiz-mini mx-wiz-voice-yell" title={t('Heard further away; conventionally written in upper case')}>
+															<input type="checkbox" checked={v.item.line.yell} onChange={e => setLine({ yell: e.target.checked })} />
+															{t('Yell')}
+														</label>
+														<span className="mx-wiz-item-from">
+															{v.item.from.length > 1
+																? t('{{count}} of them say it', { count: v.item.from.length })
+																: v.item.from.length === 1
+																	? t('from {{name}}', { name: v.item.from[0] })
+																	: t('yours')}
+														</span>
+														<button
+															className="ss-btn ss-btn-ghost ss-ed-mini"
+															title={t('Remove')}
+															onClick={() => {
+																mark('voices');
+																setVoices(voices.filter((_, j) => j !== i));
+															}}
+														>
+															<Trash2 size={13} />
+														</button>
+													</div>
+												);
+											})}
+										</div>
+										<div className="mx-wiz-rowend">
+											<button className="ss-btn" onClick={addVoice}>
+												<Plus size={14} />
+												{t('Add a line')}
+											</button>
+										</div>
+									</>
 								)}
 
 								{/* TVP and Nostalrius read neither attribute, and the writer
@@ -1734,7 +1936,7 @@ export default function CreateWizard({
 
 								<div className="ss-modal-desc">
 									{voices.length === 0
-										? t('Add lines in the editor if it should talk.')
+										? t('Nothing drawn to start from — anything you write here is the whole pool.')
 										: engine.voicesCadence
 											? t('Lines two of them share arrive ticked. Anything naming its own speaker is left out.')
 											: t('This engine reads no interval or chance on voices, so there is nothing to set.')}

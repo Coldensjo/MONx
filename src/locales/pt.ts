@@ -531,10 +531,22 @@ const pt: Record<string, string> = {
 	'Remove this attack': 'Remover este ataque',
 	'Add an attack': 'Adicionar um ataque',
 	'Calls for help': 'Chama ajuda',
-	'Nothing in this corpus summons anything.': 'Nada neste corpus invoca nada.',
+	'Nothing in this corpus summons anything — name one yourself below.':
+		'Nada neste corpus invoca nada — indique um você mesmo abaixo.',
 	'Summons other monsters': 'Invoca outros monstros',
 	'{{count}} monster summons it_one': '{{count}} monstro o invoca',
 	'{{count}} monster summons it_other': '{{count}} monstros o invocam',
+	'Monster name': 'Nome do monstro',
+	'No monster with this name is registered — the server summons nothing and says nothing.':
+		'Nenhum monstro com este nome está registrado — o servidor não invoca nada e não avisa nada.',
+	'at once': 'de uma vez',
+	'How many of this one may be alive at once': 'Quantos deste podem estar vivos ao mesmo tempo',
+	'Chance the summon fires on each attempt': 'Chance de a invocação sair em cada tentativa',
+	'How often it tries, in milliseconds': 'Com que frequência ele tenta, em milissegundos',
+	yours: 'sua',
+	'Total across all entries — zero means it never summons, whatever the rows say.':
+		'Total de todas as entradas — zero significa que ele nunca invoca, digam o que disserem as linhas.',
+	'Add a summon': 'Adicionar uma invocação',
 
 	'How does it defend itself?': 'Como ele se defende?',
 	'Name a monster or two on the second step and this fills itself in.':
@@ -553,12 +565,14 @@ const pt: Record<string, string> = {
 	'Add a defense': 'Adicionar uma defesa',
 
 	'Does it have anything to say?': 'Ele tem algo a dizer?',
-	'None of the monsters you named says anything.': 'Nenhum dos monstros que você indicou diz nada.',
+	'None of the monsters you named says anything — write a line yourself below.':
+		'Nenhum dos monstros que você indicou diz nada — escreva uma fala você mesmo abaixo.',
 	'It speaks': 'Ele fala',
-	yelled: 'gritado',
 	'{{count}} of them say it_one': '{{count}} deles diz isso',
 	'{{count}} of them say it_other': '{{count}} deles dizem isso',
-	'Add lines in the editor if it should talk.': 'Adicione falas no editor se ele deve falar.',
+	'Add a line': 'Adicionar uma fala',
+	'Nothing drawn to start from — anything you write here is the whole pool.':
+		'Nada sorteado para começar — o que você escrever aqui é todo o conjunto.',
 	'Lines two of them share arrive ticked. Anything naming its own speaker is left out.':
 		'Falas que dois deles compartilham já vêm marcadas. Qualquer uma que cite o próprio falante fica de fora.',
 	'This engine reads no interval or chance on voices, so there is nothing to set.':

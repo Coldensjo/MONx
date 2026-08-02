@@ -611,11 +611,23 @@ const pl: Record<string, string> = {
 	'Remove this attack': 'Usuń ten atak',
 	'Add an attack': 'Dodaj atak',
 	'Calls for help': 'Wzywa pomoc',
-	'Nothing in this corpus summons anything.': 'Nic w tym korpusie niczego nie przywołuje.',
+	'Nothing in this corpus summons anything — name one yourself below.':
+		'Nic w tym korpusie niczego nie przywołuje — wpisz coś sam poniżej.',
 	'Summons other monsters': 'Przywołuje inne potwory',
 	'{{count}} monster summons it_one': 'przywołuje go {{count}} potwór',
 	'{{count}} monster summons it_few': 'przywołują go {{count}} potwory',
 	'{{count}} monster summons it_many': 'przywołuje go {{count}} potworów',
+	'Monster name': 'Nazwa potwora',
+	'No monster with this name is registered — the server summons nothing and says nothing.':
+		'Żaden potwór o tej nazwie nie jest zarejestrowany — serwer nic nie przywoła i nic nie powie.',
+	'at once': 'naraz',
+	'How many of this one may be alive at once': 'Ile sztuk tego może żyć jednocześnie',
+	'Chance the summon fires on each attempt': 'Szansa, że przywołanie zadziała przy każdej próbie',
+	'How often it tries, in milliseconds': 'Jak często próbuje, w milisekundach',
+	yours: 'od ciebie',
+	'Total across all entries — zero means it never summons, whatever the rows say.':
+		'Łącznie ze wszystkich wpisów — zero oznacza, że nigdy nie przywołuje, cokolwiek mówią wiersze.',
+	'Add a summon': 'Dodaj przywołanie',
 
 	'How does it defend itself?': 'Jak się broni?',
 	'Name a monster or two on the second step and this fills itself in.':
@@ -636,13 +648,15 @@ const pl: Record<string, string> = {
 	'Add a defense': 'Dodaj obronę',
 
 	'Does it have anything to say?': 'Czy ma coś do powiedzenia?',
-	'None of the monsters you named says anything.': 'Żaden ze wskazanych potworów nic nie mówi.',
+	'None of the monsters you named says anything — write a line yourself below.':
+		'Żaden ze wskazanych potworów nic nie mówi — napisz kwestię sam poniżej.',
 	'It speaks': 'Mówi',
-	yelled: 'krzyczane',
 	'{{count}} of them say it_one': 'mówi to {{count}} z nich',
 	'{{count}} of them say it_few': 'mówią to {{count}} z nich',
 	'{{count}} of them say it_many': 'mówi to {{count}} z nich',
-	'Add lines in the editor if it should talk.': 'Dodaj kwestie w edytorze, jeśli ma mówić.',
+	'Add a line': 'Dodaj kwestię',
+	'Nothing drawn to start from — anything you write here is the whole pool.':
+		'Nic nie wylosowano na start — to, co tu napiszesz, jest całą pulą.',
 	'Lines two of them share arrive ticked. Anything naming its own speaker is left out.':
 		'Kwestie wspólne dla dwóch z nich są od razu zaznaczone. Wszystko, co wymienia własnego mówcę, jest pomijane.',
 	'This engine reads no interval or chance on voices, so there is nothing to set.':

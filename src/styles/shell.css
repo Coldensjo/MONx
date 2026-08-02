@@ -2471,6 +2471,7 @@
 	margin: 8px 0;
 }
 
+/* No pointer cursor: the row is fields now, not one big label to click. */
 .mx-wiz-voice,
 .mx-wiz-summon {
 	display: flex;
@@ -2479,7 +2480,6 @@
 	padding: 4px 6px;
 	border-radius: var(--radius);
 	font-size: 12px;
-	cursor: pointer;
 }
 
 .mx-wiz-voice:hover,
@@ -2488,10 +2488,52 @@
 }
 
 /* A line is prose and wants to read as prose — the provenance beside it is not,
-   and must not push it around as the list scrolls. */
-.mx-wiz-voice-text {
+   and must not push it around as the list scrolls. Editable, so it is a field
+   rather than a span: an inherited line is where a voice starts, not what it
+   has to stay. */
+.mx-wiz-voice-input {
 	flex: 1 1 auto;
+	height: 26px;
 	font-style: italic;
+}
+
+.mx-wiz-voice-yell {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+}
+
+/* The summon rows carry a name and up to three numbers, so they wrap rather
+   than squeezing the name down to nothing on a narrow dialog. */
+.mx-wiz-summon {
+	flex-wrap: wrap;
+}
+
+.mx-wiz-summon-name {
+	flex: 1 1 140px;
+	min-width: 100px;
+	height: 26px;
+}
+
+/* A label and the box it names, one unit — so a row that wraps wraps between
+   the numbers rather than dropping a field away from its own word. */
+.mx-wiz-summon-num {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+/* The section total, beside the button that adds to what it caps — a row, not
+   a stacked field, and shoved left so the Add button keeps the end. */
+.mx-wiz-summon-max {
+	flex: 0 0 auto;
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	margin-right: auto;
 }
 
 /* ---- The drop step's donor row ---- */

@@ -737,8 +737,10 @@ export function sampleSummons(donors: MonsterDoc[], pool: SummonPoolEntry[], exp
 	return out;
 }
 
-/** A summon nobody donated, at the cadence the corpus writes most often. */
-function blankSummon(name: string): SummonEntry {
+/** A summon nobody donated, at the cadence the corpus writes most often. Also
+ *  what the wizard's "Add a summon" row starts from, so a hand-typed summon and
+ *  a drawn one differ in their name and nothing else. */
+export function blankSummon(name: string): SummonEntry {
 	return { name, interval: 2000, chance: 25, delay: null, max: 2, force: false, effect: null, masterEffect: null };
 }
 
