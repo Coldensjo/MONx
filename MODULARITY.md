@@ -23,9 +23,10 @@ proved. Do not relax it without saying so in the commit.
 | `306bdfd` | `WorkspaceContext` — `MonsterEditor` 19 props → 6, `SectionProps` 13 → 4 |
 | `5028118` | `bun run commands` gate + `bun test` over the pure modules |
 | `13aeae9` | `history.ts` / `tabs.ts` — §4.3's two riskiest seams, extracted and covered |
-| this one | `buffers.ts` + `useUndoRedo` — §4.3's enabling cut; the other three seams assessed and declined |
+| `669afc7` | `buffers.ts` + `useUndoRedo` — §4.3's enabling cut; the other three seams assessed and declined |
+| this one | `PreviewProvider` hoisted to the shell — the `CustomEffectsDialog` sprite bug §4.2 recorded |
 
-Version is at `0.1.102`. No Rust file is now over 900 lines outside the frozen
+Version is at `0.1.103`. No Rust file is now over 900 lines outside the frozen
 `dat.rs` / `spr.rs`, and `lib.rs` is 98 lines: the module list, the
 `CustomEffectsState` type, and `run()`.
 
@@ -209,13 +210,18 @@ context rather than 13 defaulted props: a subtree mounted with no provider
 degrades exactly as it did before instead of throwing. The defaults are the
 same ones the props carried, which is half of why the change is invisible.
 
-**`PreviewProvider` deliberately did not move.** It looks shell-wide and is
-not: it is mounted inside `MonsterEditor` and again around the create wizard,
-and `CustomEffectsDialog` sits outside both, which is why that dialog draws
-effect ids as numbers rather than sprites. Hoisting it into `WorkspaceProvider`
-would have fixed that as a side effect of a refactor that is supposed to change
-nothing. **That is a real bug and it is still open** — a dialog for declaring
-effects that cannot show them. Fix it on its own, where it can be seen.
+**`PreviewProvider` deliberately did not move — at first.** It looked
+shell-wide and was not: it was mounted inside `MonsterEditor` and again around
+the create wizard, and `CustomEffectsDialog` sits outside both, which is why
+that dialog drew effect ids as numbers rather than sprites. Hoisting it into
+`WorkspaceProvider` would have fixed a real bug as a side effect of a refactor
+that is supposed to change nothing, so it was left alone and written down here
+instead. **Fixed since, on its own, where it could be seen** — the provider is
+in `WorkspaceProvider` now and both inner mounts are gone.
+
+The pattern is worth keeping: a refactor that trips over a bug should record
+it, not absorb it. A fix buried in a no-behaviour-change commit is a fix nobody
+reviewed and a claim that is no longer true.
 
 ### 4.3 `Workspace.tsx` — 3,036 lines, 2,836 of them in one component
 

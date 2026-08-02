@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { tauriItemIndex, type ItemIndex, type SpellName } from './monster';
 import { DEFAULT_PREFS, type Prefs } from './prefs';
-import { ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { PreviewProvider, ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 
 /**
  * The facts that are true of the open workspace rather than of the monster
@@ -66,20 +66,27 @@ const WorkspaceContext = createContext<WorkspaceFacts>(FALLBACK);
  * panel is a sibling of `MonsterEditor` and needs the same facts.
  *
  * `previewUrl` and `thingAnim` keep the contexts they already had, consumed
- * deep in `fields/`, and nothing under `fields/` changes. `ThingAnimProvider`
- * moves in here because it was already mounted around the whole shell;
- * `PreviewProvider` deliberately does **not**, because it was not. It is
- * mounted inside `MonsterEditor` and again around the create wizard, and a
- * component that sits outside both — `CustomEffectsDialog` is the one — draws
- * effect ids as numbers rather than sprites today. Hoisting the provider here
- * would quietly give that dialog its sprites back, which is a fix and not a
- * refactor. Worth doing; not worth smuggling in under a change that is
- * supposed to be provably invisible.
+ * deep in `fields/`, and nothing under `fields/` changes. Both are mounted
+ * here, around the shell, rather than around the pieces that happen to use
+ * them today.
+ *
+ * That placement is the fix for a real bug rather than a tidy-up.
+ * `PreviewProvider` used to sit inside `MonsterEditor` and again around the
+ * create wizard, so anything mounted outside both got no preview context —
+ * and `CustomEffectsDialog` is outside both. It draws a sprite beside each
+ * effect id for the express purpose of letting you check the id, and with no
+ * provider that sprite fell back to rendering the number you had just typed.
+ * The dialog exists for people whose server added effects the shipped
+ * catalogue does not know, which makes it exactly the place where being
+ * unable to see the sprite matters most — and the fallback was
+ * indistinguishable from the answer for a genuinely empty id.
  */
 export function WorkspaceProvider({ value, children }: { value: WorkspaceFacts; children: ReactNode }) {
 	return (
 		<WorkspaceContext.Provider value={value}>
-			<ThingAnimProvider value={value.thingAnim}>{children}</ThingAnimProvider>
+			<PreviewProvider value={value.previewUrl}>
+				<ThingAnimProvider value={value.thingAnim}>{children}</ThingAnimProvider>
+			</PreviewProvider>
 		</WorkspaceContext.Provider>
 	);
 }

@@ -110,7 +110,7 @@ import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus, type LintTab } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
-import { PreviewProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 import { WorkspaceProvider, type WorkspaceFacts } from './workspacectx';
 import { useUndoRedo } from './hooks/useUndoRedo';
 import { closeTabs as closeTabsIn, openTab, pinTab as pinTabIn, stepTab as stepTabIn, type TabState } from './tabs';
@@ -2779,10 +2779,6 @@ export default function Workspace({
 			)}
 
 			{wizardOpen && (
-				/* The wizard's spell step picks effects by sprite, and the grid that
-				   draws them reads its client through this context — the editor's own
-				   provider is inside MonsterEditor, which is not mounted here. */
-				<PreviewProvider value={previewUrl}>
 				<CreateWizard
 					hidden={wizardPick !== null}
 					onBrowse={startWizardPick}
@@ -2805,7 +2801,6 @@ export default function Workspace({
 					onClose={() => setWizardOpen(false)}
 					showToast={showToast}
 				/>
-				</PreviewProvider>
 			)}
 
 			{conflicts.length > 0 && (

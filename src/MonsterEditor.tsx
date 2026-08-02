@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { AlertTriangle } from 'lucide-react';
 import { type Lint, type MonsterDoc } from './monster';
 import { loadSetting, saveSetting } from './settings';
-import { PreviewProvider } from './fields/preview';
 import { SECTION_ENGINE_FLAG, SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
 import { landingSection, visibleSectionIds } from './prefs';
 import {
@@ -79,7 +78,7 @@ export function MonsterEditor({
 	onJumped
 }: MonsterEditorProps) {
 	const { t } = useTranslation();
-	const { prefs, onToast, previewUrl } = useWorkspace();
+	const { prefs, onToast } = useWorkspace();
 	const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => new Set(loadState().collapsed));
 	const [active, setActive] = useState<SectionId>(() => landingSection(prefs) ?? 'identity');
 	const scrollRef = useRef<HTMLDivElement>(null);
@@ -244,11 +243,7 @@ export function MonsterEditor({
 	// spread into twelve components that mostly did not ask for them.
 	const common = { doc, patch, lintAt, readOnly };
 
-	// The preview context stays mounted here rather than at the shell, which is
-	// where it was: `CustomEffectsDialog` sits outside it and draws effect ids
-	// as numbers, and hoisting this would change that.
 	return (
-		<PreviewProvider value={previewUrl}>
 		<BlockContext.Provider value={blocks}>
 			<div className="ss-ed">
 				<nav className="ss-ed-bar">
@@ -309,6 +304,5 @@ export function MonsterEditor({
 				</div>
 			</div>
 		</BlockContext.Provider>
-		</PreviewProvider>
 	);
 }
