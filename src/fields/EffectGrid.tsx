@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Ban, ChevronDown, Search } from 'lucide-react';
 import type { EffectEntry } from '../catalog';
 import { ANIM_INTERVAL_MS } from '../ThingBrowser';
-import { commonest, usePreviewUrl, useThingAnimLookup } from './preview';
+import { commonest, usePreviewUrl, useThingAnim, useThingAnimLookup } from './preview';
 
 /** Search row + grid at its tallest, matching the CSS below. */
 const GRID_HEIGHT = 290;
@@ -31,16 +31,22 @@ interface Props {
 /** One effect's sprite, or its bare id when nothing can render it. Exported for
  *  the custom-effect dialog, where seeing the sprite is how you know the id is
  *  the one you meant. */
-export function Sprite({ id, kind }: { id: number; kind: 'area' | 'shoot' }) {
+export function Sprite({ id, kind, size = 32 }: { id: number; kind: 'area' | 'shoot'; size?: number }) {
 	const previewUrl = usePreviewUrl();
 	const url = id > 0 ? previewUrl?.(thingKind(kind), id) : null;
-	if (!url) return <span className="ss-ed-effect-chip">{id}</span>;
+	if (!url) {
+		return (
+			<span className="ss-ed-effect-chip" style={size === 32 ? undefined : { width: size, height: size }}>
+				{id}
+			</span>
+		);
+	}
 	return (
 		<img
 			className="ss-ed-effect-sprite"
 			src={url}
-			width={32}
-			height={32}
+			width={size}
+			height={size}
 			alt=""
 			draggable={false}
 			onError={e => (e.currentTarget.style.visibility = 'hidden')}
@@ -58,18 +64,30 @@ export function Sprite({ id, kind }: { id: number; kind: 'area' | 'shoot' }) {
  * Mounted this way it is one request per phase, ever, and stepping the
  * animation touches nothing but a style.
  */
-function AnimatedSprite({ id, kind, frames, frame }: { id: number; kind: 'area' | 'shoot'; frames: number; frame: number }) {
+function AnimatedSprite({
+	id,
+	kind,
+	frames,
+	frame,
+	size = 32
+}: {
+	id: number;
+	kind: 'area' | 'shoot';
+	frames: number;
+	frame: number;
+	size?: number;
+}) {
 	const previewUrl = usePreviewUrl();
 	const shown = frame % frames;
 	return (
-		<span className="ss-ed-effect-sprite-anim">
+		<span className="ss-ed-effect-sprite-anim" style={size === 32 ? undefined : { width: size, height: size }}>
 			{Array.from({ length: frames }, (_, f) => (
 				<img
 					key={f}
 					className="ss-ed-effect-sprite"
 					src={previewUrl?.(thingKind(kind), id, { frame: f }) ?? ''}
-					width={32}
-					height={32}
+					width={size}
+					height={size}
 					alt=""
 					draggable={false}
 					style={{ display: f === shown ? 'block' : 'none' }}
@@ -78,6 +96,33 @@ function AnimatedSprite({ id, kind, frames, frame }: { id: number; kind: 'area' 
 			))}
 		</span>
 	);
+}
+
+/**
+ * One effect, playing, at whatever size the caller has room for.
+ *
+ * `Sprite` is the still and the grid animates from a catalogue-wide lookup;
+ * this is the single-thing case, so it resolves its own phase count through
+ * `useThingAnim` and runs its own clock. That is the right shape for one cell
+ * and the wrong one for eighty, which is why the grid does not use it.
+ *
+ * Falls back to the still, and then to the id chip, so a workspace with no
+ * client still renders something rather than a gap.
+ */
+export function EffectPreview({ id, kind, size = 32 }: { id: number; kind: 'area' | 'shoot'; size?: number }) {
+	const anim = useThingAnim(thingKind(kind), id > 0 ? id : null);
+	const frames = anim && anim.frames > 1 ? anim.frames : 0;
+	const ms = commonest(anim?.durations ?? []) || ANIM_INTERVAL_MS;
+	const [frame, setFrame] = useState(0);
+
+	useEffect(() => {
+		if (frames < 2) return;
+		const timer = window.setInterval(() => setFrame(f => f + 1), ms);
+		return () => window.clearInterval(timer);
+	}, [frames, ms]);
+
+	if (frames >= 2) return <AnimatedSprite id={id} kind={kind} frames={frames} frame={frame} size={size} />;
+	return <Sprite id={id} kind={kind} size={size} />;
 }
 
 /**

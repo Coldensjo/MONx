@@ -4,7 +4,8 @@ import { X } from 'lucide-react';
 import { engineInfo } from '../engine';
 import { mergeEffects } from '../customeffects';
 import { useCustomEffects } from './customctx';
-import { EffectGrid, Sprite } from './EffectGrid';
+import { EffectGrid, EffectPreview } from './EffectGrid';
+import { usePreviewUrl } from './preview';
 
 interface Props {
 	kind: 'area' | 'shoot';
@@ -76,6 +77,7 @@ export function EffectBrowse({
 	const { t } = useTranslation();
 	const info = engineInfo(engine);
 	const custom = useCustomEffects();
+	const previewUrl = usePreviewUrl();
 	const entries = useMemo(
 		() => (kind === 'area' ? mergeEffects(info.magicEffects, custom.magic) : mergeEffects(info.shootEffects, custom.shoot)),
 		[kind, info, custom]
@@ -84,12 +86,35 @@ export function EffectBrowse({
 	// "(none)": a value the editor renders as nothing is a value the next click
 	// deletes.
 	const entry = value ? entries.find(e => e.name === value) : null;
+	// Whether there is an animation to show *instead of* the name, which is the
+	// only thing that makes hiding the name safe.
+	const hasSprite = !!previewUrl && !!entry && entry.id > 0;
 
+	// The effect, not its identifier. `CONST_ME_EXPLOSIONHIT` is longer than the
+	// field it sits in, so the name wrapped onto its own line and pushed the two
+	// pickers out of alignment — and it was never the useful half anyway: you
+	// recognise the animation, not the constant. It is the tooltip now, and the
+	// sprite is drawn at 64 and playing, which is the size at which an impact is
+	// actually distinguishable from the four other red ones.
+	//
+	// The name still shows when there is no sprite to show instead. A workspace
+	// opened without a client folder would otherwise render every effect as an
+	// anonymous id chip, and then the identifier is all there is.
+	const label = value ?? t('(none)');
 	return (
 		<div className="ss-ed-effect-browse">
-			<button type="button" className="ss-ed-input ss-ed-item-trigger" onClick={onBrowse}>
-				{entry ? <Sprite id={entry.id} kind={kind} /> : <span className="ss-ed-effect-chip">—</span>}
-				<span className="ss-ed-item-name">{value ?? t('(none)')}</span>
+			<button
+				type="button"
+				className="ss-ed-input ss-ed-item-trigger ss-ed-effect-trigger"
+				onClick={onBrowse}
+				title={label}
+			>
+				{entry ? (
+					<EffectPreview id={entry.id} kind={kind} size={64} />
+				) : (
+					<span className="ss-ed-effect-chip ss-ed-effect-chip-lg">—</span>
+				)}
+				{!hasSprite && <span className="ss-ed-item-name">{label}</span>}
 			</button>
 			{value && (
 				<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" title={t('Clear')} onClick={onClear}>

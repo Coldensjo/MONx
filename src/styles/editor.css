@@ -541,6 +541,11 @@
 	border-radius: 3px;
 	image-rendering: pixelated;
 	flex-shrink: 0;
+	/* `/thing.png` composes at the thing's own size, so a multi-tile area effect
+	   comes back larger than one cell and need not be square. The box is fixed
+	   by the caller; `contain` fits the sprite inside it rather than stretching
+	   it to the box's aspect. Matters more at 64 than it ever did at 32. */
+	object-fit: contain;
 }
 
 /* An animating cell holds every phase at once and shows one. The box is sized
@@ -1227,6 +1232,24 @@
 .ss-ed-effect-browse .ss-ed-item-trigger {
 	flex: 1;
 	min-width: 0;
+}
+
+/* Sprite-only, so the trigger is a frame around the effect rather than a row
+   with a picture at one end. It stops growing with its contents: the name it
+   used to carry is a tooltip now, and the two pickers sit side by side only
+   while neither can be pushed wider than the other. */
+.ss-ed-effect-trigger {
+	flex: 0 0 auto;
+	justify-content: center;
+	padding: 4px;
+}
+
+/* Matches EffectPreview's own 64, so the box is the right size before any
+   phase has decoded and does not resize when one does. */
+.ss-ed-effect-chip-lg {
+	width: 64px;
+	height: 64px;
+	font-size: 12px;
 }
 
 .mx-stage {
