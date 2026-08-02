@@ -55,7 +55,6 @@ import {
 	nextFreeRaceid,
 	resolveLootIds,
 	saveMonster,
-	summonPool,
 	MIN_BAND_N,
 	type AttacksStats,
 	type BalanceBand,
@@ -67,13 +66,13 @@ import {
 	type MonsterSummary,
 	type SpellBlock,
 	type SpellName,
-	type SummonPoolEntry
 } from './monster';
 import { engineInfo, type EngineInfo } from './engine';
 import { damageTypes } from './catalog';
 import { CompactProvider } from './fields/Field';
 import { useItemInfo } from './fields/ItemPicker';
 import { useCustomEffects } from './fields/customctx';
+import { EffectSelect } from './fields/EffectSelect';
 import { mergeEffects } from './customeffects';
 import { NumberField } from './fields/NumberField';
 import { SpellCard } from './sections/SpellCard';
@@ -101,7 +100,6 @@ import {
 	sampleLoot,
 	sampleLook,
 	sampleStats,
-	sampleSummons,
 	sampleVoices,
 	usableBands,
 	voiceCadence,
@@ -174,11 +172,13 @@ const STATS_STEP = 4;
 const ATTACK_STEP = 5;
 const ABILITY_STEP = 6;
 const SUMMON_STEP = 7;
-const RESIST_STEP = 8;
-const DEFEND_STEP = 9;
-const SAY_STEP = 10;
-const DROP_STEP = 11;
-const STEP_COUNT = 12;
+const SUMMON_DETAIL_STEP = 8;
+const RESIST_STEP = 9;
+const DEFEND_STEP = 10;
+const SAY_STEP = 11;
+const DROP_STEP = 12;
+const STEP_COUNT = 13;
+
 
 /** As many neighbours as are worth naming. Past this the picks stop describing
  *  one family and start describing the corpus, which is what the drawn default
@@ -195,10 +195,9 @@ const MAX_DRAW = 25;
  *  ceiling on the search rather than on the choice. */
 const MAX_CORPSE_CANDIDATES = 60;
 
-/** How many voice lines and summon candidates the proposal shows. Both are
- *  ranked, so this cuts the tail rather than the answer. */
+/** How many voice lines the proposal shows. Ranked, so this cuts the tail
+ *  rather than the answer. */
 const MAX_VOICES = 12;
-const MAX_SUMMON_CANDIDATES = 12;
 
 /** Everything the generator can fill in, and therefore everything `touched` and
  *  `derivedFrom` have keys for. A field the user has edited is never redrawn
@@ -302,7 +301,6 @@ export default function CreateWizard({
 	const [voicesOn, setVoicesOn] = useState(false);
 	const [voices, setVoices] = useState<Ticked<SampledVoice>[]>([]);
 	const [cadence, setCadence] = useState({ interval: 5000, chance: 10 });
-	const [summonsOn, setSummonsOn] = useState(false);
 	const [summons, setSummons] = useState<Ticked<SampledSummon>[]>([]);
 	/** How many summons may be alive at once. Drawn off the donors like the rest
 	 *  of the proposal, but typed over like the rest of it too — zero here is the
@@ -326,7 +324,6 @@ export default function CreateWizard({
 	const [donors, setDonors] = useState<MonsterDoc[]>([]);
 	const [lootDonors, setLootDonors] = useState<MonsterDoc[]>([]);
 	const [lootIds, setLootIds] = useState<Map<string, (number | null)[]>>(new Map());
-	const [pool, setPool] = useState<SummonPoolEntry[]>([]);
 	const [items, setItems] = useState<Map<number, ItemInfo>>(new Map());
 	const [template, setTemplate] = useState<MonsterDoc | null>(null);
 	const [raceid, setRaceid] = useState<number | null>(null);
@@ -379,12 +376,6 @@ export default function CreateWizard({
 				setHasItems(ids.length > 0);
 			})
 			.catch(() => live && setHasItems(false));
-		// Never a name the corpus does not already summon: `summon.unknown` is a
-		// silent lint on a cross-file pass the wizard's own linting never runs, so
-		// a bad name here is one nothing would ever mention.
-		void summonPool()
-			.then(p => live && setPool(p))
-			.catch(() => undefined);
 		if (engine.raceidAttr) {
 			void nextFreeRaceid()
 				.then(id => live && setRaceid(id))
@@ -660,14 +651,16 @@ export default function CreateWizard({
 		noteDerived('voices', sig);
 	}, [donors, touched, nonce.voices, sig, noteDerived]);
 
+	// Summons are not drawn. Naming a family used to inherit its summon rows, on
+	// the same reasoning as the voices and the loot — but a summon is a statement
+	// about *other monsters existing*, not a flavour detail, and a wizard that
+	// quietly decides a new monster calls two dragons has made a design decision
+	// on the user's behalf that they now have to find and undo. The cap still
+	// follows the family, because it is only read once a summon is picked.
 	useEffect(() => {
 		if (touched.has('summons') || donors.length === 0) return;
-		const drawn = sampleSummons(donors, pool, stats?.experience ?? 0, MAX_SUMMON_CANDIDATES);
-		setSummons(drawn.map(item => ({ item, on: item.from !== null })));
-		setSummonsOn(drawn.some(s => s.from !== null));
 		setMaxSummons(maxSummonsFor(donors));
-		noteDerived('summons', sig);
-	}, [donors, pool, stats, touched, nonce.summons, sig, noteDerived]);
+	}, [donors, touched]);
 
 	// The draw count follows the donors' own tables. It is set rather than
 	// derived so that typing over it stays typed.
@@ -880,9 +873,10 @@ export default function CreateWizard({
 			const onVoices = voicesOn
 				? voices.filter(v => v.on && v.item.line.sentence.trim() !== '').map(v => ({ ...v.item.line, sentence: v.item.line.sentence.trim() }))
 				: [];
-			const onSummons = summonsOn
-				? summons.filter(s => s.on && s.item.entry.name.trim() !== '').map(s => ({ ...s.item.entry, name: s.item.entry.name.trim() }))
-				: [];
+			// Picking nothing is the `no`; there is no separate tick to consult.
+			const onSummons = summons
+				.filter(s => s.on && s.item.entry.name.trim() !== '')
+				.map(s => ({ ...s.item.entry, name: s.item.entry.name.trim() }));
 			return {
 				...base,
 				name,
@@ -930,7 +924,6 @@ export default function CreateWizard({
 			voicesOn,
 			voices,
 			cadence,
-			summonsOn,
 			summons,
 			maxSummons,
 			loot
@@ -970,13 +963,43 @@ export default function CreateWizard({
 	const lastStep = STEP_COUNT - 1;
 	const canAdvance = step !== NAME_STEP || name.trim().length > 0;
 
-	// Every step is reached, even when it has nothing to offer — it says why
-	// instead of listing ids it cannot vouch for. Skipping one outright would
-	// strand the user on the step before, where the primary button is still
-	// "Next", and would make the row of dots mean a different number of questions
-	// depending on answers nobody can see from the dots.
-	const next = useCallback(() => setStep(s => Math.min(lastStep, s + 1)), [lastStep]);
-	const back = useCallback(() => setStep(s => Math.max(0, s - 1)), []);
+	// A step whose subject does not exist is stepped over in both directions.
+	//
+	// This is not the same as a step with nothing to *offer* — the loot step with
+	// no item database still appears and says why, rather than listing ids it
+	// cannot vouch for. The distinction is whether there is a question left: "how
+	// many does it summon, how often, with what effect" is not a question you can
+	// ask about a monster that summons nothing, and showing it empty would be
+	// asking the user to click past a form about something they just declined.
+	//
+	// Stepped over rather than hidden after the fact, so `back` never lands on it
+	// either — arriving at a dead step by reversing is the same dead end.
+	const skipped = useCallback(
+		(s: number) => s === SUMMON_DETAIL_STEP && summons.filter(x => x.on).length === 0,
+		[summons]
+	);
+
+	const next = useCallback(() => {
+		setStep(s => {
+			let n = Math.min(lastStep, s + 1);
+			while (n < lastStep && skipped(n)) n++;
+			return n;
+		});
+	}, [lastStep, skipped]);
+
+	const back = useCallback(() => {
+		setStep(s => {
+			let n = Math.max(0, s - 1);
+			while (n > 0 && skipped(n)) n--;
+			return n;
+		});
+	}, [skipped]);
+
+	/** The steps the dots stand for. A skipped step is not a question this
+	 *  monster has, so it is not a dot — a row that stays the same length while
+	 *  the number of questions changes is a row that lies about how far along
+	 *  you are. */
+	const dots = useMemo(() => [...Array(STEP_COUNT).keys()].filter(i => !skipped(i)), [skipped]);
 
 	const commit = useCallback(async () => {
 		const trimmed = name.trim();
@@ -1086,7 +1109,8 @@ export default function CreateWizard({
 				  step === SAY_STEP ||
 				  step === ABILITY_STEP ||
 				  step === DEFEND_STEP ||
-				  (step === SUMMON_STEP && summonsOn) ||
+				  step === SUMMON_STEP ||
+			  step === SUMMON_DETAIL_STEP ||
 				  (step === DROP_STEP && lootStep)
 				? ' mx-wiz-mid'
 				: '';
@@ -1100,7 +1124,7 @@ export default function CreateWizard({
 				<div className="ss-modal-title">
 					{t('New monster')}
 					<span className="mx-wiz-steps">
-						{[...Array(STEP_COUNT)].map((_, i) => (
+						{dots.map(i => (
 							<span key={i} className={i === step ? 'mx-wiz-dot mx-wiz-dot-on' : 'mx-wiz-dot'} />
 						))}
 					</span>
@@ -1572,45 +1596,46 @@ export default function CreateWizard({
 							// a question buried under the ability designer is one you scroll
 							// past. Cheap to decline beats hidden.
 							<Step question={t('Does it summon help?')}>
-								<label className="mx-wiz-card-tick">
-									<input
-										type="checkbox"
-										checked={summonsOn}
-										onChange={() => {
-											mark('summons');
-											setSummonsOn(v => !v);
-										}}
-									/>
-									{t('Summons other monsters')}
-								</label>
-								{summonsOn && (
-									<>
-										{/* The monsters are picked from the corpus, the same way an
-										    outfit is picked — not typed, and not chosen from "what
-										    other monsters already summon".
+								{/* No yes/no tick. Picking nothing *is* the no, and it is the
+								    answer the step opens on — a tick in front of the grid was one
+								    more click between the question and the only thing that
+								    answers it, and two ways to say the same no.
 
-										    That ranking was there to keep the wizard from proposing
-										    a name the server cannot find: `summon.unknown` is a
-										    *silent* lint, so a summon naming an unknown monster is
-										    dropped without a word. Picking from the corpus is a
-										    stronger guarantee than the ranking was, not a weaker
-										    one — every name on the list demonstrably exists — and
-										    it answers the question people actually arrive with,
-										    which is "it summons three of these", about a monster
-										    nothing else has ever summoned. */}
-										<MonsterPicker
-											monsters={monsters}
-											kind={kind}
-											band={band}
-											picked={summonPicks}
-											lead={null}
-											onToggle={toggleSummon}
-											onLead={null}
-										/>
+								    The monsters are picked from the corpus, the same way an
+								    outfit is picked — not typed, and not chosen from "what other
+								    monsters already summon".
+
+								    That ranking was there to keep the wizard from proposing a
+								    name the server cannot find: `summon.unknown` is a *silent*
+								    lint, so a summon naming an unknown monster is dropped without
+								    a word. Picking from the corpus is a stronger guarantee than
+								    the ranking was, not a weaker one — every name on the list
+								    demonstrably exists — and it answers the question people
+								    actually arrive with, which is "it summons three of these",
+								    about a monster nothing else has ever summoned. */}
+								<MonsterPicker
+									monsters={monsters}
+									kind={kind}
+									band={band}
+									picked={summonPicks}
+									lead={null}
+									onToggle={toggleSummon}
+									onLead={null}
+								/>
+								<div className="ss-modal-desc">
+									{summonPicks.length === 0
+										? t('Nothing picked — it summons nothing, and the next question is skipped.')
+										: t('Next: how many of each, how often, and with what effect.')}
+								</div>
+							</Step>
+						)}
+
+						{step === SUMMON_DETAIL_STEP && (
+							// Reached only when something was picked — see `skipped`. No picker
+							// here: the previous step chose the monsters and this one is about
+							// the numbers, which is the whole reason the two are separate.
+							<Step question={t('How many does it summon?')}>
 										<div className="mx-wiz-summons">
-											{summons.length === 0 && (
-												<div className="ss-modal-desc">{t('Pick the monsters it calls for above.')}</div>
-											)}
 											{summons.map((s, i) => {
 												const entry = s.item.entry;
 												const update = (p: Partial<typeof entry>) => {
@@ -1684,6 +1709,39 @@ export default function CreateWizard({
 																/>
 															</span>
 														)}
+														{/* The effect the summon arrives with, and the one played
+														    on the summoner as it calls. The popover grid rather
+														    than the browser: a trip out to the effects browser and
+														    back, per summon, is a lot of travel for a flourish —
+														    and unlike the spell designer's pickers these sit in a
+														    row that is already wide. */}
+														{engine.summonEffects && (
+															<>
+																<span className="mx-wiz-summon-num">
+																	<span className="mx-wiz-mini">{t('Effect')}</span>
+																	<EffectSelect
+																		kind="area"
+																		value={entry.effect}
+																		onChange={v => update({ effect: v })}
+																		engine={engine.key}
+																	/>
+																</span>
+																<span className="mx-wiz-summon-num">
+																	<span
+																		className="mx-wiz-mini"
+																		title={t('Played on the summoner as it calls, rather than on what it called.')}
+																	>
+																		{t('On caster')}
+																	</span>
+																	<EffectSelect
+																		kind="area"
+																		value={entry.masterEffect}
+																		onChange={v => update({ masterEffect: v })}
+																		engine={engine.key}
+																	/>
+																</span>
+															</>
+														)}
 														<span className="mx-wiz-item-from">
 															{s.item.from
 																? t('from {{name}}', { name: s.item.from })
@@ -1722,8 +1780,6 @@ export default function CreateWizard({
 												/>
 											</label>
 										</div>
-									</>
-								)}
 								{staleNotice('summons', t('the summons'))}
 							</Step>
 						)}

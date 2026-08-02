@@ -15,8 +15,9 @@ for each step, has been cut — it is in `git log` (`git log --oneline` between
 
 It already names its seams as constants — `KIND_STEP`, `SIMILAR_STEP`,
 `LOOK_STEP`, `NAME_STEP`, `STATS_STEP`, `ATTACK_STEP`, `ABILITY_STEP`,
-`SUMMON_STEP`, `RESIST_STEP`, `DEFEND_STEP`, `SAY_STEP`, `DROP_STEP`. Twelve
-steps, twelve obvious components.
+`SUMMON_STEP`, `SUMMON_DETAIL_STEP`, `RESIST_STEP`, `DEFEND_STEP`, `SAY_STEP`,
+`DROP_STEP`. Thirteen steps, thirteen obvious components — one of them
+conditional, which a split has to preserve (see `skipped`).
 
 **Blocked on §3, and not urgent.** Unlike the backend files this was never
 dangerous — it is long, not subtle. Split it when it is next being changed for

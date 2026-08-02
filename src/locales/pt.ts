@@ -455,6 +455,15 @@ const pt: Record<string, string> = {
 	'How does it attack?': 'Como ele ataca?',
 	'What attacks can it use?': 'Que ataques ele pode usar?',
 	'Does it summon help?': 'Ele invoca ajuda?',
+	'How many does it summon?': 'Quantos ele invoca?',
+	'Nothing picked — it summons nothing, and the next question is skipped.':
+		'Nada escolhido — ele não invoca nada, e a próxima pergunta é ignorada.',
+	'Next: how many of each, how often, and with what effect.':
+		'A seguir: quantos de cada, com que frequência e com qual efeito.',
+	'On caster': 'No invocador',
+	'Played on the summoner as it calls, rather than on what it called.':
+		'Reproduzido no invocador ao chamar, e não no que foi invocado.',
+	Effect: 'Efeito',
 	'Pick the monsters it calls for above.': 'Escolha acima os monstros que ele invoca.',
 	'Fights in melee': 'Luta corpo a corpo',
 	'Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.':

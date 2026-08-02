@@ -532,6 +532,15 @@ const pl: Record<string, string> = {
 	'How does it attack?': 'Jak atakuje?',
 	'What attacks can it use?': 'Jakich ataków może używać?',
 	'Does it summon help?': 'Czy przyzywa pomoc?',
+	'How many does it summon?': 'Ile ich przyzywa?',
+	'Nothing picked — it summons nothing, and the next question is skipped.':
+		'Nic nie wybrano — nikogo nie przyzywa, a następne pytanie zostanie pominięte.',
+	'Next: how many of each, how often, and with what effect.':
+		'Dalej: ile każdego, jak często i z jakim efektem.',
+	'On caster': 'Na przyzywającym',
+	'Played on the summoner as it calls, rather than on what it called.':
+		'Odtwarzany na przyzywającym w chwili wezwania, a nie na przyzwanym.',
+	Effect: 'Efekt',
 	'Pick the monsters it calls for above.': 'Wybierz powyżej potwory, które przyzywa.',
 	'Fights in melee': 'Walczy wręcz',
 	'Derived: ceil(skill × attack × 0.05 + attack × 0.5). The loader computes it, so there is no field for it.':
