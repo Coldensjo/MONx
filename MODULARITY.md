@@ -19,9 +19,10 @@ proved. Do not relax it without saying so in the commit.
 | `5e53a2c` | `probe_monster --crud` mirrored `.monx-backup` and counted it as its own work |
 | `867a4ee` | `engine.rs` (2,306) → `engine/`, 6 modules |
 | `5931476` | `monster/write.rs` (1,758) → `write/`, 7 modules |
-| this one | `lib.rs` (1,680) → `commands/`, 6 modules + `mod.rs` |
+| `3ddba8e` | `lib.rs` (1,680) → `commands/`, 6 modules + `mod.rs` |
+| this one | `WorkspaceContext` — `MonsterEditor` 19 props → 6, `SectionProps` 13 → 4 |
 
-Version is at `0.1.99`. No Rust file is now over 900 lines outside the frozen
+Version is at `0.1.100`. No Rust file is now over 900 lines outside the frozen
 `dat.rs` / `spr.rs`, and `lib.rs` is 98 lines: the module list, the
 `CustomEffectsState` type, and `run()`.
 
@@ -186,19 +187,26 @@ Two things the earlier plan got wrong, worth knowing before the next one:
   also what makes the macro `#[macro_export]`, and so re-exportable at all.
   A private `fn` in a submodule silently fails to produce one.
 
-### 4.2 `WorkspaceContext` — do this *before* any frontend split
+### 4.2 ~~`WorkspaceContext`~~ — done
 
-`MonsterEditor` takes **19 props, 13 optional**, nearly all threaded straight
-from `Workspace`. `items`, `previewUrl`, `thingAnim`, `prefs` and the `onBrowse*`
-callbacks are ambient workspace facts, not editor inputs.
+`src/workspacectx.tsx`. `MonsterEditor` went from 19 props to 6, and
+`SectionProps` from 13 fields to 4 — `doc`, `patch`, `lintAt`, `readOnly`, the
+only ones that are about the document rather than the folders that are open.
+Five of the twelve sections read a workspace fact; the other seven were being
+handed eight props they never used.
 
-A context removes most of that signature. The reason to do it first: splitting
-either big component without it just moves the prop-drilling around, and you
-will pay for it twice.
+The optional-with-default capability is kept, as a `FALLBACK` value on the
+context rather than 13 defaulted props: a subtree mounted with no provider
+degrades exactly as it did before instead of throwing. The defaults are the
+same ones the props carried, which is half of why the change is invisible.
 
-The optional-with-default pattern exists so `fixtures.ts` can render components
-in isolation. A context with a fixture provider serves that better than 13
-defaulted props — keep that capability, it is why the props are shaped that way.
+**`PreviewProvider` deliberately did not move.** It looks shell-wide and is
+not: it is mounted inside `MonsterEditor` and again around the create wizard,
+and `CustomEffectsDialog` sits outside both, which is why that dialog draws
+effect ids as numbers rather than sprites. Hoisting it into `WorkspaceProvider`
+would have fixed that as a side effect of a refactor that is supposed to change
+nothing. **That is a real bug and it is still open** — a dialog for declaring
+effects that cannot show them. Fix it on its own, where it can be seen.
 
 ### 4.3 `Workspace.tsx` — 3,036 lines, 2,836 of them in one component
 
@@ -228,16 +236,34 @@ Same disease. It already names its seams as constants — `KIND_STEP`,
 reconstruction-diff methods that made the Rust splits safe do not apply: React
 components have no byte-exact output to diff.
 
-Whatever is done here needs a different story before it starts, not after.
-Options, roughly in order of usefulness:
+§4.2 was done without one, and what it was verified by is worth writing down
+because it is the ceiling of what is available today:
 
-- The headless UI harness (see the memory note "Headless UI harness") — renders
-  and measures a layout without the Tauri window.
-- `bun run build` catches type-level breakage only, which for a hook extraction
-  is most of it but not the behaviour.
-- Manual exercise through `./monx.sh` against the real corpus, with a written
-  checklist per section, since the hotkey/menu/command surface is where a
-  mistake would hide.
+- `bun run build` — `tsc` under `noUnusedLocals`. For a prop-to-context move
+  this is most of it: every consumer still destructuring a removed prop is a
+  compile error, and so is every import left behind.
+- **A parity audit.** Each moved value was checked against the call site it
+  came from — same expression, same default, same provider placement. The two
+  things tsc cannot see are a fact wired to the wrong source and a consumer
+  mounted outside the provider, and both are answerable by reading if you
+  actually enumerate them rather than assume.
+- `bun run i18n` reporting the same 931 strings before and after, which is a
+  cheap check that no user-visible text was lost in the move.
+
+That was enough for §4.2 because it moves no logic. It is **not** enough for
+§4.3 or §4.4, which move state and effects — a `useEffect` with the wrong
+dependency list after a hook extraction compiles perfectly and misbehaves at
+runtime. Those still need one of:
+
+- A headless render harness. The earlier note pointed at a memory entry named
+  "Headless UI harness"; **that memory does not exist on this machine**, so
+  treat it as unwritten rather than as something to go and find. Building one
+  means a DOM implementation and a test runner, which is a dependency decision
+  and an explicit exception to "do not add tests" in AGENTS.md — ask first.
+- Manual exercise through `./monx.sh` (or `bun run tauri:dev`) against the real
+  corpus, with a written checklist per section. The hotkey/menu/command surface
+  is where a mistake would hide, and it is the part no type check reaches: the
+  command table is read by three consumers and a dropped entry compiles.
 
 Do not start §4.3 or §4.4 until one of those is actually in place.
 

@@ -12,6 +12,7 @@ import { TextField } from '../fields/TextField';
 import { ItemPicker, ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { reorder, useDragSource, useDropTarget } from '../dnd';
 import { Section, useMonsterState, type SectionId, type SectionProps } from './section';
+import { useWorkspace } from '../workspacectx';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -293,7 +294,8 @@ const LootRow = memo(function LootRow({
 	);
 });
 
-export function Loot({ doc, patch, lintAt, items, readOnly, collapsed, onToggle }: Props) {
+export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { items } = useWorkspace();
 	const { t } = useTranslation();
 	const [adding, setAdding] = useMonsterState(doc.file, () => false);
 	const [simulating, setSimulating] = useMonsterState(doc.file, () => false);

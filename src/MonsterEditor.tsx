@@ -1,11 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { tauriItemIndex, type ItemIndex, type Lint, type MonsterDoc, type SpellName } from './monster';
+import { type Lint, type MonsterDoc } from './monster';
 import { loadSetting, saveSetting } from './settings';
-import { PreviewProvider, ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { PreviewProvider } from './fields/preview';
 import { SECTION_ENGINE_FLAG, SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
-import { DEFAULT_PREFS, landingSection, visibleSectionIds, type Prefs } from './prefs';
+import { landingSection, visibleSectionIds } from './prefs';
 import {
 	applyBlock,
 	BLOCK_LABEL,
@@ -28,6 +28,7 @@ import { PacifistEvents } from './sections/PacifistEvents';
 import { BestiarySection } from './sections/BestiarySection';
 import { TargetStrategySection } from './sections/TargetStrategySection';
 import { engineInfo } from './engine';
+import { useWorkspace } from './workspacectx';
 
 const STATE_KEY = 'monx.editor';
 
@@ -49,62 +50,36 @@ function loadState(): EditorState {
 	}
 }
 
+/**
+ * What the editor is told about the monster in front of it. Everything that is
+ * a fact about the *workspace* — the item database, the spell catalogue, the
+ * scripts, the browsers, the preview URLs, the preferences — now comes from
+ * `useWorkspace()`, which is why this is six props and not nineteen.
+ */
 export interface MonsterEditorProps {
 	doc: MonsterDoc;
 	/** Whole-doc immutable updates — the editor never mutates what it is given. */
 	onChange: (doc: MonsterDoc) => void;
 	lints: Lint[];
-	spells: SpellName[];
 	readOnly: boolean;
-	/** Defaults to the Tauri-backed index; injectable for fixture-only rendering. */
-	items?: ItemIndex;
-	/** `.lua` files in monster/scripts, for the Identity dropdown. */
-	scripts?: string[];
-	/** Registered monster names, for summon validation. */
-	monsterNames?: string[];
-	nextRaceid?: number | null;
-	onBrowseOutfits?: () => void;
-	/** Opens the Items browser pre-filtered to corpses. */
-	onBrowseCorpses?: () => void;
-	/** Opens the Items browser unfiltered, for the typeex picker. */
-	onBrowseItems?: () => void;
-	/** Resolves client things to protocol URLs; without it previews degrade to ids. */
-	previewUrl?: PreviewUrl;
-	/** Frame counts for animated things; without it the spell stage guesses a loop. */
-	thingAnim?: ThingAnimLookup;
-	/** Tab visibility and the tab a monster opens on (Preferences). */
-	prefs?: Prefs;
 	/** A tab the shell wants shown — the preview panel's Loot → Edit button. */
 	jumpRequest?: SectionId | null;
 	/** Called once the request has been honoured, so the caller can clear it. A
 	 *  request left standing would re-fire on every remount and beat the default
 	 *  tab the next time a monster is opened. */
 	onJumped?: () => void;
-	/** Feedback for the block clipboard; silent without it. */
-	onToast?: (kind: 'ok' | 'error', message: string) => void;
 }
 
 export function MonsterEditor({
 	doc,
 	onChange,
 	lints,
-	spells,
 	readOnly,
-	items = tauriItemIndex,
-	scripts = [],
-	monsterNames = [],
-	nextRaceid = null,
-	onBrowseOutfits,
-	onBrowseCorpses,
-	onBrowseItems,
-	previewUrl,
-	thingAnim,
-	prefs = DEFAULT_PREFS,
 	jumpRequest = null,
-	onJumped,
-	onToast
+	onJumped
 }: MonsterEditorProps) {
 	const { t } = useTranslation();
+	const { prefs, onToast, previewUrl } = useWorkspace();
 	const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => new Set(loadState().collapsed));
 	const [active, setActive] = useState<SectionId>(() => landingSection(prefs) ?? 'identity');
 	const scrollRef = useRef<HTMLDivElement>(null);
@@ -264,25 +239,17 @@ export function MonsterEditor({
 		return { error, warning };
 	}, [lints]);
 
-	const common = {
-		doc,
-		patch,
-		lintAt,
-		items,
-		spells,
-		scripts,
-		monsterNames,
-		nextRaceid,
-		readOnly,
-		onBrowseOutfits,
-		onBrowseCorpses,
-		onBrowseItems
-	};
+	// Four things, all about the document in hand. The workspace facts the
+	// sections need reach them through `useWorkspace()` rather than being
+	// spread into twelve components that mostly did not ask for them.
+	const common = { doc, patch, lintAt, readOnly };
 
+	// The preview context stays mounted here rather than at the shell, which is
+	// where it was: `CustomEffectsDialog` sits outside it and draws effect ids
+	// as numbers, and hoisting this would change that.
 	return (
-		<PreviewProvider value={previewUrl ?? null}>
-			<ThingAnimProvider value={thingAnim ?? null}>
-			<BlockContext.Provider value={blocks}>
+		<PreviewProvider value={previewUrl}>
+		<BlockContext.Provider value={blocks}>
 			<div className="ss-ed">
 				<nav className="ss-ed-bar">
 					{visible.map(id => (
@@ -341,8 +308,7 @@ export function MonsterEditor({
 					</div>
 				</div>
 			</div>
-			</BlockContext.Provider>
-			</ThingAnimProvider>
+		</BlockContext.Provider>
 		</PreviewProvider>
 	);
 }

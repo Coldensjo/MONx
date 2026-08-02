@@ -11,6 +11,7 @@ import { DecayChain } from '../fields/DecayChain';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
 import { useDropTarget } from '../dnd';
 import { Banner, Section, SubGroup, useMonsterState, type SectionId, type SectionProps } from './section';
+import { useWorkspace } from '../workspacectx';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -25,18 +26,8 @@ const COLOUR_PARTS: { key: 'head' | 'body' | 'legs' | 'feet'; label: string }[] 
 	{ key: 'feet', label: 'Feet' }
 ];
 
-export function LookSection({
-	doc,
-	patch,
-	lintAt,
-	items,
-	readOnly,
-	collapsed,
-	onToggle,
-	onBrowseOutfits,
-	onBrowseCorpses,
-	onBrowseItems
-}: Props) {
+export function LookSection({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { items, onBrowseOutfits, onBrowseCorpses, onBrowseItems } = useWorkspace();
 	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
 	// Health stays locked unless the author deliberately wants a monster that

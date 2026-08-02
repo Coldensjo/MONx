@@ -10,6 +10,7 @@ import { Toggle } from '../fields/Toggle';
 import { SortableList } from '../fields/SortableList';
 import { useDropTarget } from '../dnd';
 import { Banner, Section, type SectionId, type SectionProps } from './section';
+import { useWorkspace } from '../workspacectx';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -20,7 +21,8 @@ function blankSummon(name: string): SummonEntry {
 	return { name, interval: 2000, chance: 30, delay: null, max: 1, force: false, effect: null, masterEffect: null };
 }
 
-export function Summons({ doc, patch, lintAt, monsterNames, readOnly, collapsed, onToggle }: Props) {
+export function Summons({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { monsterNames } = useWorkspace();
 	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
 	const summons = doc.summons;

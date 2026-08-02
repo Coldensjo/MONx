@@ -6,6 +6,7 @@ import { EnumSelect, type EnumOption } from '../fields/EnumSelect';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
 import { Section, type SectionId, type SectionProps } from './section';
+import { useWorkspace } from '../workspacectx';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -24,7 +25,8 @@ const SKULL_OPTIONS: EnumOption<string>[] = SKULLS.map(s => ({
 	preview: <span className="ss-ed-blood" style={{ background: s.color, borderColor: 'var(--border-strong)' }} />
 }));
 
-export function Identity({ doc, patch, lintAt, scripts, nextRaceid, readOnly, collapsed, onToggle }: Props) {
+export function Identity({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { scripts, nextRaceid } = useWorkspace();
 	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
 	const raceidLints = lintAt('raceid');

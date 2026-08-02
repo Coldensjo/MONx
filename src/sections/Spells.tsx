@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import type { SpellBlock } from '../monster';
 import { SortableList } from '../fields/SortableList';
 import { Section, type SectionId, type SectionProps } from './section';
+import { useWorkspace } from '../workspacectx';
 import { SpellCard } from './SpellCard';
 
 interface Props extends SectionProps {
@@ -37,7 +38,8 @@ export function blankSpell(which: 'attacks' | 'defenses'): SpellBlock {
 	};
 }
 
-export function Spells({ which, doc, patch, lintAt, spells, readOnly, collapsed, onToggle }: Props) {
+export function Spells({ which, doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
+	const { spells } = useWorkspace();
 	const { t } = useTranslation();
 	const blocks = which === 'attacks' ? doc.attacks : doc.defenses;
 	const setBlocks = (next: SpellBlock[]) => patch(which === 'attacks' ? { attacks: next } : { defenses: next });

@@ -110,7 +110,8 @@ import PreviewPanel from './PreviewPanel';
 import LintPanel, { LintStatus, type LintTab } from './LintPanel';
 import ThingBrowser from './ThingBrowser';
 import { MonsterEditor } from './MonsterEditor';
-import { PreviewProvider, ThingAnimProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { PreviewProvider, commonest, idleCycleMs, walkFrameMs, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
+import { WorkspaceProvider, type WorkspaceFacts } from './workspacectx';
 
 /** The speed the Outfits grid animates at, having no creature to read one from.
  *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
@@ -2082,11 +2083,37 @@ export default function Workspace({
 		[visibleMonsterLints, visibleWorkspaceLints]
 	);
 
+	// What the editor and its sections used to be handed as nineteen props.
+	// Memoised: this is the provider's value, so a new object on every render
+	// would re-render every consumer on every keystroke — the prop version was
+	// at least only rebuilding the editor's own subtree.
+	//
+	// `items` is not in the dependency list because `tauriItemIndex` is a module
+	// singleton, which is what the editor's own default resolved to before.
+	const workspaceFacts = useMemo<WorkspaceFacts>(
+		() => ({
+			items: tauriItemIndex,
+			spells,
+			scripts,
+			monsterNames,
+			nextRaceid,
+			prefs,
+			previewUrl,
+			thingAnim,
+			onBrowseOutfits: () => setView('outfits'),
+			onBrowseCorpses: browseCorpses,
+			onBrowseItems: browseItems,
+			onToast: showToast
+		}),
+		[spells, scripts, monsterNames, nextRaceid, prefs, previewUrl, thingAnim, browseCorpses, browseItems, showToast]
+	);
+
 	// The provider wraps the whole shell, not just the editor: the preview panel
 	// is a sibling of MonsterEditor, and without the lookup in scope it fell back
-	// to assuming three outfit frames.
+	// to assuming three outfit frames. It carries the thing-animation context
+	// with it, which was already mounted here for the same reason.
 	return (
-		<ThingAnimProvider value={thingAnim}>
+		<WorkspaceProvider value={workspaceFacts}>
 			<CustomEffectsProvider value={engineFx}>
 			<Menubar menus={menus} />
 
@@ -2262,20 +2289,9 @@ export default function Workspace({
 								doc={doc}
 								onChange={editDoc}
 								lints={visibleMonsterLints}
-								spells={spells}
 								readOnly={false}
-								scripts={scripts}
-								monsterNames={monsterNames}
-								nextRaceid={nextRaceid}
-								onBrowseOutfits={() => setView('outfits')}
-								onBrowseCorpses={browseCorpses}
-								onBrowseItems={browseItems}
-								previewUrl={previewUrl}
-								thingAnim={thingAnim}
-								prefs={prefs}
 								jumpRequest={jumpRequest}
 								onJumped={() => setJumpRequest(null)}
-								onToast={showToast}
 							/>
 						) : (
 							<div className="mx-empty">{t('Select a monster')}</div>
@@ -3031,6 +3047,6 @@ export default function Workspace({
 				onIgnoreCode={ignoreLintCode}
 			/>
 			</CustomEffectsProvider>
-		</ThingAnimProvider>
+		</WorkspaceProvider>
 	);
 }

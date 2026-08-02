@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { ChevronDown, ChevronRight, ClipboardPaste, ClipboardPlus, Copy, Info } from 'lucide-react';
-import type { ItemIndex, MonsterDoc, SpellName } from '../monster';
+import type { MonsterDoc } from '../monster';
 import { asTitle, NoteTip, useCompact, type LintAt } from '../fields/Field';
 import { BLOCK_LABEL, isBlockKind, useBlocks } from '../blocks';
 
@@ -53,23 +53,18 @@ export const SECTION_LABEL: Record<SectionId, string> = {
 
 /** Everything a section needs. `patch` takes a whole-doc partial so no section
     ever mutates the document it was handed (DESIGN §10). */
+/**
+ * What a section is given about the *document*. Everything else it needs — the
+ * item database, the spell catalogue, the scripts on disk, the sidebar's
+ * browsers — is a fact about the open workspace, and comes from
+ * `useWorkspace()` instead of being spread through here into all twelve
+ * sections whether they wanted it or not.
+ */
 export interface SectionProps {
 	doc: MonsterDoc;
 	patch: (p: Partial<MonsterDoc>) => void;
 	lintAt: LintAt;
-	items: ItemIndex;
-	spells: SpellName[];
-	/** `.lua` files present in monster/scripts — Identity's script dropdown. */
-	scripts: string[];
-	/** Registered monster names, for summon-name validation (§14). */
-	monsterNames: string[];
-	nextRaceid: number | null;
 	readOnly: boolean;
-	onBrowseOutfits?: () => void;
-	/** Opens the Items browser pre-filtered to corpses, for the Look section's corpse picker. */
-	onBrowseCorpses?: () => void;
-	/** Opens the Items browser unfiltered, for the Look section's typeex picker. */
-	onBrowseItems?: () => void;
 }
 
 /**
