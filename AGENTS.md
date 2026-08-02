@@ -12,6 +12,8 @@ Opens a workspace of up to four folders: the server's `monster/` folder, its `it
 
 MONx is a fork of **SPRx**, a sprite browser for the same client formats. The sprite/thing engine — `spr.rs`, `dat.rs`, the protocol image server, the virtualized browsers — is inherited whole. What's new is the monster-XML layer on top.
 
+**There is a refactor in progress.** [MODULARITY.md](MODULARITY.md) tracks it: what has been split so far, the two-part method used to prove each split changed no behaviour, and what is left. Read it before splitting a large file or before starting on `lib.rs`, `Workspace.tsx` or `CreateWizard.tsx`, and delete it when its list is empty.
+
 ## Stack
 
 | Layer | Tech |
