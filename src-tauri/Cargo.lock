@@ -1803,7 +1803,7 @@ dependencies = [
 
 [[package]]
 name = "monx"
-version = "0.1.87"
+version = "0.1.88"
 dependencies = [
  "byteorder",
  "image",

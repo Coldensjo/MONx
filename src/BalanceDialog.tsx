@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useState } from 'react';
-import { Scale } from 'lucide-react';
+import { ChevronDown, ChevronUp, Scale } from 'lucide-react';
 import {
 	balanceBands,
 	bandExcludes,
@@ -44,6 +44,22 @@ const FILTERS = [
 		title: 'Not attackable, or immune to every damage type this engine offers by immunity or by a 100% element — nothing can hurt it'
 	}
 ] as const satisfies readonly { key: keyof BandFilter; label: string; title: string }[];
+
+/** What the member list can be ordered by. Null is the default order — furthest
+ *  from the middle of the band first — which is the question the list was
+ *  opened to answer and therefore what it comes back to. */
+type SortKey = 'name' | (typeof STATS)[number]['key'];
+
+/** First click sorts the natural way for the column (names up, numbers down),
+ *  second reverses it, third gives the outliers back. Three states rather than
+ *  two because "sorted by armour" is a detour from what this list is for, and
+ *  the way back has to be the same button that led there. */
+function nextSort(prev: { key: SortKey; dir: 1 | -1 } | null, key: SortKey): { key: SortKey; dir: 1 | -1 } | null {
+	const natural: 1 | -1 = key === 'name' ? 1 : -1;
+	if (prev?.key !== key) return { key, dir: natural };
+	if (prev.dir === natural) return { key, dir: (natural === 1 ? -1 : 1) as 1 | -1 };
+	return null;
+}
 
 /** How far from the middle of its band a monster sits, over all four stats.
  *  The maximum rather than the mean: one stat far out is what makes a monster
@@ -91,14 +107,28 @@ export default function BalanceDialog({ monsters, onOpen, onClose }: Props) {
 	// 10,000 experience should not be shown four empty tiers.
 	const populated = useMemo(() => bands.filter(b => b.count > 0), [bands]);
 
+	/** Null is by deviation, which is what the list is for; a column is a detour
+	 *  the user asked for. Held across bands rather than per band, so opening the
+	 *  next one down keeps the ordering the last one was being read in. */
+	const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
+
 	const members = useMemo(() => {
 		const band = populated.find(b => b.label === openBand);
 		if (!band) return [];
-		return monsters
+		const rows = monsters
 			.filter(m => m.experience > 0 && m.experience >= band.min && m.experience <= band.max && !bandExcludes(filter, m))
-			.map(m => ({ monster: m, deviation: deviation(m, band), band }))
-			.sort((a, b) => b.deviation - a.deviation || a.monster.name.localeCompare(b.monster.name));
-	}, [populated, monsters, openBand, filter]);
+			.map(m => ({ monster: m, deviation: deviation(m, band), band }));
+		if (!sort) return rows.sort((a, b) => b.deviation - a.deviation || a.monster.name.localeCompare(b.monster.name));
+		// Name ties broken by name is a no-op; every other column needs it, or
+		// three monsters on the same armour come back in file order.
+		const stat = STATS.find(s => s.key === sort.key);
+		return rows.sort((a, b) => {
+			const d = stat
+				? stat.of(a.monster) - stat.of(b.monster)
+				: a.monster.name.localeCompare(b.monster.name);
+			return d * sort.dir || a.monster.name.localeCompare(b.monster.name);
+		});
+	}, [populated, monsters, openBand, filter, sort]);
 
 	const scored = populated.reduce((sum, b) => sum + b.count, 0);
 
@@ -140,11 +170,15 @@ export default function BalanceDialog({ monsters, onOpen, onClose }: Props) {
 				</div>
 
 				<div className="mx-bal-table" role="table">
+					{/* The header sorts the monsters inside a band, not the bands: the
+					    bands are a ladder and reordering them would make the whole table
+					    unreadable. `n` is a property of the band alone, so it is the one
+					    column with nothing to sort by. */}
 					<div className="mx-bal-head" role="row">
-						<span>{t('Band')}</span>
+						<SortHeader label={t('Band')} sortKey="name" sort={sort} onSort={setSort} />
 						<span>{t('n')}</span>
 						{STATS.map(s => (
-							<span key={s.key}>{t(s.label)}</span>
+							<SortHeader key={s.key} label={t(s.label)} sortKey={s.key} sort={sort} onSort={setSort} numeric />
 						))}
 					</div>
 					{populated.map(band => {
@@ -180,6 +214,10 @@ export default function BalanceDialog({ monsters, onOpen, onClose }: Props) {
 												onClick={() => onOpen(monster.file)}
 											>
 												<span className="mx-bal-member-name">{monster.name}</span>
+											{/* The `n` column is the band's own count and means nothing for one
+											    monster — but the cell has to exist, or all four stats sit one
+											    column to the left of the headers they answer to. */}
+											<span />
 												{STATS.map(s => {
 													const pct = percentileIn(b[s.key].values, s.of(monster));
 													const out = !thin && (pct <= 10 || pct >= 90);
@@ -214,5 +252,37 @@ export default function BalanceDialog({ monsters, onOpen, onClose }: Props) {
 				</div>
 			</div>
 		</div>
+	);
+}
+
+/** One sortable column head. The arrow is the whole state: no arrow means the
+ *  list is in its own order, furthest from the middle first. */
+function SortHeader({
+	label,
+	sortKey,
+	sort,
+	onSort,
+	numeric
+}: {
+	label: string;
+	sortKey: SortKey;
+	sort: { key: SortKey; dir: 1 | -1 } | null;
+	onSort: (next: { key: SortKey; dir: 1 | -1 } | null) => void;
+	numeric?: boolean;
+}) {
+	const { t } = useTranslation();
+	const on = sort?.key === sortKey;
+	return (
+		<button
+			type="button"
+			className={
+				(numeric ? 'mx-bal-sort mx-bal-sort-num' : 'mx-bal-sort') + (on ? ' mx-bal-sort-on' : '')
+			}
+			title={t('Sort the monsters in the open band by this — again to reverse it, a third time for the outliers')}
+			onClick={() => onSort(nextSort(sort, sortKey))}
+		>
+			{label}
+			{on && (sort.dir === 1 ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
+		</button>
 	);
 }

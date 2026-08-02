@@ -1566,6 +1566,8 @@ const pl: Record<string, string> = {
 	'{{count}} monster left out_one': 'pominięto {{count}} potwora',
 	'{{count}} monster left out_few': 'pominięto {{count}} potwory',
 	'{{count}} monster left out_many': 'pominięto {{count}} potworów',
+	'Sort the monsters in the open band by this — again to reverse it, a third time for the outliers':
+		'Sortuj potwory w otwartym przedziale według tej kolumny — ponownie, aby odwrócić, trzeci raz, aby wrócić do odstających',
 	Band: 'Przedział',
 	'Show the monsters in this band, furthest from the middle first': 'Pokaż potwory w tym przedziale, najdalsze od środka na początku',
 	'Too few to draw a median from': 'Za mało, by wyznaczyć medianę',

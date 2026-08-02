@@ -1483,6 +1483,8 @@ const pt: Record<string, string> = {
 		'Não pode ser atacado, ou é imune a todos os tipos de dano que este engine oferece, por imunidade ou por um elemento de 100% — nada consegue feri-lo',
 	'{{count}} monster left out_one': '{{count}} monstro de fora',
 	'{{count}} monster left out_other': '{{count}} monstros de fora',
+	'Sort the monsters in the open band by this — again to reverse it, a third time for the outliers':
+		'Ordenar os monstros da faixa aberta por esta coluna — de novo para inverter, uma terceira vez para voltar aos destoantes',
 	Band: 'Faixa',
 	'Show the monsters in this band, furthest from the middle first': 'Mostrar os monstros desta faixa, os mais distantes do meio primeiro',
 	'Too few to draw a median from': 'Poucos demais para tirar uma mediana',

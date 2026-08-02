@@ -500,6 +500,33 @@
 	font-variant-numeric: tabular-nums;
 }
 
+/* A column head is a button now. It has to keep the grid cell's alignment —
+   the numeric ones sit against the right edge, over the figures they order. */
+.mx-bal-sort {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.mx-bal-sort-num {
+	justify-content: flex-end;
+}
+
+.mx-bal-sort:hover {
+	color: var(--text);
+}
+
+.mx-bal-sort-on {
+	color: var(--accent);
+}
+
 .mx-bal-row {
 	padding: 6px 8px;
 	border: 0;
