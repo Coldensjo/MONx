@@ -103,7 +103,7 @@ export function LookSection({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 								title={t('Browse the Items grid, then right-click one to set it as the outfit')}
 							>
 								<PackageSearch size={14} />
-								Select item
+								{t('Select item')}
 							</button>
 							{look.typeex !== null && (
 								<button
@@ -217,7 +217,7 @@ export function LookSection({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 							title={t('Browse the Items grid filtered to corpses, then right-click one to set it')}
 						>
 							<PackageSearch size={14} />
-							Select corpse
+							{t('Select corpse')}
 						</button>
 						{look.corpse !== 0 && (
 							<button

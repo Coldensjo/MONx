@@ -792,7 +792,15 @@ fn parse_attributes(body: &str) -> BTreeMap<String, String> {
             let end = chunk.find('>')?;
             let head = &chunk[..end];
             let key = attr(head, "key")?;
-            let value = attr(head, "value").unwrap_or("").to_string();
+            // A range is written without `value`: <attribute key="duration"
+            // minvalue="1999" maxvalue="1999"/>, which the server rolls between.
+            // Read as the floor rather than as nothing — an empty string here
+            // reaches the decay chain as a duration that parses to NaN, and the
+            // one attribute written this way is the one the chain is made of.
+            let value = attr(head, "value")
+                .or_else(|| attr(head, "minvalue"))
+                .unwrap_or("")
+                .to_string();
             Some((key.to_string(), value))
         })
         .collect()

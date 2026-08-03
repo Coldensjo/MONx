@@ -8,8 +8,10 @@ import { ItemSprite } from './ItemPicker';
 /** One resolved stage of a corpse's decay chain. */
 interface Stage {
 	item: ItemInfo;
-	/** Seconds until this stage decays into the next; null when items.xml gives
-	    a decayTo without a duration. */
+	/** Seconds until this stage decays into the next. Null is "not known from
+	    items.xml" — either a decayTo with no duration, or a duration that does
+	    not parse. Which of those it is does not change what can be shown; where
+	    it sits in the chain does, so the last stage reads ∞ and the rest ?. */
 	seconds: number | null;
 }
 
@@ -46,7 +48,10 @@ async function walkChain(serverId: number): Promise<Chain> {
 		const rawTo = item.attributes.decayTo;
 		const decayTo = rawTo !== undefined ? parseInt(rawTo, 10) : null;
 		const rawDur = item.attributes.duration;
-		const duration = rawDur !== undefined ? parseInt(rawDur, 10) : null;
+		const parsed = rawDur !== undefined ? parseInt(rawDur, 10) : NaN;
+		// NaN never reaches a stage: it renders as "NaNs" and poisons the total
+		// into "?" — a duration nobody can read has to say so, not lie twice.
+		const duration = Number.isFinite(parsed) ? parsed : null;
 		stages.push({ item, seconds: decayTo !== null ? duration : null });
 		if (decayTo === null || Number.isNaN(decayTo)) break; // terminal — stays forever
 		if (decayTo === 0) {
@@ -102,7 +107,14 @@ export function DecayChain({ serverId }: { serverId: number | null }) {
 						>
 							<ItemSprite serverId={s.item.serverId} size={32} />
 							<span className="ss-ed-decay-time">
-								{s.seconds !== null ? formatSeconds(s.seconds) : '∞'}
+								{/* ∞ is a statement: the chain stops here. A stage in the
+									    middle with no readable duration is an unknown, and the
+									    two must not look alike. */}
+									{s.seconds !== null
+										? formatSeconds(s.seconds)
+										: i === chain.stages.length - 1 && !chain.vanishes
+											? '∞'
+											: '?'}
 							</span>
 						</span>
 					</span>

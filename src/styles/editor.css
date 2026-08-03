@@ -693,20 +693,21 @@
 	box-shadow: 0 0 0 1px var(--accent);
 }
 
-.ss-ed-colour-row {
-	display: flex;
-	gap: 14px;
-	flex-wrap: wrap;
-}
-
+/* Head, body, legs and feet are four fields, so they belong on the four columns
+   every other field in the section is on — packed tight against the left they
+   read as a toolbar, and the row below them lands nowhere near. Layout comes
+   from the card-grid rule this is grouped with. */
 .ss-ed-colour-cell {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+	min-width: 0;
 }
 
+/* Matches .ss-ed-field-label — the same word in the same section should not be
+   set two ways depending on which control it happens to sit above. */
 .ss-ed-colour-label {
-	font-size: 11px;
+	font-size: 12px;
 	color: var(--text-muted);
 }
 
@@ -888,7 +889,8 @@
    set of columns. 200px is the narrowest track a label and a note still read in,
    and it keeps three columns at the old 720px measure. */
 .ss-ed-card-grid,
-.ss-ed-loot-detail {
+.ss-ed-loot-detail,
+.ss-ed-colour-row {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 	gap: 14px;

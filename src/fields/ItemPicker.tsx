@@ -174,7 +174,7 @@ export function ItemPicker({
 			</button>
 			{value !== null && onClear && (
 				<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" disabled={disabled} onClick={onClear}>
-					Clear
+					{t('Clear')}
 				</button>
 			)}
 			{open && (
