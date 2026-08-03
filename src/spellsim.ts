@@ -162,8 +162,12 @@ const MIN_FLIGHT_MS = 280;
 /** Client magic effects step at roughly this rate; `impact` lasts frames × this. */
 export const EFFECT_FRAME_MS = 100;
 const MIN_IMPACT_MS = 320;
-/** With "real cooldown" off, long intervals collapse to this so the loop stays watchable. */
-export const COMPRESSED_COOLDOWN_MS = 1200;
+/** The wait between casts while the stage is ignoring `interval`. A flat figure
+ *  rather than a ceiling on the real one: the point of ignoring the cooldown is
+ *  a cast you can rely on arriving, and a 300 ms spell firing four times a
+ *  second is as hard to read as a 30 s one firing twice a minute. Two seconds
+ *  leaves the projectile, the impact and the damage floater room to finish. */
+export const IGNORED_COOLDOWN_MS = 2000;
 
 export function flightDuration(distance: number): number {
 	return Math.max(MIN_FLIGHT_MS, Math.round(distance * MS_PER_TILE));

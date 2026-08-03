@@ -6,7 +6,7 @@ import { MAGIC_EFFECT_BY_NAME, SHOOT_EFFECT_BY_NAME } from '../catalog';
 import { lookUrl, type Look, type SpellBlock } from '../monster';
 import { castsPerMinute, spellDamageRange } from '../derive';
 import {
-	COMPRESSED_COOLDOWN_MS,
+	IGNORED_COOLDOWN_MS,
 	EFFECT_FRAME_MS,
 	facingFor,
 	flightDuration,
@@ -82,7 +82,10 @@ export function SpellStage({ block, look, parent }: Props) {
 	const compact = useCompact();
 	const [playing, setPlaying] = useState(true);
 	const [speed, setSpeed] = useState<Speed>(1);
-	const [realCooldown, setRealCooldown] = useState(false);
+	// On by default: the stage is for reading a spell's shape and effects, and a
+	// spell on a 30 s interval shows you one cast a minute. The real interval is
+	// one click away and printed on the meter either way.
+	const [ignoreCooldown, setIgnoreCooldown] = useState(true);
 	// Where the victim stands, in tiles from the caster. Dragging it is the whole
 	// point of the stage: range, facing and beam rotation all follow from it.
 	const [target, setTarget] = useState<Tile>(() => ({ dx: defaultDistance(block), dy: 0 }));
@@ -146,7 +149,7 @@ export function SpellStage({ block, look, parent }: Props) {
 	// sub-frame position, and pausing has to freeze it exactly where it is.
 	const timings = useRef({ cooldown: 0, flight: 0, impact: 0 });
 	timings.current = {
-		cooldown: realCooldown ? Math.max(1, block.interval) : Math.min(Math.max(1, block.interval), COMPRESSED_COOLDOWN_MS),
+		cooldown: ignoreCooldown ? IGNORED_COOLDOWN_MS : Math.max(1, block.interval),
 		// Nothing travels when caster and victim are the same creature.
 		flight: shoot === null || selfCast ? 0 : flightDuration(distance),
 		impact: impactDuration(areaAnim?.frames ?? 1)
@@ -334,8 +337,8 @@ export function SpellStage({ block, look, parent }: Props) {
 					))}
 				</div>
 				<label className="mx-stage-toggle" title={`interval="${block.interval}"`}>
-					<input type="checkbox" checked={realCooldown} onChange={e => setRealCooldown(e.target.checked)} />
-					{t('Real cooldown')}
+					<input type="checkbox" checked={ignoreCooldown} onChange={e => setIgnoreCooldown(e.target.checked)} />
+					{t('Ignore cooldown')}
 				</label>
 			</div>
 
@@ -485,10 +488,16 @@ export function SpellStage({ block, look, parent }: Props) {
 					style={{ width: `${Math.round(progress * 100)}%` }}
 				/>
 				<span className="mx-stage-meter-label">
+					{/* The real interval stays on the label while it is being ignored:
+					    the stage is where a spell's cadence is judged, and hiding the
+					    number the server actually reads would be the wrong economy. */}
 					{phase === 'cooldown'
-						? realCooldown
-							? t('cooldown {{ms}} ms', { ms: block.interval })
-							: t('cooldown {{ms}} ms (compressed)', { ms: block.interval })
+						? ignoreCooldown
+							? t('every {{ms}} ms · interval is {{real}} ms', {
+									ms: IGNORED_COOLDOWN_MS,
+									real: block.interval
+								})
+							: t('cooldown {{ms}} ms', { ms: block.interval })
 						: phase === 'flight'
 						? t('projectile')
 						: t('impact')}
