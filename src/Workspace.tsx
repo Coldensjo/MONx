@@ -1055,12 +1055,19 @@ export default function Workspace({
 			showToast('ok', t('Saved {{file}}', { file: doc.file }));
 			setWorkspaceLints(await lintWorkspace());
 			refreshDropped();
+			// The summaries carry each monster's lint counts, and the list badges
+			// and the lint filters are built from them — so a save that fixes the
+			// last finding has to re-list, or the monster keeps the badge it no
+			// longer earns and stays in a "has lints" filter until something else
+			// reloads. Save-all and every batch write already did this; the single
+			// save was the one write that did not.
+			onMonstersChanged(null);
 		} catch (e) {
 			showToast('error', String(e));
 		} finally {
 			setSaving(false);
 		}
-	}, [doc, showToast, refreshDropped, t]);
+	}, [doc, onMonstersChanged, showToast, refreshDropped, t]);
 
 	/**
 	 * Every dirty buffer, one after another.
