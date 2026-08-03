@@ -914,6 +914,8 @@ const pt: Record<string, string> = {
 	'Mana to summon or convince this monster.': 'Mana para invocar ou convencer este monstro.',
 	'next free: {{id}}': 'próximo livre: {{id}}',
 	'Another monster already uses this raceid.': 'Outro monstro já usa este raceid.',
+	'Already used by "{{name}}" — the bestiary counts both as one.':
+		'Já usado por "{{name}}" — o bestiário conta os dois como um.',
 	'Use {{id}}': 'Usar {{id}}',
 	'Controls blood splash, corpse decay and undead checks.':
 		'Controla a poça de sangue, a decomposição do corpo e as checagens de morto-vivo.',

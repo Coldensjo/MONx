@@ -268,7 +268,7 @@ pub(crate) fn render_monster(state: State<WorkspaceState>, doc: MonsterDoc) -> R
 #[tauri::command]
 pub(crate) fn next_free_raceid(state: State<WorkspaceState>) -> Result<i64, String> {
     let ws = state.read().map_err(|e| format!("lock: {e}"))?;
-    Ok(lint::next_free_raceid(&ws.docs))
+    Ok(lint::next_free_raceid(&ws.docs, &ws.hidden_docs))
 }
 
 #[tauri::command]

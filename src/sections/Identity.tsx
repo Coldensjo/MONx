@@ -26,11 +26,17 @@ const SKULL_OPTIONS: EnumOption<string>[] = SKULLS.map(s => ({
 }));
 
 export function Identity({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
-	const { scripts, nextRaceid } = useWorkspace();
+	const { scripts, nextRaceid, raceidOwner } = useWorkspace();
 	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
 	const raceidLints = lintAt('raceid');
-	const duplicate = raceidLints.some(l => l.code === 'raceid.duplicate');
+	// The corpus answers this, not the lint: `raceid.duplicate` is a cross-file
+	// finding and is only recomputed at the next workspace lint, so on its own it
+	// would let a taken id be typed and look fine until a reload. The lint stays
+	// in the fallback because a section mounted without a provider has no corpus
+	// to ask.
+	const takenBy = doc.raceid !== null ? raceidOwner(doc.raceid, doc.file) : null;
+	const duplicate = takenBy !== null || raceidLints.some(l => l.code === 'raceid.duplicate');
 
 	const scriptOptions: EnumOption<string>[] = [
 		{ value: '', label: t('(none)') },
@@ -107,7 +113,13 @@ export function Identity({ doc, patch, lintAt, readOnly, collapsed, onToggle }: 
 					label={engine.raceidAttr === 'raceId' ? t('Race id (raceId)') : t('Race id')}
 					lints={raceidLints}
 					hint={nextRaceid !== null ? t('next free: {{id}}', { id: nextRaceid }) : undefined}
-					note={duplicate ? t('Another monster already uses this raceid.') : undefined}
+					note={
+						takenBy
+							? t('Already used by "{{name}}" — the bestiary counts both as one.', { name: takenBy })
+							: duplicate
+								? t('Another monster already uses this raceid.')
+								: undefined
+					}
 				>
 					<span className={duplicate ? 'ss-ed-invalid' : undefined}>
 						<NumberField

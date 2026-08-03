@@ -1192,15 +1192,20 @@ pub fn lint_workspace(
     }
     r.file = None;
 
-    // §24: raceid must be unique across the whole corpus.
+    // §24: raceid must be unique across the whole corpus. Grouped over the
+    // filtered monsters too, exactly as `registry.dangling` above is: the filter
+    // is an editor-side view, so a monster the sidebar is not showing is still
+    // loaded by the server and still owns its id in the bestiary. Reported only
+    // on the visible side — a finding on a file the app will not open is one the
+    // user cannot act on — but the *other* named in the message can be either.
     let mut by_raceid: BTreeMap<i64, Vec<&MonsterDoc>> = BTreeMap::new();
-    for doc in docs {
+    for doc in docs.iter().chain(filtered.iter()) {
         if let Some(id) = doc.raceid {
             by_raceid.entry(id).or_default().push(doc);
         }
     }
     for (id, group) in by_raceid.iter().filter(|(_, g)| g.len() > 1) {
-        for doc in group {
+        for doc in group.iter().filter(|d| docs.iter().any(|v| v.file == d.file)) {
             let others: Vec<&str> = group
                 .iter()
                 .filter(|d| d.file != doc.file)
@@ -1349,7 +1354,11 @@ pub fn summaries(
 }
 
 /// Lowest unused raceid across the corpus (§24 — they must be unique).
-pub fn next_free_raceid(docs: &[MonsterDoc]) -> i64 {
-    let used: std::collections::BTreeSet<i64> = docs.iter().filter_map(|d| d.raceid).collect();
+/// `filtered` are the monsters the corpus filter is hiding. They count: the
+/// filter is an editor-side view, the server still loads them, and an id handed
+/// out because the sidebar cannot see its owner is a duplicate in the bestiary.
+pub fn next_free_raceid(docs: &[MonsterDoc], filtered: &[MonsterDoc]) -> i64 {
+    let used: std::collections::BTreeSet<i64> =
+        docs.iter().chain(filtered.iter()).filter_map(|d| d.raceid).collect();
     (1..).find(|id| !used.contains(id)).unwrap_or(1)
 }

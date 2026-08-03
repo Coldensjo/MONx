@@ -33,6 +33,11 @@ export interface WorkspaceFacts {
 	/** Registered monster names, for summon validation (§14). */
 	monsterNames: string[];
 	nextRaceid: number | null;
+	/** The name of the *other* monster holding `id`, or null if it is free. Live
+	 *  against the whole corpus — filtered monsters and unsaved buffers included
+	 *  — so the editor can say an id is taken while it is being typed, rather
+	 *  than at the next workspace lint. */
+	raceidOwner: (id: number, file: string) => string | null;
 	/** Tab visibility and the tab a monster opens on (Preferences). */
 	prefs: Prefs;
 	/** Resolves client things to protocol URLs; without it previews degrade to ids. */
@@ -54,6 +59,7 @@ const FALLBACK: WorkspaceFacts = {
 	scripts: [],
 	monsterNames: [],
 	nextRaceid: null,
+	raceidOwner: () => null,
 	prefs: DEFAULT_PREFS,
 	previewUrl: null,
 	thingAnim: null

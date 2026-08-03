@@ -483,26 +483,51 @@ export default function Workspace({
 		listMonsterScripts().then(setScripts).catch(() => setScripts([]));
 	}, []);
 
-	// The lowest unused raceid, shown beside the field and behind its "Use n"
-	// button. Derived here rather than asked of the backend (`next_free_raceid`)
-	// because the backend only knows what is on disk: taking the suggestion in
-	// one monster has to move it for the next one, before either is saved. A
-	// dirty buffer therefore overrides its summary, and the open document
-	// overrides its own buffer, which lags a keystroke behind.
-	const nextRaceid = useMemo(() => {
-		const used = new Set<number>();
-		const add = (id: number | null | undefined) => {
-			if (id !== null && id !== undefined) used.add(id);
+	// Who holds which raceid, across the whole corpus. Derived here rather than
+	// asked of the backend (`next_free_raceid`) because the backend only knows
+	// what is on disk: taking the suggestion in one monster has to move it for
+	// the next one, before either is saved. A dirty buffer therefore overrides
+	// its summary, and the open document overrides its own buffer, which lags a
+	// keystroke behind.
+	//
+	// `hiddenMonsters` is in here because the filter is an editor-side view and
+	// nothing more — a filtered monster is still in monsters.xml, the server
+	// still loads it, and the bestiary still counts its kills against that id.
+	// Handing its id out because the sidebar cannot see it is how two monsters
+	// end up sharing one entry.
+	// Keyed by file, not by name: this corpus has fourteen name.duplicate
+	// findings, so "is that me?" cannot be answered by comparing names.
+	const raceidOwners = useMemo(() => {
+		const owners = new Map<number, MonsterSummary>();
+		const add = (id: number | null | undefined, m: MonsterSummary) => {
+			if (id !== null && id !== undefined && !owners.has(id)) owners.set(id, m);
 		};
 		for (const m of monsters) {
-			if (doc && doc.file === m.file) add(doc.raceid);
-			else if (dirtyFiles.has(m.file)) add(buffersRef.current.get(m.file)?.doc.raceid ?? m.raceid);
-			else add(m.raceid);
+			if (doc && doc.file === m.file) add(doc.raceid, m);
+			else if (dirtyFiles.has(m.file)) add(buffersRef.current.get(m.file)?.doc.raceid ?? m.raceid, m);
+			else add(m.raceid, m);
 		}
+		for (const m of hiddenMonsters) add(m.raceid, m);
+		return owners;
+	}, [monsters, hiddenMonsters, dirtyFiles, doc]);
+
+	// The lowest unused id, shown beside the field and behind its "Use n" button.
+	const nextRaceid = useMemo(() => {
 		let id = 1;
-		while (used.has(id)) id++;
+		while (raceidOwners.has(id)) id++;
 		return id;
-	}, [monsters, dirtyFiles, doc]);
+	}, [raceidOwners]);
+
+	// Who else holds the id the open monster is on — live, so typing a taken one
+	// says so on the keystroke rather than at the next workspace lint. Its own
+	// raceid is not a duplicate of itself, hence the file check.
+	const raceidOwner = useCallback(
+		(id: number, file: string) => {
+			const owner = raceidOwners.get(id);
+			return owner && owner.file !== file ? owner.name : null;
+		},
+		[raceidOwners]
+	);
 
 	// The list draws its sprites from `/monsters.png`, which renders the backend's
 	// corpus — so a look only reaches it on save. Every file with unsaved edits
@@ -711,13 +736,24 @@ export default function Workspace({
 		pushCustomEffects(customFx);
 	}, [customFx]);
 
-	// Fetched when the dialog that shows them opens, rather than held from the
-	// open: the corpus moves under saves and renames, and a list kept warm for a
-	// dialog nobody has opened is one more thing to keep in step.
+	// Re-fetched when the dialog that shows them opens, because the corpus moves
+	// under saves and renames.
 	useEffect(() => {
 		if (!prefsOpen) return;
 		listHidden().then(setHiddenMonsters).catch(() => undefined);
 	}, [prefsOpen]);
+
+	// And once at the open, which the dialog alone used to cover. A filtered
+	// monster still occupies its raceid, so the id suggestion needs this list
+	// whether or not anybody has opened the filter — see `raceidOwners`. Skipped
+	// when nothing is filtered, which is the usual case.
+	useEffect(() => {
+		if (hidden.length === 0) {
+			setHiddenMonsters([]);
+			return;
+		}
+		listHidden().then(setHiddenMonsters).catch(() => undefined);
+	}, [hidden]);
 
 	/** Filters a set of monsters out of the corpus, or puts them back. Saved per
 	 *  corpus, pushed to the backend, and then everything is re-read: the sidebar,
@@ -2026,6 +2062,7 @@ export default function Workspace({
 			scripts,
 			monsterNames,
 			nextRaceid,
+			raceidOwner,
 			prefs,
 			previewUrl,
 			thingAnim,
@@ -2034,7 +2071,19 @@ export default function Workspace({
 			onBrowseItems: browseItems,
 			onToast: showToast
 		}),
-		[spells, scripts, monsterNames, nextRaceid, prefs, previewUrl, thingAnim, browseCorpses, browseItems, showToast]
+		[
+			spells,
+			scripts,
+			monsterNames,
+			nextRaceid,
+			raceidOwner,
+			prefs,
+			previewUrl,
+			thingAnim,
+			browseCorpses,
+			browseItems,
+			showToast
+		]
 	);
 
 	// The provider wraps the whole shell, not just the editor: the preview panel
