@@ -64,8 +64,11 @@
 	padding: 20px 16px 64px;
 }
 
-/* Long labels stay readable only in a narrow column — full-bleed forms at
-   1200px are the thing --editor-w exists to prevent. */
+/* The column tracks the pane and stops at --editor-w, so a wider window is a
+   wider form. What kept the old 720px cap honest — that a full-bleed form is
+   unreadable — is now the job of the field itself: a field caps at 320px and
+   wraps, so widening fits *more fields per row* rather than stretching each one
+   across the screen. Same behaviour as the thing browser's cells. */
 .ss-ed-column {
 	max-width: var(--editor-w);
 	margin: 0 auto;
@@ -350,10 +353,13 @@
 
 /* ---------- banners ---------- */
 
+/* A banner is a sentence, and a sentence does not want the whole of a wide
+   column — the fields reflow into more columns, prose just gets harder to read. */
 .ss-ed-banner {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	max-width: 96ch;
 	padding: 8px 10px;
 	border-radius: var(--radius);
 	font-size: 12px;
@@ -885,7 +891,8 @@
    of shoving its neighbours onto the next line. No `min-width: 0` — a field
    holding a fixed-width control keeps that as its min-content, so it wraps to
    the next line rather than overflowing the card. */
-.ss-ed-card-grid > .ss-ed-field {
+.ss-ed-card-grid > .ss-ed-field,
+.ss-ed-loot-detail > .ss-ed-field {
 	flex: 1 1 180px;
 	max-width: 320px;
 }

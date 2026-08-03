@@ -8,7 +8,11 @@
 	--warn-dim: rgba(217, 164, 65, 0.12);
 	--silent: #8b7ec8;
 	--silent-dim: rgba(139, 126, 200, 0.12);
-	--editor-w: 720px;
+	/* The editor column's cap, not its width — below this it tracks the pane, so
+	   widening the window widens the form. 1440px is where a form stops reading
+	   as one and starts reading as two; with the list and preview taking ~510px
+	   of shell, reaching it needs a window near 2000px wide. */
+	--editor-w: 1440px;
 }
 
 /* ---------- Titlebar ---------- */
