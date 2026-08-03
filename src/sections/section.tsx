@@ -35,6 +35,65 @@ export const SECTION_ENGINE_FLAG: Partial<Record<SectionId, 'bestiary' | 'target
 	strategy: 'targetStrategy'
 };
 
+/**
+ * Which section renders the field a `Lint.path` names, so clicking a finding can
+ * land on it.
+ *
+ * A table rather than something derived: the paths are the *document's* shape
+ * and the sections are the *editor's*, and the two deliberately disagree in
+ * places. `defenseStats` is armour and defence, which Combat owns while
+ * `defenses` is the spell list; `voices.leash` and `voices.pacifist` are on the
+ * document's voices node but are edited under Pacifist & Events; health moved
+ * from Look to Identity without the path following it. Every one of those is a
+ * decision someone made, not a rule a parser could recover.
+ *
+ * Order matters — the longer prefix is tested first, or `defenseStats` lands in
+ * the spell list and `voices.leash` in Voices.
+ */
+const PATH_SECTION: [prefix: string, section: SectionId][] = [
+	['attacksStats', 'combat'],
+	['defenseStats', 'combat'],
+	['targetchange', 'combat'],
+	['flags', 'combat'],
+	['targetStrategy', 'strategy'],
+	['voices.leash', 'events'],
+	['voices.pacifist', 'events'],
+	['pacifist', 'events'],
+	['events', 'events'],
+	['attacks', 'attacks'],
+	['defenses', 'defenses'],
+	['immunities', 'resistances'],
+	['elements', 'resistances'],
+	['bestiary', 'bestiary'],
+	['summons', 'summons'],
+	['voices', 'voices'],
+	['loot', 'loot'],
+	['look', 'look'],
+	// Identity's own fields are bare names, so they are listed rather than
+	// matched by prefix — `name` would otherwise swallow `nameDescription`'s
+	// section as readily as its own, which happens to be right, and `race`
+	// would swallow `raceid`, which also happens to be right. Listing them
+	// keeps that an accident that cannot start mattering.
+	['health', 'identity'],
+	['name', 'identity'],
+	['nameDescription', 'identity'],
+	['race', 'identity'],
+	['raceid', 'identity'],
+	['species', 'identity'],
+	['experience', 'identity'],
+	['speed', 'identity'],
+	['manacost', 'identity'],
+	['skull', 'identity'],
+	['script', 'identity']
+];
+
+/** The section holding `path`, or null when nothing renders it. */
+export function sectionForPath(path: string | null | undefined): SectionId | null {
+	if (!path) return null;
+	const hit = PATH_SECTION.find(([prefix]) => path === prefix || path.startsWith(`${prefix}.`) || path.startsWith(`${prefix}[`));
+	return hit ? hit[1] : null;
+}
+
 /** Values are i18n keys — translated at the render site with t(). */
 export const SECTION_LABEL: Record<SectionId, string> = {
 	identity: 'Identity',

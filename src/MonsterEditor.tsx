@@ -63,6 +63,14 @@ export interface MonsterEditorProps {
 	readOnly: boolean;
 	/** A tab the shell wants shown — the preview panel's Loot → Edit button. */
 	jumpRequest?: SectionId | null;
+	/** A `Lint.path` to land on inside that tab, from the lint drawer. The
+	 *  section alone is often a screenful; the finding is one row of it. */
+	jumpPath?: string | null;
+	/** The file that request is about. A workspace finding on another monster
+	 *  selects it first, and the selection outruns the read — without this the
+	 *  request would be honoured against the document still on screen and
+	 *  cleared before the right one arrived. */
+	jumpFile?: string | null;
 	/** Called once the request has been honoured, so the caller can clear it. A
 	 *  request left standing would re-fire on every remount and beat the default
 	 *  tab the next time a monster is opened. */
@@ -75,6 +83,8 @@ export function MonsterEditor({
 	lints,
 	readOnly,
 	jumpRequest = null,
+	jumpPath = null,
+	jumpFile = null,
 	onJumped
 }: MonsterEditorProps) {
 	const { t } = useTranslation();
@@ -205,6 +215,46 @@ export function MonsterEditor({
 		box.scrollTo({ top: Math.max(0, top), behavior });
 	}, []);
 
+	/**
+	 * Scrolls the field a lint names into view and flashes it.
+	 *
+	 * Runs after the section jump rather than instead of it: the section has to
+	 * be uncollapsed and mounted before its fields can be found, and a collapsed
+	 * one has no row to scroll to at all. The flash is removed on a timer rather
+	 * than on animation end — a class that outlives its animation cannot be
+	 * re-added to flash the same field twice, which is exactly what clicking the
+	 * same lint again asks for.
+	 *
+	 * Centred rather than scrolled to the top edge: a finding usually needs the
+	 * fields around it to make sense, and a row pinned to the top of the pane
+	 * looks like the section starts there.
+	 */
+	const landOn = useCallback((path: string, attempt = 0) => {
+		const box = scrollRef.current;
+		if (!box) return;
+		const el = box.querySelector<HTMLElement>(`[data-lint-path="${CSS.escape(path)}"]`);
+		if (!el) {
+			// The section jump above uncollapses by setting state, so on the frame
+			// this first runs the fields of a folded section are not mounted yet.
+			// Wait for that render rather than racing it. Bounded, because a path
+			// no field claims — a whole-file finding, or a section the engine does
+			// not have — must not retry forever; the tab jump already happened and
+			// is the honest answer there.
+			if (attempt < 4) requestAnimationFrame(() => landOn(path, attempt + 1));
+			return;
+		}
+		const boxBox = box.getBoundingClientRect();
+		const elBox = el.getBoundingClientRect();
+		const top = box.scrollTop + elBox.top - boxBox.top - (boxBox.height - elBox.height) / 2;
+		box.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+		el.classList.remove('ss-ed-field-found');
+		// Reading offsetWidth restarts the animation: without it the class goes
+		// straight back on in the same frame and nothing replays.
+		void el.offsetWidth;
+		el.classList.add('ss-ed-field-found');
+		window.setTimeout(() => el.classList.remove('ss-ed-field-found'), 1600);
+	}, []);
+
 	// Opening a monster lands on the default tab, instantly: this is where the
 	// work starts, so animating there would only be a delay. Keyed on the file,
 	// so switching tabs or reloading a monster re-lands but editing does not.
@@ -224,9 +274,12 @@ export function MonsterEditor({
 	// column remounts the editor — the request is the one that sticks.
 	useLayoutEffect(() => {
 		if (!jumpRequest) return;
+		// Left standing, not dropped: the document it is for is still loading.
+		if (jumpFile && jumpFile !== doc.file) return;
 		if (visible.includes(jumpRequest)) jump(jumpRequest, 'auto');
+		if (jumpPath) landOn(jumpPath);
 		onJumped?.();
-	}, [jumpRequest, visible, jump, onJumped]);
+	}, [jumpRequest, jumpPath, jumpFile, doc.file, visible, jump, landOn, onJumped]);
 
 	const lintCounts = useMemo(() => {
 		let error = 0;

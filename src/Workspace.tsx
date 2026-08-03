@@ -41,7 +41,7 @@ import {
 import { engineInfo } from './engine';
 import Menubar, { type Menu, type MenuItem } from './Menubar';
 import { newLootEntry } from './sections/Loot';
-import { SECTION_IDS, SECTION_LABEL, type SectionId } from './sections/section';
+import { SECTION_IDS, SECTION_LABEL, sectionForPath, type SectionId } from './sections/section';
 import HotkeysDialog from './HotkeysDialog';
 import {
 	loadBindings,
@@ -225,6 +225,11 @@ export default function Workspace({
 	/** A tab the editor should show, set from outside it (Loot → Edit). Cleared as
 	 *  soon as the editor honours it. */
 	const [jumpRequest, setJumpRequest] = useState<SectionId | null>(null);
+	// The field inside that section, when the jump came from a lint. Separate
+	// state rather than a pair, so the three callers that only want a tab stay
+	// as they are.
+	const [jumpPath, setJumpPath] = useState<string | null>(null);
+	const [jumpFile, setJumpFile] = useState<string | null>(null);
 	/** Which severities the drawer shows, and which lint codes are ignored. */
 	const [lintPrefs, setLintPrefs] = useState<LintPrefs>(loadLintPrefs);
 	/** Command id → chords. Defaults merged with the user's overrides. */
@@ -2276,7 +2281,13 @@ export default function Workspace({
 								lints={visibleMonsterLints}
 								readOnly={false}
 								jumpRequest={jumpRequest}
-								onJumped={() => setJumpRequest(null)}
+								jumpPath={jumpPath}
+								jumpFile={jumpFile}
+								onJumped={() => {
+									setJumpRequest(null);
+									setJumpPath(null);
+									setJumpFile(null);
+								}}
 							/>
 						) : (
 							<div className="mx-empty">{t('Select a monster')}</div>
@@ -3018,9 +3029,24 @@ export default function Workspace({
 				onFixAll={() => setFixScope('monster')}
 				onFixAllWorkspace={() => setFixScope('workspace')}
 				file={doc?.file ?? null}
+				// A finding is a place in a document, so clicking one goes there:
+				// the file, then the tab that renders the path, then the row
+				// itself. Landing on the tab alone was most of the way and felt
+				// like none of it — a spell error on defenses[0] left you looking
+				// at the attack you were already reading.
+				//
+				// Cross-file findings switch monsters first. The section jump is
+				// state rather than a call because the editor for that file may
+				// not be mounted yet, and the request survives the remount.
 				onJump={lint => {
 					if (lint.file && lint.file !== selected) setSelected(lint.file);
 					setView('monsters');
+					const section = sectionForPath(lint.path);
+					if (section) {
+						setJumpRequest(section);
+						setJumpPath(lint.path ?? null);
+						setJumpFile(lint.file ?? doc?.file ?? null);
+					}
 				}}
 				severities={lintPrefs.severities}
 				onToggleSeverity={toggleLintSeverity}

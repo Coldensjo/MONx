@@ -47,6 +47,11 @@ interface Props {
 	spells: SpellName[];
 	/** Already scoped to this block, so the card asks for `min`, not `attacks[2].min`. */
 	lintAt: (suffix: string) => Lint[];
+	/** The unscoped path — `attacks[2]`. Only for the lint drawer to land on:
+	 *  a block the loader drops whole has a finding on the block, not on a field
+	 *  of it, and without this there is nothing in the DOM carrying that path.
+	 *  Absent in the create wizard, where there is no drawer to jump from. */
+	path?: string;
 	readOnly: boolean;
 	/** `<defenses>` cards default healing/haste; `<attacks>` default damage. */
 	parent: 'attacks' | 'defenses';
@@ -77,6 +82,7 @@ export function SpellCard({
 	onChange,
 	spells,
 	lintAt,
+	path,
 	readOnly,
 	parent,
 	look,
@@ -205,7 +211,9 @@ export function SpellCard({
 	const healing = block.name === 'healing';
 
 	return (
-		<div className="ss-ed-card">
+		// Block-level findings — a spell the loader drops whole — carry the card's
+		// path and no field's, so the card is what the lint drawer lands on.
+		<div className="ss-ed-card" data-lint-path={path}>
 			<div className="ss-ed-card-head">
 				{scripted ? (
 					<Field label={t('Script')}>

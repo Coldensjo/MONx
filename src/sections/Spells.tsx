@@ -67,6 +67,7 @@ export function Spells({ which, doc, patch, lintAt, readOnly, collapsed, onToggl
 						spells={spells}
 						engine={doc.engine}
 						lintAt={suffix => lintAt(`${which}[${i}].${suffix}`)}
+						path={`${which}[${i}]`}
 						readOnly={readOnly}
 						parent={which}
 						look={doc.look}

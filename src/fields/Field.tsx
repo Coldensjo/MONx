@@ -92,8 +92,15 @@ interface FieldProps {
 export function Field({ label, hint, lints, note, ignored, children }: FieldProps) {
 	const compact = useCompact();
 	const tip = compact ? asTitle(note) : null;
+	// What the lint drawer scrolls to. Taken from the lints the field was handed
+	// rather than from a prop every call site would have to pass and keep in step:
+	// a field is only ever a jump target when it has a finding on it, and when it
+	// does, the path it was looked up by is right there on the finding.
 	return (
-		<div className={ignored ? 'ss-ed-field ss-ed-field-ignored' : 'ss-ed-field'}>
+		<div
+			className={ignored ? 'ss-ed-field ss-ed-field-ignored' : 'ss-ed-field'}
+			data-lint-path={lints?.[0]?.path ?? undefined}
+		>
 			<label className="ss-ed-field-label">
 				{label}
 				{tip && <NoteTip note={tip} />}

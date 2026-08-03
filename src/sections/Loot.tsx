@@ -142,6 +142,7 @@ const LootRow = memo(function LootRow({
 		<>
 			<div
 				className="ss-ed-loot-row"
+				data-lint-path={path}
 				style={depth ? { paddingLeft: 16 + depth * 20 } : undefined}
 				{...drag}
 				{...drop}
