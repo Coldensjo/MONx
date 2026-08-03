@@ -455,6 +455,14 @@
 	overflow: hidden;
 }
 
+/* Anchored to the trigger's right edge instead of its left, for a popover wider
+   than the room left of the scroll container's edge. Set from JS, which is the
+   only place the two widths are both known. */
+.ss-ed-popover-right {
+	left: auto;
+	right: 0;
+}
+
 .ss-ed-popover-search {
 	display: flex;
 	align-items: center;
@@ -659,9 +667,11 @@
 
 /* ---------- colour palette ---------- */
 
+/* The colour is the control here — the index beside it is a read-out. Big
+   enough to judge a shade against the outfit preview, and to hit. */
 .ss-ed-color-chip {
-	width: 18px;
-	height: 18px;
+	width: 24px;
+	height: 24px;
 	border-radius: 3px;
 	border: 1px solid var(--border-strong);
 	flex-shrink: 0;
