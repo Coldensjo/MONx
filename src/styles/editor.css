@@ -213,7 +213,7 @@
 .ss-ed-input {
 	min-height: 30px;
 	padding: 4px 8px;
-	background: var(--bg);
+	background: var(--input-bg);
 	color: var(--text);
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
@@ -814,7 +814,7 @@
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	padding: 8px;
-	background: var(--bg);
+	background: var(--input-bg);
 }
 
 .ss-ed-row-body {
@@ -1259,7 +1259,7 @@
 	padding: 10px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
-	background: var(--bg);
+	background: var(--input-bg);
 }
 
 .mx-stage-bar {

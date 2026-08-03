@@ -226,6 +226,7 @@ const pt: Record<string, string> = {
 		'Editando sob as regras do {{engine}} — a detecção não foi confiável',
 	'Switch to light mode': 'Mudar para o modo claro',
 	'Switch to dark mode': 'Mudar para o modo escuro',
+	'Switch to lined mode': 'Mudar para o modo linhas',
 	'Toggle theme': 'Alternar tema',
 	Minimize: 'Minimizar',
 	Maximize: 'Maximizar',

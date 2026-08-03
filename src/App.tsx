@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { confirm } from '@tauri-apps/plugin-dialog';
-import { AlertCircle, CheckCircle2, Minus, Moon, Square, Sun, X } from 'lucide-react';
+import { AlertCircle, AlignJustify, CheckCircle2, Minus, Moon, Square, Sun, X } from 'lucide-react';
 import {
 	bumpCorpusKey,
 	closeWorkspace,
@@ -28,6 +28,11 @@ export interface Toast {
 	msg: string;
 }
 
+/** The palettes in theme.css, in the order the titlebar button cycles them.
+ *  'dark' is index.css's own :root, so it is the one with no attribute. */
+const THEMES = ['lined', 'light', 'dark'] as const;
+type Theme = (typeof THEMES)[number];
+
 /** "…/Ironcore/data/monster" → "Ironcore". Falls back to the folder itself. */
 export function workspaceLabel(monstersPath: string): string {
 	const parts = monstersPath.split(/[\\/]/).filter(Boolean);
@@ -44,13 +49,16 @@ export default function App() {
 	const [opening, setOpening] = useState(false);
 	const [droppedPath, setDroppedPath] = useState<string | null>(null);
 	const [recent, setRecent] = useState<RecentWorkspace[]>(loadWorkspaces);
-	const [theme, setTheme] = useState<'dark' | 'light'>(() =>
-		loadSetting('monx.theme', 'dark') === 'light' ? 'light' : 'dark'
-	);
+	const [theme, setTheme] = useState<Theme>(() => {
+		const saved = loadSetting('monx.theme', 'lined');
+		return THEMES.includes(saved as Theme) ? (saved as Theme) : 'lined';
+	});
 
-	// The stylesheet keys the light palette off <html data-theme="light">.
+	// theme.css keys each palette off <html data-theme="…">; the inherited dark
+	// one is index.css's :root, so it is the value the attribute never takes.
 	useEffect(() => {
-		document.documentElement.dataset.theme = theme;
+		if (theme === 'dark') delete document.documentElement.dataset.theme;
+		else document.documentElement.dataset.theme = theme;
 		saveSetting('monx.theme', theme);
 	}, [theme]);
 	const [toast, setToast] = useState<Toast | null>(null);
@@ -258,13 +266,27 @@ export default function App() {
 				    titlebar is the one strip on screen in every state, so the language
 				    is reachable from the landing screen and mid-edit alike. */}
 				<LanguagePicker />
+				{/* Three palettes, so the button advances rather than flips. The icon
+				    and the tooltip both name what comes next, not what is on. */}
 				<button
 					className="ss-caption-button"
-					onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
-					title={theme === 'dark' ? t('Switch to light mode') : t('Switch to dark mode')}
+					onClick={() => setTheme(cur => THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length])}
+					title={
+						theme === 'lined'
+							? t('Switch to light mode')
+							: theme === 'light'
+								? t('Switch to dark mode')
+								: t('Switch to lined mode')
+					}
 					aria-label={t('Toggle theme')}
 				>
-					{theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+					{theme === 'lined' ? (
+						<Sun size={14} />
+					) : theme === 'light' ? (
+						<Moon size={14} />
+					) : (
+						<AlignJustify size={14} />
+					)}
 				</button>
 				<button className="ss-caption-button" onClick={() => void win.minimize()} aria-label={t('Minimize')}>
 					<Minus size={14} />

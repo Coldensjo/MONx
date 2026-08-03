@@ -1,11 +1,20 @@
-/* Light theme. index.css is frozen SPRx and owns the dark :root palette, so
-   the light variant lives here as a [data-theme] override — App.tsx stamps
-   the attribute on <html> and persists the choice under monx.theme. Every
-   variable the dark palette defines (index.css + shell.css) is re-stated;
-   nothing else changes, so both themes flow through the same var() plumbing. */
+/* The themes that are not index.css's. index.css is frozen SPRx and owns the
+   dark :root palette, so every other variant lives here as a [data-theme]
+   override — App.tsx stamps the attribute on <html> and persists the choice
+   under monx.theme. Each one re-states every variable the dark palette defines
+   (index.css + shell.css); nothing else changes, so the themes all flow through
+   the same var() plumbing.
+
+   Three of them: 'lined' (the default), 'light', and index.css's own dark under
+   no attribute at all. */
 
 :root {
 	color-scheme: dark;
+
+	/* The fill behind a control that sits inside a section. Its own variable
+	   because 'lined' has no section card for a control to sit on: the editor
+	   ground *is* --bg there, so a --bg field would have no edges. */
+	--input-bg: var(--bg);
 }
 
 :root[data-theme='light'] {
@@ -39,4 +48,74 @@
 /* The context-menu shadow is hardcoded dark in frozen index.css; soften it. */
 :root[data-theme='light'] .ss-context-menu {
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+/* ---------------------------------------------------------------------------
+   Lined — the default.
+
+   A warm neutral grey, flatter than index.css's near-black, and the only theme
+   that changes more than colour: the editor's sections stop being cards. A rule
+   and their heading carry the hierarchy instead, which is a screen's worth of
+   borders removed and roughly two more field rows visible per section.
+
+   The palette half is values only. The chrome half is the four rules at the
+   bottom, all of them scoped to this attribute so 'light' and the inherited
+   dark keep their cards.
+   --------------------------------------------------------------------------- */
+
+:root[data-theme='lined'] {
+	color-scheme: dark;
+
+	--bg: #1e1d1c;
+	--surface: #262524;
+	--surface-2: #2f2d2c;
+	--border: #383634;
+	--border-strong: #4b4846;
+
+	--text: #ecebe9;
+	--text-muted: #94908c;
+
+	/* Sage rather than index.css's mint: at this saturation the accent stays
+	   quieter than any sprite on screen, which is the point of the grey. */
+	--accent: #8fa87c;
+	--accent-dim: rgba(143, 168, 124, 0.16);
+	--accent-text: #1a1918;
+
+	--destructive: #cf7a6a;
+	--destructive-dim: rgba(207, 122, 106, 0.12);
+
+	--sprite-bg: #322f2d;
+
+	--warn: #c39a55;
+	--warn-dim: rgba(195, 154, 85, 0.12);
+	--silent: #9b8ac4;
+	--silent-dim: rgba(155, 138, 196, 0.12);
+
+	/* No card behind a field here, so controls take the surface tone. */
+	--input-bg: var(--surface);
+}
+
+/* The section, unboxed. `+` rather than :first-child so a banner above the
+   first section does not leave a rule hanging under it. */
+:root[data-theme='lined'] .ss-ed-column {
+	gap: 0;
+}
+
+:root[data-theme='lined'] .ss-ed-section {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+
+:root[data-theme='lined'] .ss-ed-section + .ss-ed-section {
+	border-top: 1px solid var(--border);
+}
+
+:root[data-theme='lined'] .ss-ed-section-head {
+	padding: 14px 2px 2px;
+	border-bottom: 0;
+}
+
+:root[data-theme='lined'] .ss-ed-section-body {
+	padding: 6px 2px 18px;
 }

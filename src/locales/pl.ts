@@ -301,6 +301,7 @@ const pl: Record<string, string> = {
 		'Edycja według reguł {{engine}} — wykrycie nie było pewne',
 	'Switch to light mode': 'Przełącz na tryb jasny',
 	'Switch to dark mode': 'Przełącz na tryb ciemny',
+	'Switch to lined mode': 'Przełącz na tryb liniowy',
 	'Toggle theme': 'Przełącz motyw',
 	Minimize: 'Minimalizuj',
 	Maximize: 'Maksymalizuj',
