@@ -1062,6 +1062,7 @@ const pl: Record<string, string> = {
 	'damaged on spawn': 'ranny przy pojawieniu',
 	locked: 'zablokowane',
 	'Health on spawn': 'Zdrowie przy pojawieniu',
+	'on spawn': 'przy pojawieniu',
 	'Above max — the loader clamps it down and warns. Shown as written.':
 		'Powyżej maksimum — loader obcina wartość i ostrzega. Pokazane tak, jak zapisano.',
 

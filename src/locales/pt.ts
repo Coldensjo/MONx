@@ -971,6 +971,7 @@ const pt: Record<string, string> = {
 	'damaged on spawn': 'ferido ao nascer',
 	locked: 'travado',
 	'Health on spawn': 'Vida ao nascer',
+	'on spawn': 'ao nascer',
 	'Above max — the loader clamps it down and warns. Shown as written.':
 		'Acima do máximo — o loader reduz o valor e avisa. Exibido como está escrito.',
 

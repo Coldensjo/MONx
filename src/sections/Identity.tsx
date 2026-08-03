@@ -93,9 +93,22 @@ export function Identity({ doc, patch, lintAt, readOnly, collapsed, onToggle }: 
 				    Experience and the balance bands are judged against — the two
 				    were a section apart for no reason other than that <health> and
 				    <look> are adjacent in the file. */}
+				{/* One field, two numbers. Unlocking used to add a second field to the
+				    grid, which took a column and pushed Experience, Speed and mana
+				    cost along one place each — a toggle that rearranges the row it
+				    sits in reads as a mistake. The spawn value belongs to health
+				    anyway: it is the same <health> node, and it is only ever set
+				    against the max beside it. Growing downwards costs the row some
+				    height, which `align-items: start` already absorbs, and moves
+				    nothing sideways.
+
+				    Both paths' lints ride on the field, health.now's included while
+				    locked: locking does not itself write now = max, so a document
+				    that arrived with the two apart must not fall silent when the
+				    button is pressed. */}
 				<Field
 					label={t('Max health')}
-					lints={lintAt('health.max')}
+					lints={[...lintAt('health.max'), ...lintAt('health.now')]}
 					hint={
 						<button
 							type="button"
@@ -108,6 +121,11 @@ export function Identity({ doc, patch, lintAt, readOnly, collapsed, onToggle }: 
 							{healthUnlocked ? t('damaged on spawn') : t('locked')}
 						</button>
 					}
+					note={
+						healthUnlocked && doc.health.now > doc.health.max
+							? t('Above max — the loader clamps it down and warns. Shown as written.')
+							: undefined
+					}
 				>
 					<NumberField
 						value={doc.health.max}
@@ -116,27 +134,19 @@ export function Identity({ doc, patch, lintAt, readOnly, collapsed, onToggle }: 
 						width={120}
 						disabled={readOnly}
 					/>
+					{healthUnlocked && (
+						<span className="ss-ed-inline ss-ed-subfield">
+							<span className="ss-ed-field-hint">{t('on spawn')}</span>
+							<NumberField
+								value={doc.health.now}
+								onChange={v => patch({ health: { ...doc.health, now: v } })}
+								min={1}
+								width={120}
+								disabled={readOnly}
+							/>
+						</span>
+					)}
 				</Field>
-
-				{healthUnlocked && (
-					<Field
-						label={t('Health on spawn')}
-						lints={lintAt('health.now')}
-						note={
-							doc.health.now > doc.health.max
-								? t('Above max — the loader clamps it down and warns. Shown as written.')
-								: undefined
-						}
-					>
-						<NumberField
-							value={doc.health.now}
-							onChange={v => patch({ health: { ...doc.health, now: v } })}
-							min={1}
-							width={120}
-							disabled={readOnly}
-						/>
-					</Field>
-				)}
 
 				<Field
 					label={t('Experience')}

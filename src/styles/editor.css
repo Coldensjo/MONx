@@ -311,6 +311,15 @@
 	flex-wrap: wrap;
 }
 
+/* A second control under the one it qualifies, inside a single field — health's
+   spawn value under its max. `flex-basis: 100%` takes the line rather than the
+   space beside it, so the field grows downwards and the grid column it sits in
+   keeps its width. */
+.ss-ed-subfield {
+	flex-basis: 100%;
+	gap: 8px;
+}
+
 /* The corpse read-out beside Select corpse — display only, the browser picks. */
 .ss-ed-corpse-name {
 	font-size: 12px;
