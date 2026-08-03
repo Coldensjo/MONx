@@ -880,21 +880,33 @@
 	gap: 12px;
 }
 
-.ss-ed-card-grid {
-	display: flex;
+/* A grid, not a wrapping flex row. Under flex each row divided its own leftover
+   space, so a three-field row and a four-field row landed on different column
+   positions and the section read as scattered — no row was wrong, they just
+   never agreed with each other. `auto-fill` resolves the same track count from
+   the same width, so every card grid in the editor, in every section, shares one
+   set of columns. 200px is the narrowest track a label and a note still read in,
+   and it keeps three columns at the old 720px measure. */
+.ss-ed-card-grid,
+.ss-ed-loot-detail {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 	gap: 14px;
-	flex-wrap: wrap;
+	align-items: start;
 }
 
-/* A field sharing a line is a form column, not a paragraph: it takes an even
-   share of the row and caps, so a long note wraps inside its own column instead
-   of shoving its neighbours onto the next line. No `min-width: 0` — a field
-   holding a fixed-width control keeps that as its min-content, so it wraps to
-   the next line rather than overflowing the card. */
+/* Columns only line up if a field can be as narrow as its column. A control
+   carrying an explicit pixel width — NumberField's `width`, the wide selects in
+   Identity and SpellCard — would otherwise hold the field open past its track,
+   so the width stays an intent and the column stays the limit. */
 .ss-ed-card-grid > .ss-ed-field,
 .ss-ed-loot-detail > .ss-ed-field {
-	flex: 1 1 180px;
-	max-width: 320px;
+	min-width: 0;
+}
+
+.ss-ed-card-grid .ss-ed-field-control > *,
+.ss-ed-loot-detail .ss-ed-field-control > * {
+	max-width: 100%;
 }
 
 .ss-ed-flags {
@@ -1159,10 +1171,8 @@
 	flex-shrink: 0;
 }
 
+/* Layout comes from the card-grid rule it is grouped with. */
 .ss-ed-loot-detail {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 14px;
 	padding: 8px;
 	border-bottom: 1px solid var(--border);
 	background: var(--surface-2);

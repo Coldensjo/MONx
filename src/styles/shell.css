@@ -2281,8 +2281,19 @@
 	row-gap: 8px;
 }
 
+/* The editor's card grid is a grid, so its columns agree across sections. The
+   designer wants the opposite: every rule above pairs specific fields off by
+   `flex-basis`, because which two share a line is a per-card decision here, not
+   a corpus-wide one. So it keeps the wrapping flex row those rules are written
+   against, and `min-width` goes back to auto with it. */
 .mx-wiz-designer .ss-ed-card-grid {
+	display: flex;
+	flex-wrap: wrap;
 	gap: 8px;
+}
+
+.mx-wiz-designer .ss-ed-card-grid > .ss-ed-field {
+	min-width: auto;
 }
 
 .mx-wiz-designer .ss-ed-field {
