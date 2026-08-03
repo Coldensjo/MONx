@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Link2, PackageSearch, Unlink, X } from 'lucide-react';
+import { PackageSearch, X } from 'lucide-react';
 import { itemUrl, type Look } from '../monster';
 import { engineInfo } from '../engine';
 import { Field } from '../fields/Field';
@@ -10,7 +10,7 @@ import { ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { DecayChain } from '../fields/DecayChain';
 import { Toggle, ToggleGroup } from '../fields/Toggle';
 import { useDropTarget } from '../dnd';
-import { Banner, Section, SubGroup, useMonsterState, type SectionId, type SectionProps } from './section';
+import { Banner, Section, SubGroup, type SectionId, type SectionProps } from './section';
 import { useWorkspace } from '../workspacectx';
 
 interface Props extends SectionProps {
@@ -30,9 +30,6 @@ export function LookSection({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 	const { items, onBrowseOutfits, onBrowseCorpses, onBrowseItems } = useWorkspace();
 	const { t } = useTranslation();
 	const engine = engineInfo(doc.engine);
-	// Health stays locked unless the author deliberately wants a monster that
-	// spawns damaged; the loader clamps now > max and warns (§4).
-	const [healthUnlocked, setHealthUnlocked] = useMonsterState(doc.file, () => doc.health.now !== doc.health.max);
 
 	const look = doc.look;
 	const setLook = (p: Partial<Look>) => patch({ look: { ...look, ...p } });
@@ -252,52 +249,6 @@ export function LookSection({ doc, patch, lintAt, readOnly, collapsed, onToggle 
 				)}
 			</SubGroup>
 
-			<SubGroup title={t('Health')}>
-				<Field
-					label={t('Max health')}
-					lints={lintAt('health.max')}
-					hint={
-						<button
-							type="button"
-							className="ss-btn ss-btn-ghost ss-ed-mini"
-							disabled={readOnly}
-							onClick={() => setHealthUnlocked(u => !u)}
-							title={healthUnlocked ? t('Lock now to max') : t('Allow a damaged-on-spawn monster')}
-						>
-							{healthUnlocked ? <Unlink size={13} /> : <Link2 size={13} />}
-							{healthUnlocked ? t('damaged on spawn') : t('locked')}
-						</button>
-					}
-				>
-					<NumberField
-						value={doc.health.max}
-						onChange={v => patch({ health: { max: v, now: healthUnlocked ? doc.health.now : v } })}
-						min={1}
-						width={120}
-						disabled={readOnly}
-					/>
-				</Field>
-
-				{healthUnlocked && (
-					<Field
-						label={t('Health on spawn')}
-						lints={lintAt('health.now')}
-						note={
-							doc.health.now > doc.health.max
-								? t('Above max — the loader clamps it down and warns. Shown as written.')
-								: undefined
-						}
-					>
-						<NumberField
-							value={doc.health.now}
-							onChange={v => patch({ health: { ...doc.health, now: v } })}
-							min={1}
-							width={120}
-							disabled={readOnly}
-						/>
-					</Field>
-				)}
-			</SubGroup>
 		</Section>
 	);
 }

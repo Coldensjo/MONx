@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next';
+import { Link2, Unlink } from 'lucide-react';
 import { RACES, SKULLS } from '../catalog';
 import { engineInfo } from '../engine';
 import { Field } from '../fields/Field';
 import { EnumSelect, type EnumOption } from '../fields/EnumSelect';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
-import { Section, type SectionId, type SectionProps } from './section';
+import { Section, useMonsterState, type SectionId, type SectionProps } from './section';
 import { useWorkspace } from '../workspacectx';
 
 interface Props extends SectionProps {
@@ -37,6 +38,10 @@ export function Identity({ doc, patch, lintAt, readOnly, collapsed, onToggle }: 
 	// to ask.
 	const takenBy = doc.raceid !== null ? raceidOwner(doc.raceid, doc.file) : null;
 	const duplicate = takenBy !== null || raceidLints.some(l => l.code === 'raceid.duplicate');
+
+	// Health stays locked unless the author deliberately wants a monster that
+	// spawns damaged; the loader clamps now > max and warns (§4).
+	const [healthUnlocked, setHealthUnlocked] = useMonsterState(doc.file, () => doc.health.now !== doc.health.max);
 
 	const scriptOptions: EnumOption<string>[] = [
 		{ value: '', label: t('(none)') },
@@ -83,6 +88,56 @@ export function Identity({ doc, patch, lintAt, readOnly, collapsed, onToggle }: 
 			</div>
 
 			<div className="ss-ed-card-grid">
+				{/* Health leads the stat line rather than sitting under Look. It is
+				    what a monster is worth reading first, and it is the number
+				    Experience and the balance bands are judged against — the two
+				    were a section apart for no reason other than that <health> and
+				    <look> are adjacent in the file. */}
+				<Field
+					label={t('Max health')}
+					lints={lintAt('health.max')}
+					hint={
+						<button
+							type="button"
+							className="ss-btn ss-btn-ghost ss-ed-mini"
+							disabled={readOnly}
+							onClick={() => setHealthUnlocked(u => !u)}
+							title={healthUnlocked ? t('Lock now to max') : t('Allow a damaged-on-spawn monster')}
+						>
+							{healthUnlocked ? <Unlink size={13} /> : <Link2 size={13} />}
+							{healthUnlocked ? t('damaged on spawn') : t('locked')}
+						</button>
+					}
+				>
+					<NumberField
+						value={doc.health.max}
+						onChange={v => patch({ health: { max: v, now: healthUnlocked ? doc.health.now : v } })}
+						min={1}
+						width={120}
+						disabled={readOnly}
+					/>
+				</Field>
+
+				{healthUnlocked && (
+					<Field
+						label={t('Health on spawn')}
+						lints={lintAt('health.now')}
+						note={
+							doc.health.now > doc.health.max
+								? t('Above max — the loader clamps it down and warns. Shown as written.')
+								: undefined
+						}
+					>
+						<NumberField
+							value={doc.health.now}
+							onChange={v => patch({ health: { ...doc.health, now: v } })}
+							min={1}
+							width={120}
+							disabled={readOnly}
+						/>
+					</Field>
+				)}
+
 				<Field
 					label={t('Experience')}
 					lints={lintAt('experience')}
