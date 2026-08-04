@@ -66,6 +66,7 @@ pub fn run() {
             commands::create_monster,
             commands::duplicate_monster,
             commands::delete_monster,
+            commands::dedupe_registry_entry,
             commands::rename_monster,
             commands::reveal_monster,
             commands::scan_external_changes,

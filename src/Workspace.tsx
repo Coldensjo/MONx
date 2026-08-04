@@ -7,6 +7,7 @@ import {
 	getItem,
 	allLints as fetchAllLints,
 	getMonster,
+	dedupeRegistryEntry,
 	droppedItemIds,
 	itemsRowUrl,
 	itemUrl,
@@ -52,7 +53,7 @@ import {
 	type Command
 } from './hotkeys';
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
-import { applyLintFix } from './lintfix';
+import { applyLintFix, OUT_OF_DOCUMENT_FIXES } from './lintfix';
 import PinLootDialog, { type PinScope } from './PinLootDialog';
 import FixPreviewDialog, { type FixTarget } from './FixPreviewDialog';
 import { listHidden, loadHidden, pushHidden, saveHidden } from './hidden';
@@ -834,6 +835,22 @@ export default function Workspace({
 	const fixLint = useCallback(
 		async (lint: Lint) => {
 			const target = lint.file ?? doc?.file ?? null;
+			// Registry repairs first: they are about monsters.xml, so they neither
+			// go through the open buffer nor care whether it is dirty, and routing
+			// them by code is what keeps them out of the document fix below —
+			// which, handed one, would try to repair the wrong file.
+			if (OUT_OF_DOCUMENT_FIXES.has(lint.code)) {
+				if (!lint.file) return;
+				try {
+					await dedupeRegistryEntry(lint.file);
+					setWorkspaceLints(await lintWorkspace().catch(() => []));
+					onMonstersChanged(null);
+					showToast('ok', t('Fixed {{code}} in {{file}}', { code: lint.code, file: lint.file }));
+				} catch (e) {
+					showToast('error', String(e));
+				}
+				return;
+			}
 			if (doc && (target === null || target === doc.file)) {
 				const next = applyLintFix(doc, lint, { nextRaceid });
 				if (next) editDoc(next);
@@ -902,7 +919,12 @@ export default function Workspace({
 	const fixScopeLints = useMemo(() => {
 		if (fixScope === null) return [];
 		const source = fixScope === 'monster' ? visibleMonsterLints : visibleWorkspaceLints;
-		return source.filter(l => l.fixable && (fixScope === 'monster' || l.file));
+		// A registry repair is fixable but has no document diff to preview, so the
+		// dialog would list it and then show an empty change. It stays a one-click
+		// fix on its own row.
+		return source.filter(
+			l => l.fixable && !OUT_OF_DOCUMENT_FIXES.has(l.code) && (fixScope === 'monster' || l.file)
+		);
 	}, [fixScope, visibleMonsterLints, visibleWorkspaceLints]);
 
 	/**

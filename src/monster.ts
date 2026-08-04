@@ -595,6 +595,12 @@ export function deleteMonster(file: string): Promise<void> {
 	return invoke<void>('delete_monster', { file });
 }
 
+/** The fix for `registry.duplicate-entry`: drops the repeated monsters.xml
+ *  lines for `file`, keeping the first. Touches the registry, not the monster. */
+export function dedupeRegistryEntry(file: string): Promise<void> {
+	return invoke<void>('dedupe_registry_entry', { file });
+}
+
 export function renameMonster(file: string, newName: string, newFile: string): Promise<MonsterDoc> {
 	return invoke<MonsterDoc>('rename_monster', { file, newName, newFile });
 }

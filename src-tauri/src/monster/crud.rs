@@ -324,6 +324,23 @@ pub fn duplicate(
     Ok(doc)
 }
 
+/// Removes the repeated `monsters.xml` lines for one file, keeping the first.
+/// The monster itself is not touched — the finding is about the registry.
+pub fn dedupe_registry(
+    dir: &Path,
+    registry: &crate::registry::Registry,
+    file: &str,
+) -> Result<(), String> {
+    if !registry.present {
+        return Err(format!("{file}: this corpus has no monsters.xml"));
+    }
+    let updated = registry.with_deduped(file);
+    if updated == registry.bytes {
+        return Err(format!("{file} is listed once — nothing to remove"));
+    }
+    write_atomic(&dir.join("monsters.xml"), &updated)
+}
+
 pub fn delete(
     dir: &Path,
     registry: &crate::registry::Registry,

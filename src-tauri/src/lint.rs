@@ -1132,10 +1132,17 @@ pub fn lint_workspace(
             format!("monsters.xml registers \"{name}\" {} times ({}) — the last one wins and the rest can never be summoned, spawned or targeted by name",
                 files.len(), files.join(", ")));
     }
+    // Fixable, and the only repair in the codebase that is not a document edit:
+    // the repeated lines are in monsters.xml, so `dedupe_registry_entry` does it
+    // rather than `lintfix.ts`. Attributed to the monster whose entry repeats —
+    // the finding is about that monster's registration, and the drawer needs a
+    // file to hang it on and to pass back when the button is pressed.
     for ((_, file), n) in reg_by_entry.iter().filter(|(_, n)| **n > 1) {
-        r.add(WARNING, "registry.duplicate-entry", None, false,
+        r.file = Some((*file).to_string());
+        r.add(WARNING, "registry.duplicate-entry", None, true,
             format!("monsters.xml lists {file} {n} times — the server parses it once per line for the same result"));
     }
+    r.file = None;
 
     // The registry's name is the key the server looks a monster up by; the
     // file's own `name` is what the creature is called once loaded. When they

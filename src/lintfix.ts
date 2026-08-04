@@ -81,6 +81,16 @@ function takeUnknown(
 }
 
 /**
+ * Fixable codes whose repair is not a change to a monster document, so
+ * `applyLintFix` cannot express them and the batch preview — which is a diff of
+ * documents — cannot show them. Each is dispatched to its own backend command.
+ *
+ * Kept here rather than at the two call sites so the rule that they are not
+ * document fixes lives beside the ones that are.
+ */
+export const OUT_OF_DOCUMENT_FIXES = new Set(['registry.duplicate-entry']);
+
+/**
  * Applies the unambiguous repair for a fixable lint, or returns null when this
  * code has no automatic fix (or the path no longer resolves).
  */

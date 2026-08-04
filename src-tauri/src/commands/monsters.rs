@@ -175,6 +175,18 @@ pub(crate) fn duplicate_monster(
     Ok(doc)
 }
 
+/// The fix behind `registry.duplicate-entry`. Rewrites monsters.xml only — the
+/// monster file is untouched, which is why this is not one of `lintfix.ts`'s
+/// repairs: every one of those is a change to a document the editor is holding,
+/// and the registry is neither held nor a document the user can open.
+#[tauri::command]
+pub(crate) fn dedupe_registry_entry(state: State<WorkspaceState>, file: String) -> Result<(), String> {
+    let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;
+    monster::dedupe_registry(&ws.monsters_dir(), &ws.registry, &file)?;
+    refresh(&mut ws);
+    Ok(())
+}
+
 #[tauri::command]
 pub(crate) fn delete_monster(state: State<WorkspaceState>, file: String) -> Result<(), String> {
     let mut ws = state.write().map_err(|e| format!("lock: {e}"))?;

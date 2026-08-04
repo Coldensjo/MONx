@@ -221,6 +221,40 @@ impl Registry {
         out.into_bytes()
     }
 
+    /// Drops every line pointing at `file` except the first.
+    ///
+    /// The first rather than an arbitrary one: the server parses the list top
+    /// down and the later lines only repeat the work, so the surviving entry
+    /// should be the one that was already deciding the outcome. It is also the
+    /// one whose `name=` the rest of the registry rules have been reported
+    /// against, which keeps a dedupe from silently changing a monster's
+    /// registered name.
+    ///
+    /// Spliced back to front so an earlier line's span is still valid after a
+    /// later one has been cut.
+    pub fn with_deduped(&self, file: &str) -> Vec<u8> {
+        let text = String::from_utf8_lossy(&self.bytes).into_owned();
+        let dupes: Vec<usize> = self
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.file.eq_ignore_ascii_case(file))
+            .map(|(i, _)| i)
+            .skip(1)
+            .collect();
+        if dupes.is_empty() {
+            return self.bytes.clone();
+        }
+        let mut out = text;
+        for index in dupes.into_iter().rev() {
+            let Some((start, end)) = self.line_span(&out, index) else {
+                continue;
+            };
+            out.replace_range(start..end, "");
+        }
+        out.into_bytes()
+    }
+
     /// Indentation and line ending used by the entries already in the file.
     fn style(&self, text: &str) -> (String, String) {
         let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
