@@ -1070,6 +1070,10 @@ const pt: Record<string, string> = {
 	'Clear selection': 'Limpar seleção',
 	'Search items…': 'Buscar itens…',
 	'Add item': 'Adicionar item',
+	'Add loot from…': 'Adicionar loot de…',
+	'Append another monster’s loot table to this one, chances and all':
+		'Acrescenta a tabela de loot de outro monstro a esta, com as chances',
+	'No monster here has loot to copy.': 'Nenhum monstro aqui tem loot para copiar.',
 	'Rarest last': 'Mais raros por último',
 	'Sort by chance': 'Ordenar por chance',
 	'Chance is out of 100,000 in the file; shown here as a percent.':

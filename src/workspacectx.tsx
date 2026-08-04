@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import { tauriItemIndex, type ItemIndex, type SpellName } from './monster';
+import { tauriItemIndex, type ItemIndex, type MonsterSummary, type SpellName } from './monster';
 import { DEFAULT_PREFS, type Prefs } from './prefs';
 import { PreviewProvider, ThingAnimProvider, type PreviewUrl, type ThingAnimLookup } from './fields/preview';
 
@@ -32,6 +32,10 @@ export interface WorkspaceFacts {
 	scripts: string[];
 	/** Registered monster names, for summon validation (§14). */
 	monsterNames: string[];
+	/** The corpus's summaries. For the sections that offer one monster's work to
+	 *  another — Loot's "Add loot from" — which need the file to read and the
+	 *  name to show, not just the name. */
+	corpus: MonsterSummary[];
 	nextRaceid: number | null;
 	/** The name of the *other* monster holding `id`, or null if it is free. Live
 	 *  against the whole corpus — filtered monsters and unsaved buffers included
@@ -58,6 +62,7 @@ const FALLBACK: WorkspaceFacts = {
 	spells: [],
 	scripts: [],
 	monsterNames: [],
+	corpus: [],
 	nextRaceid: null,
 	raceidOwner: () => null,
 	prefs: DEFAULT_PREFS,

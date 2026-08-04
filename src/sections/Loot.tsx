@@ -1,10 +1,10 @@
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t } from 'i18next';
-import { ChevronDown, ChevronRight, Dices, Package, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Dices, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { n } from '../i18n';
 import LootSimDialog from '../LootSimDialog';
-import type { ItemIndex, LootEntry } from '../monster';
+import { getMonster, type ItemIndex, type LootEntry, type MonsterSummary } from '../monster';
 import { Field } from '../fields/Field';
 import { FieldLint, type LintAt } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
@@ -295,10 +295,78 @@ const LootRow = memo(function LootRow({
 	);
 });
 
+/**
+ * Picks a monster to copy a loot table from.
+ *
+ * Only monsters that have loot are listed, and never the one being edited: an
+ * empty donor is a click that does nothing, and the open monster is a click
+ * that doubles its own table. Both are reachable through the section's copy and
+ * paste; neither is worth offering here, where the whole point is that you do
+ * not have to go and look.
+ */
+function LootDonorPicker({
+	corpus,
+	exclude,
+	onPick,
+	onClose
+}: {
+	corpus: MonsterSummary[];
+	exclude: string;
+	onPick: (m: MonsterSummary) => void;
+	onClose: () => void;
+}) {
+	const { t } = useTranslation();
+	const [query, setQuery] = useState('');
+	const wrapRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		const onDown = (e: MouseEvent) => {
+			if (!wrapRef.current?.contains(e.target as Node)) onClose();
+		};
+		document.addEventListener('mousedown', onDown);
+		return () => document.removeEventListener('mousedown', onDown);
+	}, [onClose]);
+
+	const q = query.trim().toLowerCase();
+	const rows = corpus
+		.filter(m => m.hasLoot && m.file !== exclude && (q === '' || m.name.toLowerCase().includes(q)))
+		.slice(0, 200);
+
+	return (
+		<div className="ss-ed-itempick" ref={wrapRef}>
+			{/* Upwards: the button lives at the foot of the longest section in the
+			    editor, so downwards is off the bottom of the pane. */}
+			<div className="ss-ed-popover ss-ed-popover-up">
+				<div className="ss-ed-popover-search">
+					<Search size={13} />
+					<input
+						autoFocus
+						value={query}
+						onChange={e => setQuery(e.target.value)}
+						placeholder={t('Search monsters')}
+						onKeyDown={e => e.key === 'Escape' && onClose()}
+					/>
+				</div>
+				<div className="ss-ed-popover-list">
+					{rows.map(m => (
+						<button key={m.file} type="button" className="ss-ed-popover-item" onClick={() => onPick(m)}>
+							<span className="ss-ed-popover-label">{m.name}</span>
+						</button>
+					))}
+					{rows.length === 0 && (
+						<div className="ss-ed-popover-empty">{t('No monster here has loot to copy.')}</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
-	const { items } = useWorkspace();
+	const { items, corpus, onToast } = useWorkspace();
 	const { t } = useTranslation();
 	const [adding, setAdding] = useMonsterState(doc.file, () => false);
+	const [donorOpen, setDonorOpen] = useMonsterState(doc.file, () => false);
 	const [simulating, setSimulating] = useMonsterState(doc.file, () => false);
 	/** Top-level row indices in the multi-selection. Indices only mean anything
 	 *  within one monster, so this re-seeds when the file changes. */
@@ -430,6 +498,43 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 					<button type="button" className="ss-btn" disabled={readOnly} onClick={() => setAdding(true)}>
 						<Plus size={14} />
 						{t('Add item')}
+					</button>
+				)}
+				{donorOpen ? (
+					<LootDonorPicker
+						corpus={corpus}
+						exclude={doc.file}
+						onClose={() => setDonorOpen(false)}
+						onPick={m => {
+							setDonorOpen(false);
+							// Read the file rather than the summary: a summary knows only
+							// that there is loot, and what is wanted is the table — ids,
+							// chances, counts, subtypes, containers and their contents.
+							getMonster(m.file)
+								.then(from => {
+									if (from.loot.length === 0) return;
+									// Appended whole and unchanged, chances included. A donor's
+									// table is a balance someone already struck; re-rolling any
+									// part of it here would be this editor inventing numbers.
+									// Duplicates of what is already here are left in, as the
+									// section's own paste-merge leaves them: two rows for one
+									// item is a legal table, and which one to drop is a
+									// judgement the author is standing right there to make.
+									setLoot([...doc.loot, ...from.loot]);
+								})
+								.catch(e => onToast?.('error', String(e)));
+						}}
+					/>
+				) : (
+					<button
+						type="button"
+						className="ss-btn ss-btn-ghost"
+						disabled={readOnly}
+						title={t('Append another monster’s loot table to this one, chances and all')}
+						onClick={() => setDonorOpen(true)}
+					>
+						<Package size={14} />
+						{t('Add loot from…')}
 					</button>
 				)}
 				<button
