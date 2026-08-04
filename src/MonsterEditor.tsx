@@ -279,27 +279,27 @@ export function MonsterEditor({
 
 	// Runs before the landing effect, which is what lets it win: both fire on the
 	// same mount and the last write to scrollTop would otherwise be the default
-	// tab's. Reading and clearing in one go — a restore is spent once, so opening
-	// the same monster again later starts fresh.
+	// tab's. The slot is left standing rather than consumed, so a second trip out
+	// to the browsers and back lands in the same place as the first.
 	useLayoutEffect(() => {
 		const box = scrollRef.current;
 		if (!box || lastScroll?.file !== doc.file) return;
 		box.scrollTop = lastScroll.top;
 		restored.current = doc.file;
-		lastScroll = null;
 	}, [doc.file]);
 
-	// Remembers on the way out. Empty deps and a ref for the file, so this runs
-	// when the editor really unmounts rather than every time the document
-	// changes — switching monsters is not leaving.
-	const fileRef = useRef(doc.file);
-	fileRef.current = doc.file;
-	useEffect(
-		() => () => {
-			const box = scrollRef.current;
-			if (box) lastScroll = { file: fileRef.current, top: box.scrollTop };
+	// Recorded as it happens, not on the way out. Catching it at unmount was the
+	// first attempt and it saved nothing: React detaches refs and pulls the node
+	// out of the document before a deleted component's cleanups run, so the
+	// element was either null or detached, and a detached element reports a
+	// scrollTop of 0 — which is exactly the top of the page it kept restoring.
+	//
+	// Writing on every scroll makes the timing of the unmount irrelevant.
+	const remember = useCallback(
+		(top: number) => {
+			lastScroll = { file: doc.file, top };
 		},
-		[]
+		[doc.file]
 	);
 
 	// Opening a monster lands on the default tab, instantly: this is where the
@@ -371,7 +371,11 @@ export function MonsterEditor({
 					)}
 				</nav>
 
-				<div className="ss-ed-scroll" ref={scrollRef}>
+				<div
+					className="ss-ed-scroll"
+					ref={scrollRef}
+					onScroll={e => remember(e.currentTarget.scrollTop)}
+				>
 					<div className="ss-ed-column">
 						{readOnly && (
 							<div className="ss-ed-banner ss-ed-banner-warn ss-ed-readonly">

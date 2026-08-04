@@ -478,14 +478,14 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		if (top && scrollRef.current) scrollRef.current.scrollTop = top;
 	}, [viewport.w, listKey]);
 
-	const listKeyRef = useRef(listKey);
-	listKeyRef.current = listKey;
-	useEffect(
-		() => () => {
-			const el = scrollRef.current;
-			if (el && el.scrollTop > 0) lastScrollByList.set(listKeyRef.current, el.scrollTop);
+	// Recorded as it happens rather than at unmount, for the reason MonsterEditor
+	// gives: by the time a deleted component's cleanup runs its node is detached
+	// and reports a scrollTop of 0.
+	const remember = useCallback(
+		(top: number) => {
+			lastScrollByList.set(listKey, top);
 		},
-		[]
+		[listKey]
 	);
 
 	const cols = Math.max(1, Math.floor((viewport.w - GRID_PAD * 2) / cellW));
@@ -888,7 +888,10 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 			<div
 				className={`ss-grid-wrap${dragging ? ' ss-grid-wrap-dragging' : ''}`}
 				ref={scrollRef}
-				onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
+				onScroll={e => {
+					setScrollTop(e.currentTarget.scrollTop);
+					remember(e.currentTarget.scrollTop);
+				}}
 				onMouseDown={handleGridMouseDown}
 			>
 				<div className="ss-grid-inner" style={{ height: totalHeight }}>
