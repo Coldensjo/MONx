@@ -53,6 +53,8 @@ export interface WorkspaceFacts {
 	onBrowseCorpses?: () => void;
 	/** Opens the Items browser unfiltered, for the typeex picker. */
 	onBrowseItems?: () => void;
+	/** Opens it filtered to pickupable, for building a loot table. */
+	onBrowseLootItems?: () => void;
 	/** Feedback for the block clipboard; silent without it. */
 	onToast?: (kind: 'ok' | 'error', message: string) => void;
 }

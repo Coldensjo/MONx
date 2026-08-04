@@ -412,7 +412,7 @@ function LootDonorPicker({
 }
 
 export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
-	const { items, corpus, onToast, onBrowseItems } = useWorkspace();
+	const { items, corpus, onToast, onBrowseLootItems } = useWorkspace();
 	const { t } = useTranslation();
 	const [donorOpen, setDonorOpen] = useMonsterState(doc.file, () => false);
 	const [sortOpen, setSortOpen] = useMonsterState(doc.file, () => false);
@@ -536,8 +536,8 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 				    browser is the corpus with its sprites, its filters, multi-select
 				    and the loot tray, and it can add several items in one visit —
 				    which is what filling a table actually looks like. Right-click
-				    there adds straight to this monster. */}
-				<button type="button" className="ss-btn" disabled={readOnly} onClick={onBrowseItems}>
+				    there adds straight to this monster, and it opens on pickupable. */}
+				<button type="button" className="ss-btn" disabled={readOnly} onClick={onBrowseLootItems}>
 					<Plus size={14} />
 					{t('Pick items…')}
 				</button>

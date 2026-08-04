@@ -1546,6 +1546,16 @@ export default function Workspace({
 		setView('items');
 	}, []);
 
+	/** Loot's own door into the browser. Pickupable, because a monster dropping
+	 *  something a player cannot lift is a mistake in almost every case — and the
+	 *  filter is one click away from being turned off for the few where it is
+	 *  not. `browseItems` below cannot do this: it is also the typeex picker, and
+	 *  a statue or a fire worn as a body is exactly a thing you cannot pick up. */
+	const browseLootItems = useCallback(() => {
+		setItemsInitialFilters(['pickupable']);
+		setView('items');
+	}, []);
+
 	// The create wizard borrows the browsers rather than carrying its own grids:
 	// asked for an outfit or a corpse it steps aside, the browser it sends you to
 	// is the same one the sidebar opens — every filter, every search, the real
@@ -2104,6 +2114,7 @@ export default function Workspace({
 			onBrowseOutfits: () => setView('outfits'),
 			onBrowseCorpses: browseCorpses,
 			onBrowseItems: browseItems,
+			onBrowseLootItems: browseLootItems,
 			onToast: showToast
 		}),
 		[
@@ -2118,6 +2129,7 @@ export default function Workspace({
 			thingAnim,
 			browseCorpses,
 			browseItems,
+			browseLootItems,
 			showToast
 		]
 	);
