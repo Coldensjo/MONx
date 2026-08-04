@@ -893,7 +893,18 @@ const pl: Record<string, string> = {
 	'Clear the Loot section': 'Wyczyść sekcję Łup',
 	Clear: 'Wyczyść',
 	'Clear loot': 'Wyczyść łup',
-	'Clear all loot': 'Wyczyść cały łup',
+	All: 'Wszystko',
+	Duplicates: 'Duplikaty',
+	Set: 'Ustaw',
+	'All chances to': 'Wszystkie szanse na',
+	'All count to': 'Wszystkie liczby na',
+	'No repeated entries in this table.': 'Brak powtórzonych wpisów w tej tabeli.',
+	'Remove {{count}} repeated loot entry, keeping the first of each?_one':
+		'Usunąć 1 powtórzony wpis łupu, zachowując pierwszy z każdego?',
+	'Remove {{count}} repeated loot entry, keeping the first of each?_few':
+		'Usunąć {{count}} powtórzone wpisy łupu, zachowując pierwszy z każdego?',
+	'Remove {{count}} repeated loot entry, keeping the first of each?_many':
+		'Usunąć {{count}} powtórzonych wpisów łupu, zachowując pierwszy z każdego?',
 	'Remove all {{count}} loot entry from {{monster}}?_one': 'Usunąć jedyny wpis łupu z „{{monster}}”?',
 	'Remove all {{count}} loot entry from {{monster}}?_few': 'Usunąć wszystkie {{count}} wpisy łupu z „{{monster}}”?',
 	'Remove all {{count}} loot entry from {{monster}}?_many':

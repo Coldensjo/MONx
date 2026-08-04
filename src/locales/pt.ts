@@ -802,7 +802,16 @@ const pt: Record<string, string> = {
 	'Clear the Loot section': 'Limpar a seção Loot',
 	Clear: 'Limpar',
 	'Clear loot': 'Limpar loot',
-	'Clear all loot': 'Limpar todo o loot',
+	All: 'Tudo',
+	Duplicates: 'Duplicados',
+	Set: 'Definir',
+	'All chances to': 'Todas as chances para',
+	'All count to': 'Todas as quantidades para',
+	'No repeated entries in this table.': 'Nenhuma entrada repetida nesta tabela.',
+	'Remove {{count}} repeated loot entry, keeping the first of each?_one':
+		'Remover 1 entrada de loot repetida, mantendo a primeira de cada?',
+	'Remove {{count}} repeated loot entry, keeping the first of each?_other':
+		'Remover {{count}} entradas de loot repetidas, mantendo a primeira de cada?',
 	'Remove all {{count}} loot entry from {{monster}}?_one': 'Remover a única entrada de loot de "{{monster}}"?',
 	'Remove all {{count}} loot entry from {{monster}}?_other':
 		'Remover todas as {{count}} entradas de loot de "{{monster}}"?',

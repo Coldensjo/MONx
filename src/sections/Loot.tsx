@@ -345,6 +345,47 @@ function sortLoot(rows: LootEntry[], key: SortKey): LootEntry[] {
 	return sorted.map(e => (e.children.length > 0 ? { ...e, children: sortLoot(e.children, key) } : e));
 }
 
+/** Every entry in the tree, containers and their contents alike. */
+function mapLoot(rows: LootEntry[], f: (e: LootEntry) => LootEntry): LootEntry[] {
+	return rows.map(e => {
+		const next = f(e);
+		return next.children.length > 0 ? { ...next, children: mapLoot(next.children, f) } : next;
+	});
+}
+
+/**
+ * What makes two rows the same drop.
+ *
+ * The item, and then everything that makes one instance of it different from
+ * another: a potion with charges, a book with text, a key with an action id are
+ * all the same id and none of them is a repeat of the others. Chance and count
+ * are deliberately not in the key — two rows for one item at different odds are
+ * exactly the duplicate this removes, and keeping the first keeps the one the
+ * author wrote first.
+ */
+function dupeKey(e: LootEntry): string {
+	const item = e.id !== null ? `#${e.id}` : (e.name ?? '').toLowerCase();
+	return [item, e.subtype ?? '', e.actionId ?? '', e.text ?? ''].join(' ');
+}
+
+/** Drops later rows that repeat an earlier one, within each list of siblings. */
+function withoutDupes(rows: LootEntry[]): LootEntry[] {
+	const seen = new Set<string>();
+	const kept: LootEntry[] = [];
+	for (const e of rows) {
+		const key = dupeKey(e);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		kept.push(e.children.length > 0 ? { ...e, children: withoutDupes(e.children) } : e);
+	}
+	return kept;
+}
+
+/** How many rows `withoutDupes` would drop. */
+function countLoot(rows: LootEntry[]): number {
+	return rows.reduce((n, e) => n + 1 + countLoot(e.children), 0);
+}
+
 /**
  * Picks a monster to copy a loot table from.
  *
@@ -417,6 +458,11 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 	const { t } = useTranslation();
 	const [donorOpen, setDonorOpen] = useMonsterState(doc.file, () => false);
 	const [sortOpen, setSortOpen] = useMonsterState(doc.file, () => false);
+	const [clearOpen, setClearOpen] = useMonsterState(doc.file, () => false);
+	const [setOpen, setSetOpen] = useMonsterState(doc.file, () => false);
+	/** Which "set all" is being asked about, and the answer being typed. */
+	const [setMode, setSetMode] = useMonsterState<'chance' | 'count' | null>(doc.file, () => null);
+	const [setValue, setSetValue] = useMonsterState(doc.file, () => 1);
 	const [simulating, setSimulating] = useMonsterState(doc.file, () => false);
 	/** Top-level row indices in the multi-selection. Indices only mean anything
 	 *  within one monster, so this re-seeds when the file changes. */
@@ -579,28 +625,155 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 						{t('Add loot from…')}
 					</button>
 				)}
-				{/* Asks first, because this is the one control here that throws work
-				    away rather than changing it, and the table it empties can be an
-				    afternoon's balancing. Undo still covers it — the prompt does not
-				    claim otherwise — but a misclick that silently blanks the section
-				    is not something to find out about later. */}
-				<button
-					type="button"
-					className="ss-btn ss-btn-ghost"
-					disabled={readOnly || doc.loot.length === 0}
-					onClick={() => {
-						void confirm(
-							t('Remove all {{count}} loot entry from {{monster}}?', {
-								count: doc.loot.length,
-								monster: doc.name
-							}),
-							{ title: t('Clear loot'), kind: 'warning' }
-						).then(ok => ok && setLoot([]));
-					}}
-				>
-					<Trash2 size={14} />
-					{t('Clear all loot')}
-				</button>
+				{/* Both destructive branches ask first, because this is the one control
+				    here that throws work away rather than changing it, and the table it
+				    empties can be an afternoon's balancing. Undo still covers it — the
+				    prompts do not claim otherwise — but a misclick that silently blanks
+				    the section is not something to find out about later. */}
+				<div className="ss-ed-itempick">
+					<button
+						type="button"
+						className="ss-btn ss-btn-ghost"
+						disabled={readOnly || doc.loot.length === 0}
+						onClick={() => setClearOpen(o => !o)}
+					>
+						<Trash2 size={14} />
+						{t('Clear')}
+						<ChevronDown size={13} />
+					</button>
+					{clearOpen && (
+						<div className="ss-ed-popover ss-ed-popover-up" onMouseLeave={() => setClearOpen(false)}>
+							<div className="ss-ed-popover-list">
+								<button
+									type="button"
+									className="ss-ed-popover-item"
+									onClick={() => {
+										setClearOpen(false);
+										void confirm(
+											t('Remove all {{count}} loot entry from {{monster}}?', {
+												count: countLoot(doc.loot),
+												monster: doc.name
+											}),
+											{ title: t('Clear loot'), kind: 'warning' }
+										).then(ok => ok && setLoot([]));
+									}}
+								>
+									<span className="ss-ed-popover-label">{t('All')}</span>
+								</button>
+								<button
+									type="button"
+									className="ss-ed-popover-item"
+									onClick={() => {
+										setClearOpen(false);
+										const pruned = withoutDupes(doc.loot);
+										const gone = countLoot(doc.loot) - countLoot(pruned);
+										// Nothing to ask about when there is nothing to remove, and
+										// silence would read as a button that does not work.
+										if (gone === 0) {
+											onToast?.('ok', t('No repeated entries in this table.'));
+											return;
+										}
+										void confirm(
+											t('Remove {{count}} repeated loot entry, keeping the first of each?', {
+												count: gone
+											}),
+											{ title: t('Clear loot'), kind: 'warning' }
+										).then(ok => ok && setLoot(pruned));
+									}}
+								>
+									<span className="ss-ed-popover-label">{t('Duplicates')}</span>
+								</button>
+							</div>
+						</div>
+					)}
+				</div>
+
+				{/* One value across the whole table. The prompt is inline rather than a
+				    dialog because the native one cannot take a number, and because the
+				    bulk bar above already asks for a percentage exactly this way. */}
+				<div className="ss-ed-itempick">
+					{setMode ? (
+						<span className="ss-ed-inline">
+							<span className="ss-ed-field-hint">
+								{setMode === 'chance' ? t('All chances to') : t('All count to')}
+							</span>
+							<NumberField
+								value={setValue}
+								onChange={setSetValue}
+								min={0}
+								max={setMode === 'chance' ? 100 : MAX_COUNTMAX}
+								width={72}
+								disabled={readOnly}
+							/>
+							{setMode === 'chance' && '%'}
+							<button
+								type="button"
+								className="ss-btn ss-ed-mini"
+								disabled={readOnly}
+								onClick={() => {
+									const mode = setMode;
+									setSetMode(null);
+									setLoot(
+										mapLoot(doc.loot, e =>
+											mode === 'chance'
+												? { ...e, chance: Math.max(0, Math.min(MAX_CHANCE, Math.round(setValue * 1000))) }
+												: { ...e, countmax: Math.max(1, Math.min(MAX_COUNTMAX, Math.round(setValue))) }
+										)
+									);
+								}}
+							>
+								{t('Apply')}
+							</button>
+							<button
+								type="button"
+								className="ss-btn ss-btn-ghost ss-ed-mini"
+								onClick={() => setSetMode(null)}
+							>
+								{t('Cancel')}
+							</button>
+						</span>
+					) : (
+						<>
+							<button
+								type="button"
+								className="ss-btn ss-btn-ghost"
+								disabled={readOnly || doc.loot.length === 0}
+								onClick={() => setSetOpen(o => !o)}
+							>
+								{t('Set')}
+								<ChevronDown size={13} />
+							</button>
+							{setOpen && (
+								<div className="ss-ed-popover ss-ed-popover-up" onMouseLeave={() => setSetOpen(false)}>
+									<div className="ss-ed-popover-list">
+										<button
+											type="button"
+											className="ss-ed-popover-item"
+											onClick={() => {
+												setSetOpen(false);
+												setSetValue(1);
+												setSetMode('chance');
+											}}
+										>
+											<span className="ss-ed-popover-label">{t('All chances to')}</span>
+										</button>
+										<button
+											type="button"
+											className="ss-ed-popover-item"
+											onClick={() => {
+												setSetOpen(false);
+												setSetValue(1);
+												setSetMode('count');
+											}}
+										>
+											<span className="ss-ed-popover-label">{t('All count to')}</span>
+										</button>
+									</div>
+								</div>
+							)}
+						</>
+					)}
+				</div>
 
 				<div className="ss-ed-itempick">
 					<button
