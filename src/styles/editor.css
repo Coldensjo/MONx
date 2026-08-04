@@ -1834,6 +1834,20 @@
 	accent-color: var(--accent);
 }
 
+/* The column head for the checkboxes: same padding and gap as a row, so its box
+   sits directly above theirs rather than near them. Muted, because it is a
+   control over the list and not an entry in it. */
+.ss-ed-loot-selectall {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--border);
+	font-size: 12px;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
 .ss-ed-loot-bulk {
 	display: flex;
 	align-items: center;

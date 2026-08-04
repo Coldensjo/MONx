@@ -1171,7 +1171,10 @@ const pl: Record<string, string> = {
 	'Simulate…': 'Symuluj…',
 	'No loot. Drop items here from the Items browser.':
 		'Brak łupu. Upuść tutaj przedmioty z przeglądarki Przedmiotów.',
-	'Scale chances to': 'Przeskaluj szanse do',
+	'Scale to': 'Przeskaluj do',
+	Chances: 'Szanse',
+	'Multiply every selected chance by this percent': 'Pomnóż każdą zaznaczoną szansę przez ten procent',
+	'Multiply every selected count by this percent': 'Pomnóż każdą zaznaczoną liczbę przez ten procent',
 	Apply: 'Zastosuj',
 	'Clear selection': 'Wyczyść zaznaczenie',
 	'Search items…': 'Szukaj przedmiotów…',

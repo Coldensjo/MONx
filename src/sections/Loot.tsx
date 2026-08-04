@@ -489,12 +489,19 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 		setChecked(new Set());
 	};
 
-	const scaleChecked = () => {
+	/** Count floors at 1, not 0: a drop of nothing is not a drop, and scaling a
+	 *  stack of one down by any percentage would otherwise delete it silently.
+	 *  Chance has no such floor — 0 is a real answer there, an entry that never
+	 *  drops, and the linter is the place that has an opinion about it. */
+	const scaleChecked = (what: 'chance' | 'count') => {
+		const scale = (v: number) => Math.round((v * scalePct) / 100);
 		patch({
 			loot: doc.loot.map((e, i) =>
-				checked.has(i)
-					? { ...e, chance: Math.max(0, Math.min(MAX_CHANCE, Math.round((e.chance * scalePct) / 100))) }
-					: e
+				!checked.has(i)
+					? e
+					: what === 'chance'
+						? { ...e, chance: Math.max(0, Math.min(MAX_CHANCE, scale(e.chance))) }
+						: { ...e, countmax: Math.max(1, Math.min(MAX_COUNTMAX, scale(e.countmax))) }
 			)
 		});
 	};
@@ -531,6 +538,30 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 				{doc.loot.length === 0 && (
 					<div className="ss-ed-empty">{t('No loot. Drop items here from the Items browser.')}</div>
 				)}
+				{/* Sits above the rows and lines up with their checkboxes, so the one
+				    that governs the column is at the head of it. Indeterminate while a
+				    subset is picked, which is the only honest third state for a box
+				    that answers "all of them?". Hidden for a single row, where it
+				    would just be that row's own checkbox twice. */}
+				{doc.loot.length > 1 && (
+					<label className="ss-ed-loot-selectall">
+						<input
+							type="checkbox"
+							className="ss-ed-loot-check"
+							disabled={readOnly}
+							checked={checked.size === doc.loot.length}
+							ref={el => {
+								if (el) el.indeterminate = checked.size > 0 && checked.size < doc.loot.length;
+							}}
+							onChange={() =>
+								setChecked(
+									checked.size === doc.loot.length ? new Set() : new Set(doc.loot.map((_, i) => i))
+								)
+							}
+						/>
+						{checked.size === doc.loot.length ? t('Select none') : t('Select all')}
+					</label>
+				)}
 				{doc.loot.map((entry, i) => (
 					<LootRow
 						key={i}
@@ -558,17 +589,31 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 						<Trash2 size={13} />
 						{t('Delete')}
 					</button>
+					{/* One percentage, two things it can be applied to. A second number
+					    field would double the width of the bar to ask the same question
+					    twice, and nobody scales odds and stack sizes to different
+					    figures in the same breath. */}
 					<span className="ss-ed-loot-bulk-scale">
-						{t('Scale chances to')}
+						{t('Scale to')}
 						<NumberField value={scalePct} onChange={setScalePct} min={0} max={10000} width={64} disabled={readOnly} />
 						%
 						<button
 							type="button"
 							className="ss-btn ss-ed-mini"
 							disabled={readOnly || scalePct === 100}
-							onClick={scaleChecked}
+							title={t('Multiply every selected chance by this percent')}
+							onClick={() => scaleChecked('chance')}
 						>
-							{t('Apply')}
+							{t('Chances')}
+						</button>
+						<button
+							type="button"
+							className="ss-btn ss-ed-mini"
+							disabled={readOnly || scalePct === 100}
+							title={t('Multiply every selected count by this percent')}
+							onClick={() => scaleChecked('count')}
+						>
+							{t('Count')}
 						</button>
 					</span>
 					<button type="button" className="ss-btn ss-btn-ghost ss-ed-mini" onClick={() => setChecked(new Set())}>
