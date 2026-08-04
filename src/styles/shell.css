@@ -15,6 +15,28 @@
 	--editor-w: 1440px;
 }
 
+/* ---------- Corrections to frozen index.css ---------- */
+
+/* index.css sets `cursor: text` on every `input`, which is right for the ones
+   you type into and wrong for every other kind — a checkbox, a radio, a slider
+   and a colour well all showed an I-beam, promising an insertion point that does
+   not exist.
+
+   `inherit` rather than a fixed cursor, so each control takes the cursor of
+   whatever it sits in: pointer inside a clickable label, the app's default arrow
+   on its own. That also keeps this from having an opinion about `button`, which
+   index.css deliberately leaves as the arrow a desktop app uses.
+
+   Named types rather than `:not([type='text'])`, because an `<input>` with no
+   type attribute *is* a text field and that negation would catch it. */
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'],
+input[type='color'],
+input[type='file'] {
+	cursor: inherit;
+}
+
 /* ---------- Titlebar ---------- */
 
 /* The unsaved marker. Accent rather than destructive — unsaved work is a
