@@ -1164,8 +1164,13 @@ const pl: Record<string, string> = {
 	'Append another monster’s loot table to this one, chances and all':
 		'Dopisuje tabelę łupów innego potwora do tej, razem z szansami',
 	'No monster here has loot to copy.': 'Żaden potwór tutaj nie ma łupów do skopiowania.',
-	'Rarest last': 'Najrzadsze na końcu',
-	'Sort by chance': 'Sortuj po szansie',
+	// The four below are reached through t(SORTS[i].label), which check-i18n
+	// cannot see. Keep them in step with SORTS in sections/Loot.tsx by hand.
+	Sort: 'Sortuj',
+	'Chance, rarest last': 'Szansa, najrzadsze na końcu',
+	'Item name, A–Z': 'Nazwa przedmiotu, A–Z',
+	'Item id, lowest first': 'Id przedmiotu, od najniższego',
+	'Count, largest first': 'Liczba, od największej',
 	'Chance is out of 100,000 in the file; shown here as a percent.':
 		'Szansa jest podana na 100 000 w pliku; tutaj pokazana jako procent.',
 	never: 'nigdy',

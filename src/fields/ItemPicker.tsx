@@ -22,6 +22,21 @@ export function clearItemInfoCache(): void {
 	byNameCache.clear();
 }
 
+/**
+ * The resolved name for an id or a name, if it is already cached — null if it
+ * is not, without going and asking.
+ *
+ * For the callers that need every row's name at once rather than one row's: a
+ * sort cannot await, and by the time there is a table to sort every row of it
+ * has rendered and filled this cache through `useItemInfo`. A miss is a real
+ * answer, and the caller falls back to what the entry itself carries.
+ */
+export function cachedItemName(id: number | null, name: string | null): string | null {
+	if (id !== null) return byIdCache.get(id)?.name ?? null;
+	if (name) return byNameCache.get(name.toLowerCase())?.name ?? null;
+	return null;
+}
+
 export function useItemInfo(index: ItemIndex, id: number | null, name: string | null): ItemInfo | null {
 	const [info, setInfo] = useState<ItemInfo | null>(() => {
 		if (id !== null) return byIdCache.get(id) ?? null;

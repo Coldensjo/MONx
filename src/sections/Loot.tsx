@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t } from 'i18next';
-import { ChevronDown, ChevronRight, Dices, Package, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowDownWideNarrow, ChevronDown, ChevronRight, Dices, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { n } from '../i18n';
 import LootSimDialog from '../LootSimDialog';
 import { getMonster, type ItemIndex, type LootEntry, type MonsterSummary } from '../monster';
@@ -9,7 +9,7 @@ import { Field } from '../fields/Field';
 import { FieldLint, type LintAt } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
-import { ItemPicker, ItemSprite, useItemInfo } from '../fields/ItemPicker';
+import { cachedItemName, ItemPicker, ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { reorder, useDragSource, useDropTarget } from '../dnd';
 import { Section, useMonsterState, type SectionId, type SectionProps } from './section';
 import { useWorkspace } from '../workspacectx';
@@ -295,6 +295,55 @@ const LootRow = memo(function LootRow({
 	);
 });
 
+type SortKey = 'chance' | 'name' | 'id' | 'count';
+
+/** Labels are i18n keys. Each says its direction, because none of the four has
+ *  an order that is obvious from the word alone. */
+const SORTS: { key: SortKey; label: string }[] = [
+	{ key: 'chance', label: 'Chance, rarest last' },
+	{ key: 'name', label: 'Item name, A–Z' },
+	{ key: 'id', label: 'Item id, lowest first' },
+	{ key: 'count', label: 'Count, largest first' }
+];
+
+/** What a row shows, which is what sorting by name has to agree with — the
+ *  resolved item name, then whatever the entry itself carries. */
+function sortName(e: LootEntry): string {
+	return (cachedItemName(e.id, e.name) ?? e.name ?? e.comment ?? '').toLowerCase();
+}
+
+/**
+ * Orders a table, and every container inside it.
+ *
+ * Recursive because a sort that left a container's contents where they were
+ * would be answering half the question, and because loot order means nothing to
+ * the server — it is entirely a convenience for the person reading the file, so
+ * the whole tree should read the same way.
+ *
+ * Entries with nothing to compare sort last rather than first: an unresolved
+ * row is a row to come back to, and the top of the table is where the eye lands.
+ */
+function sortLoot(rows: LootEntry[], key: SortKey): LootEntry[] {
+	const sorted = [...rows].sort((a, b) => {
+		switch (key) {
+			case 'chance':
+				return b.chance - a.chance;
+			case 'count':
+				return b.countmax - a.countmax;
+			case 'id':
+				return (a.id ?? Number.MAX_SAFE_INTEGER) - (b.id ?? Number.MAX_SAFE_INTEGER);
+			case 'name': {
+				const [x, y] = [sortName(a), sortName(b)];
+				if (x === y) return 0;
+				if (x === '') return 1;
+				if (y === '') return -1;
+				return x.localeCompare(y);
+			}
+		}
+	});
+	return sorted.map(e => (e.children.length > 0 ? { ...e, children: sortLoot(e.children, key) } : e));
+}
+
 /**
  * Picks a monster to copy a loot table from.
  *
@@ -367,6 +416,7 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 	const { t } = useTranslation();
 	const [adding, setAdding] = useMonsterState(doc.file, () => false);
 	const [donorOpen, setDonorOpen] = useMonsterState(doc.file, () => false);
+	const [sortOpen, setSortOpen] = useMonsterState(doc.file, () => false);
 	const [simulating, setSimulating] = useMonsterState(doc.file, () => false);
 	/** Top-level row indices in the multi-selection. Indices only mean anything
 	 *  within one monster, so this re-seeds when the file changes. */
@@ -537,15 +587,37 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 						{t('Add loot from…')}
 					</button>
 				)}
-				<button
-					type="button"
-					className="ss-btn ss-btn-ghost"
-					disabled={readOnly || doc.loot.length < 2}
-					title={t('Rarest last')}
-					onClick={() => setLoot([...doc.loot].sort((a, b) => b.chance - a.chance))}
-				>
-					{t('Sort by chance')}
-				</button>
+				<div className="ss-ed-itempick">
+					<button
+						type="button"
+						className="ss-btn ss-btn-ghost"
+						disabled={readOnly || doc.loot.length < 2}
+						onClick={() => setSortOpen(o => !o)}
+					>
+						<ArrowDownWideNarrow size={14} />
+						{t('Sort')}
+						<ChevronDown size={13} />
+					</button>
+					{sortOpen && (
+						<div className="ss-ed-popover ss-ed-popover-up" onMouseLeave={() => setSortOpen(false)}>
+							<div className="ss-ed-popover-list">
+								{SORTS.map(s => (
+									<button
+										key={s.key}
+										type="button"
+										className="ss-ed-popover-item"
+										onClick={() => {
+											setSortOpen(false);
+											setLoot(sortLoot(doc.loot, s.key));
+										}}
+									>
+										<span className="ss-ed-popover-label">{t(s.label)}</span>
+									</button>
+								))}
+							</div>
+						</div>
+					)}
+				</div>
 				<span className="ss-ed-field-note">
 					{t('Chance is out of 100,000 in the file; shown here as a percent.')}
 				</span>
