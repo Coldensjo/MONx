@@ -9,7 +9,7 @@ import { Field } from '../fields/Field';
 import { FieldLint, type LintAt } from '../fields/Field';
 import { NumberField } from '../fields/NumberField';
 import { TextField } from '../fields/TextField';
-import { cachedItemName, ItemPicker, ItemSprite, useItemInfo } from '../fields/ItemPicker';
+import { cachedItemName, ItemSprite, useItemInfo } from '../fields/ItemPicker';
 import { reorder, useDragSource, useDropTarget } from '../dnd';
 import { Section, useMonsterState, type SectionId, type SectionProps } from './section';
 import { useWorkspace } from '../workspacectx';
@@ -412,9 +412,8 @@ function LootDonorPicker({
 }
 
 export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
-	const { items, corpus, onToast } = useWorkspace();
+	const { items, corpus, onToast, onBrowseItems } = useWorkspace();
 	const { t } = useTranslation();
-	const [adding, setAdding] = useMonsterState(doc.file, () => false);
 	const [donorOpen, setDonorOpen] = useMonsterState(doc.file, () => false);
 	const [sortOpen, setSortOpen] = useMonsterState(doc.file, () => false);
 	const [simulating, setSimulating] = useMonsterState(doc.file, () => false);
@@ -532,24 +531,16 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 			)}
 
 			<div className="ss-ed-loot-actions">
-				{adding ? (
-					<ItemPicker
-						index={items}
-						value={null}
-						defaultOpen
-						onChange={item => {
-							setLoot([...doc.loot, newLootEntry(item)]);
-							setAdding(false);
-						}}
-						disabled={readOnly}
-						placeholder={t('Search items…')}
-					/>
-				) : (
-					<button type="button" className="ss-btn" disabled={readOnly} onClick={() => setAdding(true)}>
-						<Plus size={14} />
-						{t('Add item')}
-					</button>
-				)}
+				{/* Off to the Items browser rather than a search box in the section.
+				    The box could only match on name and show one line at a time; the
+				    browser is the corpus with its sprites, its filters, multi-select
+				    and the loot tray, and it can add several items in one visit —
+				    which is what filling a table actually looks like. Right-click
+				    there adds straight to this monster. */}
+				<button type="button" className="ss-btn" disabled={readOnly} onClick={onBrowseItems}>
+					<Plus size={14} />
+					{t('Pick items…')}
+				</button>
 				{donorOpen ? (
 					<LootDonorPicker
 						corpus={corpus}

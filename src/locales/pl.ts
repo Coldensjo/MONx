@@ -1159,7 +1159,6 @@ const pl: Record<string, string> = {
 	Apply: 'Zastosuj',
 	'Clear selection': 'Wyczyść zaznaczenie',
 	'Search items…': 'Szukaj przedmiotów…',
-	'Add item': 'Dodaj przedmiot',
 	'Add loot from…': 'Dodaj łup z…',
 	'Append another monster’s loot table to this one, chances and all':
 		'Dopisuje tabelę łupów innego potwora do tej, razem z szansami',

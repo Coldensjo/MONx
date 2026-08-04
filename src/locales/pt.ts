@@ -1069,7 +1069,6 @@ const pt: Record<string, string> = {
 	Apply: 'Aplicar',
 	'Clear selection': 'Limpar seleção',
 	'Search items…': 'Buscar itens…',
-	'Add item': 'Adicionar item',
 	'Add loot from…': 'Adicionar loot de…',
 	'Append another monster’s loot table to this one, chances and all':
 		'Acrescenta a tabela de loot de outro monstro a esta, com as chances',
