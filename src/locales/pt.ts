@@ -802,6 +802,10 @@ const pt: Record<string, string> = {
 	'Clear the Loot section': 'Limpar a seção Loot',
 	Clear: 'Limpar',
 	'Clear loot': 'Limpar loot',
+	'Clear all loot': 'Limpar todo o loot',
+	'Remove all {{count}} loot entry from {{monster}}?_one': 'Remover a única entrada de loot de "{{monster}}"?',
+	'Remove all {{count}} loot entry from {{monster}}?_other':
+		'Remover todas as {{count}} entradas de loot de "{{monster}}"?',
 	'Save this tray under a name': 'Salvar esta bandeja com um nome',
 	'Save preset': 'Salvar conjunto',
 	'No presets saved yet': 'Nenhum conjunto salvo ainda',

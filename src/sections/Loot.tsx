@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t } from 'i18next';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { ArrowDownWideNarrow, ChevronDown, ChevronRight, Dices, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { n } from '../i18n';
 import LootSimDialog from '../LootSimDialog';
@@ -578,6 +579,29 @@ export function Loot({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Prop
 						{t('Add loot from…')}
 					</button>
 				)}
+				{/* Asks first, because this is the one control here that throws work
+				    away rather than changing it, and the table it empties can be an
+				    afternoon's balancing. Undo still covers it — the prompt does not
+				    claim otherwise — but a misclick that silently blanks the section
+				    is not something to find out about later. */}
+				<button
+					type="button"
+					className="ss-btn ss-btn-ghost"
+					disabled={readOnly || doc.loot.length === 0}
+					onClick={() => {
+						void confirm(
+							t('Remove all {{count}} loot entry from {{monster}}?', {
+								count: doc.loot.length,
+								monster: doc.name
+							}),
+							{ title: t('Clear loot'), kind: 'warning' }
+						).then(ok => ok && setLoot([]));
+					}}
+				>
+					<Trash2 size={14} />
+					{t('Clear all loot')}
+				</button>
+
 				<div className="ss-ed-itempick">
 					<button
 						type="button"

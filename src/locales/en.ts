@@ -123,6 +123,9 @@ const en: Record<string, string> = {
 		'{{count}} loot entries in {{files}} become id + a trailing comment naming the item.',
 	'{{count}} item in the tray._one': '{{count}} item in the tray.',
 	'{{count}} item in the tray._other': '{{count}} items in the tray.',
+	'Remove all {{count}} loot entry from {{monster}}?_one': 'Remove the only loot entry from {{monster}}?',
+	'Remove all {{count}} loot entry from {{monster}}?_other':
+		'Remove all {{count}} loot entries from {{monster}}?',
 	'Clear {{count}} item from Loot?_one': 'Clear {{count}} item from Loot?',
 	'Clear {{count}} item from Loot?_other': 'Clear {{count}} items from Loot?',
 	'Add {{count}} item to Loot_one': 'Add item to Loot',

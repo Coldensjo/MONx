@@ -893,6 +893,11 @@ const pl: Record<string, string> = {
 	'Clear the Loot section': 'Wyczyść sekcję Łup',
 	Clear: 'Wyczyść',
 	'Clear loot': 'Wyczyść łup',
+	'Clear all loot': 'Wyczyść cały łup',
+	'Remove all {{count}} loot entry from {{monster}}?_one': 'Usunąć jedyny wpis łupu z „{{monster}}”?',
+	'Remove all {{count}} loot entry from {{monster}}?_few': 'Usunąć wszystkie {{count}} wpisy łupu z „{{monster}}”?',
+	'Remove all {{count}} loot entry from {{monster}}?_many':
+		'Usunąć wszystkie {{count}} wpisów łupu z „{{monster}}”?',
 	'Save this tray under a name': 'Zapisz tę tacę pod nazwą',
 	'Save preset': 'Zapisz zestaw',
 	'No presets saved yet': 'Nie zapisano jeszcze żadnych zestawów',
