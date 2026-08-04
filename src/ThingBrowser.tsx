@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Filter, Search, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { loadZoomIdx, saveZoomIdx } from './settings';
@@ -20,6 +20,20 @@ export const ANIM_INTERVAL_MS = 220;
 export const ITEM_ANIM_INTERVAL_MS = 500;
 
 export type CellKey = string | number;
+
+/**
+ * Where each grid was left, keyed by the list rather than the tab.
+ *
+ * A pixel offset only means the same thing against the same rows, so the key
+ * carries the search and the active filters as well: come back to a differently
+ * filtered Items grid and the old offset would point at an unrelated item, which
+ * is worse than the top.
+ *
+ * Module scope because the browser unmounts every time the centre column shows
+ * something else, which is the whole problem being solved. Not persisted — a
+ * scroll position is a fact about the last minute, not about the workspace.
+ */
+const lastScrollByList = new Map<string, number>();
 
 /** Generalisation of SPRx's `StructuralFilter`: a named predicate over a cell. */
 export interface Filter<T> {
@@ -445,6 +459,34 @@ export default function ThingBrowser<T>(props: ThingBrowserProps<T>) {
 		}
 		return [...groups.entries()];
 	}, [visibleFilters]);
+
+	/** Identifies the list, not just the tab: a scroll offset only means the same
+	 *  thing against the same rows, so a different search or filter set is a
+	 *  different place and gets the top. */
+	const listKey = `${view}|${[...activeFilters].sort().join(',')}|${search}`;
+
+	// The browser unmounts whenever the centre column shows something else, so
+	// stepping out to a monster and back put you at the top of the grid. Restored
+	// once per mount, and only after the ResizeObserver has reported: until it
+	// does, `cols` is 1 and the grid is a single tall column, so a pixel offset
+	// applied then would point at an entirely different row.
+	const restoredScroll = useRef(false);
+	useLayoutEffect(() => {
+		if (restoredScroll.current || viewport.w === 0) return;
+		restoredScroll.current = true;
+		const top = lastScrollByList.get(listKey);
+		if (top && scrollRef.current) scrollRef.current.scrollTop = top;
+	}, [viewport.w, listKey]);
+
+	const listKeyRef = useRef(listKey);
+	listKeyRef.current = listKey;
+	useEffect(
+		() => () => {
+			const el = scrollRef.current;
+			if (el && el.scrollTop > 0) lastScrollByList.set(listKeyRef.current, el.scrollTop);
+		},
+		[]
+	);
 
 	const cols = Math.max(1, Math.floor((viewport.w - GRID_PAD * 2) / cellW));
 	const rows = Math.ceil(shown.length / cols);

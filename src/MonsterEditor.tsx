@@ -31,6 +31,24 @@ import { useWorkspace } from './workspacectx';
 
 const STATE_KEY = 'monx.editor';
 
+/**
+ * Where the editor was when it last went off screen.
+ *
+ * The centre column is one slot: opening the Items browser unmounts the editor
+ * and coming back mounts a fresh one, which then lands on the default tab as if
+ * the monster had just been opened. It had not — you left to fetch an item and
+ * came straight back, and the whole point of the trip was the row you were
+ * looking at.
+ *
+ * One slot, not a map, and matched on the file: the only thing worth restoring
+ * is the monster you just left. Opening a *different* monster is a new start and
+ * should land on the default tab, which is a setting somebody chose.
+ *
+ * Module scope rather than state, because the component holding it is the one
+ * that unmounts.
+ */
+let lastScroll: { file: string; top: number } | null = null;
+
 interface EditorState {
 	collapsed: SectionId[];
 }
@@ -255,6 +273,35 @@ export function MonsterEditor({
 		window.setTimeout(() => el.classList.remove('ss-ed-field-found'), 1600);
 	}, []);
 
+	/** True for the mount that restored a position, so the landing effect below
+	 *  stands down for it and only for it. */
+	const restored = useRef<string | null>(null);
+
+	// Runs before the landing effect, which is what lets it win: both fire on the
+	// same mount and the last write to scrollTop would otherwise be the default
+	// tab's. Reading and clearing in one go — a restore is spent once, so opening
+	// the same monster again later starts fresh.
+	useLayoutEffect(() => {
+		const box = scrollRef.current;
+		if (!box || lastScroll?.file !== doc.file) return;
+		box.scrollTop = lastScroll.top;
+		restored.current = doc.file;
+		lastScroll = null;
+	}, [doc.file]);
+
+	// Remembers on the way out. Empty deps and a ref for the file, so this runs
+	// when the editor really unmounts rather than every time the document
+	// changes — switching monsters is not leaving.
+	const fileRef = useRef(doc.file);
+	fileRef.current = doc.file;
+	useEffect(
+		() => () => {
+			const box = scrollRef.current;
+			if (box) lastScroll = { file: fileRef.current, top: box.scrollTop };
+		},
+		[]
+	);
+
 	// Opening a monster lands on the default tab, instantly: this is where the
 	// work starts, so animating there would only be a delay. Keyed on the file,
 	// so switching tabs or reloading a monster re-lands but editing does not.
@@ -264,6 +311,12 @@ export function MonsterEditor({
 	// one painted frame at the old scroll position — the flicker you saw switching
 	// monsters. Scrolling here happens before the browser paints at all.
 	useLayoutEffect(() => {
+		// Consumed, not just read: the guard is for the mount that restored, and
+		// a later prefs change on the same monster should still land.
+		if (restored.current === doc.file) {
+			restored.current = null;
+			return;
+		}
 		const id = landingSection(prefs);
 		if (!id) return;
 		jump(id, 'auto');
