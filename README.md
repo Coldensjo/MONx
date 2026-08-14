@@ -59,17 +59,21 @@ bun run tauri:build:all        # both
 - Portable: `src-tauri/target/release/monx-portable.exe`
 - Installer: `src-tauri/target/release/bundle/nsis/`
 
-The bundle target in `tauri.conf.json` is Windows NSIS, so on Linux build the plain binary instead:
+On Linux:
 
 ```sh
-bun run build                      # frontend into dist/
-cd src-tauri && cargo build --release
+bun run tauri:build:portable   # portable executable only
+bun run tauri:build:linux      # .deb and AppImage packages
 ```
 
-It lands at `src-tauri/target/release/monx`. Build the frontend first — the release binary embeds `dist/` at compile time, so a stale `dist/` ships stale UI. Under Wayland, launch it the same way `monx.sh` does:
+- Portable: `src-tauri/target/release/monx-portable`
+- Debian package: `src-tauri/target/release/bundle/deb/*.deb`
+- AppImage: `src-tauri/target/release/bundle/appimage/*.AppImage`
+
+Both commands rebuild the frontend before compiling because the release binary embeds `dist/`. Build distributable packages on the oldest Linux release you intend to support; dynamically linked system libraries are selected on the build machine. Under Wayland, launch the portable executable, AppImage or installed `monx` binary the same way `monx.sh` does:
 
 ```sh
-GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
+GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx-portable
 ```
 
 ## Verifying changes
