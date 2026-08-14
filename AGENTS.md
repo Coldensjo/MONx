@@ -99,7 +99,8 @@ cargo run --release --example probe_lua -- ../assets/Canary/monster
 bun install
 bun run tauri:dev          # dev app (Vite on :8090 + Tauri window)
 
-bun run tauri:build:portable   # portable .exe only
+bun run tauri:build:portable   # portable executable only
+bun run tauri:build:linux      # Linux .deb + AppImage
 bun run tauri:build:all        # NSIS installer + portable .exe
 bun run tauri:build            # NSIS installer only
 ```
@@ -108,8 +109,9 @@ On Linux use `./monx.sh` — it runs the hot-reloading dev app, forcing XWayland
 
 **Outputs**
 
-- Portable: `src-tauri/target/release/monx-portable.exe` (renamed/copied by `scripts/prepare-portable.mjs`)
-- Installer: `src-tauri/target/release/bundle/nsis/`
+- Portable: `src-tauri/target/release/monx-portable[.exe]` (renamed/copied by `scripts/prepare-portable.mjs`)
+- Linux packages: `src-tauri/target/release/bundle/deb/*.deb`, `src-tauri/target/release/bundle/appimage/*.AppImage`
+- Windows installer: `src-tauri/target/release/bundle/nsis/`
 
 **Version bumps** touch three files: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`. Bump the patch version on every change to the software — keep all three in sync, in the same commit as the change itself.
 
