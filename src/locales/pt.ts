@@ -973,6 +973,17 @@ const pt: Record<string, string> = {
 	'Browse the Items grid filtered to corpses, then right-click one to set it':
 		'Navegue pela grade de Itens filtrada por corpos e clique com o botão direito em um para defini-lo',
 	'Select corpse': 'Selecionar corpo',
+	'Select an item': 'Selecione um item',
+	'server id {{id}}': 'id do servidor {{id}}',
+	'client id {{id}}': 'id do cliente {{id}}',
+	Summary: 'Resumo',
+	Article: 'Artigo',
+	Yes: 'Sim',
+	No: 'Não',
+	'More than one item in this corpus has this name (§13)':
+		'Mais de um item neste corpus tem esse nome (§13)',
+	'Raw attributes': 'Atributos brutos',
+	'No items match.': 'Nenhum item corresponde.',
 	'No corpse': 'Sem corpo',
 	'Corpse action id': 'Action id do corpo',
 	'Ironcore — stamped on the corpse so quest scripts can hook it. Only applied when non-zero.':

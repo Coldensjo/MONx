@@ -314,6 +314,35 @@ input[type='file'] {
 	color: var(--warn);
 }
 
+/* ---------- Item pick dialog (loot/corpse/typeex, borrowed by the wizard) ---------- */
+
+/* As wide and tall as the rail's own Items view got, because it hosts the
+   same grid — narrower and the grid loses the columns that make browsing
+   38,000 items practical. */
+.mx-item-pick-modal {
+	width: min(1200px, 96vw);
+	height: min(820px, 88vh);
+	padding: 16px;
+}
+
+.mx-item-pick-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+/* `.ss-grid-wrap` inside `ItemPickPanel` is `flex: 1`, same as it is under
+   `.ss-main` — this is what gives it something bounded to fill instead of
+   growing the modal past its own height. */
+.mx-item-pick-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	gap: 10px;
+}
+
 /* ---------- Corpus tools: the loot chance scaler ---------- */
 
 .mx-scale-modal {

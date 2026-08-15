@@ -1067,6 +1067,17 @@ const pl: Record<string, string> = {
 	'Browse the Items grid filtered to corpses, then right-click one to set it':
 		'Przeglądaj siatkę Przedmiotów odfiltrowaną do zwłok, potem kliknij prawym, aby ustawić',
 	'Select corpse': 'Wybierz zwłoki',
+	'Select an item': 'Wybierz przedmiot',
+	'server id {{id}}': 'id serwera {{id}}',
+	'client id {{id}}': 'id klienta {{id}}',
+	Summary: 'Podsumowanie',
+	Article: 'Przedimek',
+	Yes: 'Tak',
+	No: 'Nie',
+	'More than one item in this corpus has this name (§13)':
+		'Więcej niż jeden przedmiot w tym korpusie ma tę nazwę (§13)',
+	'Raw attributes': 'Surowe atrybuty',
+	'No items match.': 'Żaden przedmiot nie pasuje.',
 	'No corpse': 'Brak zwłok',
 	'Corpse action id': 'Action id zwłok',
 	'Ironcore — stamped on the corpse so quest scripts can hook it. Only applied when non-zero.':

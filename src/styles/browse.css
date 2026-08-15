@@ -805,3 +805,41 @@ body.ss-dragging {
 	pointer-events: none;
 	text-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
 }
+
+/* Same mark, in the Items sidebar row instead of a grid cell's corner. */
+.mx-item-row-fav {
+	flex: none;
+	color: var(--accent);
+}
+
+/* ---------- Item detail (centre column for the rail's Items view) ---------- */
+
+/* `.ss-details-*` classes are PreviewPanel's — reused here for the same
+   label/value row idiom, but this is the wide centre column, not the narrow
+   right-hand aside, so it gets its own outer sizing and a max width rather
+   than stretching a details grid across the whole window. */
+.mx-item-detail {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow-y: auto;
+	align-items: center;
+}
+
+.mx-item-detail .ss-details-top,
+.mx-item-detail .ss-details-scroll {
+	width: 100%;
+	max-width: 560px;
+}
+
+.mx-item-detail .ss-details-preview {
+	align-self: center;
+}
+
+.mx-item-detail-summary {
+	font-size: 13px;
+	color: var(--text);
+	line-height: 1.6;
+	white-space: pre-line;
+}
