@@ -46,7 +46,12 @@ const SLOTS: { key: SlotKey; label: string; hint: string; icon: JSX.Element; opt
 		hint: 'data/items — items.otb + items.xml|toml|srv',
 		icon: <Package size={16} />
 	},
-	{ key: 'client', label: 'Client folder', hint: 'Tibia.dat + Tibia.spr', icon: <Image size={16} /> },
+	{
+		key: 'client',
+		label: 'Client folder',
+		hint: 'Tibia.dat + Tibia.spr, or assets/ with catalog-content.json',
+		icon: <Image size={16} />
+	},
 	{
 		key: 'spells',
 		label: 'Spells folder',

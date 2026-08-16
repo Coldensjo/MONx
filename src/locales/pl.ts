@@ -319,6 +319,8 @@ const pl: Record<string, string> = {
 	'Monsters folder': 'Folder potworów',
 	'Items folder': 'Folder przedmiotów',
 	'Client folder': 'Folder klienta',
+	'Tibia.dat + Tibia.spr, or assets/ with catalog-content.json':
+		'Tibia.dat + Tibia.spr lub folder assets/ z plikiem catalog-content.json',
 	'Spells folder': 'Folder zaklęć',
 	'data/items — items.otb + items.xml': 'data/items — items.otb + items.xml',
 	'data/spells — optional, enables ### spell verification':
@@ -392,7 +394,6 @@ const pl: Record<string, string> = {
 	Undo: 'Cofnij',
 	Redo: 'Ponów',
 	'Fix every fixable lint': 'Napraw każdą naprawialną uwagę',
-	'Add the loot tray to this monster': 'Dodaj tacę łupu do tego potwora',
 	'Go to Monsters': 'Przejdź do Potworów',
 	'Go to Items': 'Przejdź do Przedmiotów',
 	'Go to Outfits': 'Przejdź do Wyglądów',
@@ -886,8 +887,9 @@ const pl: Record<string, string> = {
 	spell: 'zaklęcie',
 
 	// --- Loot tray ------------------------------------------------------------
-	'Right-click selected items above to add them here.':
-		'Kliknij prawym przyciskiem zaznaczone przedmioty powyżej, aby dodać je tutaj.',
+	'Loot to add': 'Łup do dodania',
+	'Double-click an item, or right-click the selection, to add it here.':
+		'Kliknij dwukrotnie przedmiot lub kliknij zaznaczenie prawym przyciskiem, aby dodać je tutaj.',
 	'Add loot': 'Dodaj łup',
 	'Add loot to {{monster}}': 'Dodaj łup do {{monster}}',
 	'Clear the Loot section': 'Wyczyść sekcję Łup',
@@ -1067,6 +1069,25 @@ const pl: Record<string, string> = {
 	'Browse the Items grid filtered to corpses, then right-click one to set it':
 		'Przeglądaj siatkę Przedmiotów odfiltrowaną do zwłok, potem kliknij prawym, aby ustawić',
 	'Select corpse': 'Wybierz zwłoki',
+	'Select an item': 'Wybierz przedmiot',
+	'server id {{id}}': 'id serwera {{id}}',
+	'client id {{id}}': 'id klienta {{id}}',
+	Appearance: 'Wygląd',
+	Frames: 'Klatki',
+	Variants: 'Warianty',
+	'Variant X': 'Wariant X',
+	'Variant Y': 'Wariant Y',
+	'Variant Z': 'Wariant Z',
+	'Loading client assets…': 'Wczytywanie zasobów klienta…',
+	'No client assets are available for this item.': 'Brak zasobów klienta dla tego przedmiotu.',
+	Summary: 'Podsumowanie',
+	Article: 'Przedimek',
+	Yes: 'Tak',
+	No: 'Nie',
+	'More than one item in this corpus has this name (§13)':
+		'Więcej niż jeden przedmiot w tym korpusie ma tę nazwę (§13)',
+	'Raw attributes': 'Surowe atrybuty',
+	'No items match.': 'Żaden przedmiot nie pasuje.',
 	'No corpse': 'Brak zwłok',
 	'Corpse action id': 'Action id zwłok',
 	'Ironcore — stamped on the corpse so quest scripts can hook it. Only applied when non-zero.':

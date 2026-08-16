@@ -110,7 +110,6 @@ export const DEFAULT_BINDINGS: Bindings = {
 	// binding is for.
 	'redo': bind('Ctrl+Shift+Z', 'Ctrl+Y'),
 	'fix-all-lints': bind('Ctrl+.'),
-	'add-tray-loot': bind(null),
 
 	'view-monsters': bind('Ctrl+1'),
 	'view-items': bind('Ctrl+2'),
@@ -159,6 +158,9 @@ export function loadBindings(): Bindings {
 		if (!raw) return merged;
 		const stored = JSON.parse(raw);
 		for (const [id, b] of Object.entries(stored ?? {})) {
+			// Commands can disappear when a feature becomes modal-only. Do not let
+			// an old override keep a ghost chord in conflict detection forever.
+			if (!(id in DEFAULT_BINDINGS)) continue;
 			const v = b as Partial<Binding>;
 			merged[id] = {
 				primary: typeof v?.primary === 'string' ? v.primary : null,

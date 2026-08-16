@@ -863,7 +863,7 @@ export function thingUrlFor(
 	category: 'item' | 'outfit' | 'effect' | 'missile',
 	id: number,
 	transparent: boolean,
-	opts?: { frame?: number; dir?: number; diry?: number }
+	opts?: { frame?: number; dir?: number; diry?: number; patz?: number }
 ): string {
 	const q = new URLSearchParams({
 		path: sprPath,
@@ -876,6 +876,7 @@ export function thingUrlFor(
 	if (opts?.frame !== undefined) q.set('frame', String(opts.frame));
 	if (opts?.dir !== undefined) q.set('dir', String(opts.dir));
 	if (opts?.diry !== undefined) q.set('diry', String(opts.diry));
+	if (opts?.patz !== undefined) q.set('patz', String(opts.patz));
 	return `${protocolBase}/thing.png?${q}`;
 }
 

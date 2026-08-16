@@ -244,6 +244,8 @@ const pt: Record<string, string> = {
 	'Monsters folder': 'Pasta de monstros',
 	'Items folder': 'Pasta de itens',
 	'Client folder': 'Pasta do cliente',
+	'Tibia.dat + Tibia.spr, or assets/ with catalog-content.json':
+		'Tibia.dat + Tibia.spr ou pasta assets/ com catalog-content.json',
 	'Spells folder': 'Pasta de magias',
 	'data/items — items.otb + items.xml': 'data/items — items.otb + items.xml',
 	'data/spells — optional, enables ### spell verification':
@@ -317,7 +319,6 @@ const pt: Record<string, string> = {
 	Undo: 'Desfazer',
 	Redo: 'Refazer',
 	'Fix every fixable lint': 'Corrigir todo apontamento corrigível',
-	'Add the loot tray to this monster': 'Adicionar a bandeja de loot a este monstro',
 	'Go to Monsters': 'Ir para Monstros',
 	'Go to Items': 'Ir para Itens',
 	'Go to Outfits': 'Ir para Outfits',
@@ -795,8 +796,9 @@ const pt: Record<string, string> = {
 	spell: 'magia',
 
 	// --- Loot tray -----------------------------------------------------------------------------
-	'Right-click selected items above to add them here.':
-		'Clique com o botão direito nos itens selecionados acima para adicioná-los aqui.',
+	'Loot to add': 'Loot a adicionar',
+	'Double-click an item, or right-click the selection, to add it here.':
+		'Clique duas vezes em um item ou clique com o botão direito na seleção para adicioná-la aqui.',
 	'Add loot': 'Adicionar loot',
 	'Add loot to {{monster}}': 'Adicionar loot a {{monster}}',
 	'Clear the Loot section': 'Limpar a seção Loot',
@@ -973,6 +975,25 @@ const pt: Record<string, string> = {
 	'Browse the Items grid filtered to corpses, then right-click one to set it':
 		'Navegue pela grade de Itens filtrada por corpos e clique com o botão direito em um para defini-lo',
 	'Select corpse': 'Selecionar corpo',
+	'Select an item': 'Selecione um item',
+	'server id {{id}}': 'id do servidor {{id}}',
+	'client id {{id}}': 'id do cliente {{id}}',
+	Appearance: 'Aparência',
+	Frames: 'Quadros',
+	Variants: 'Variantes',
+	'Variant X': 'Variante X',
+	'Variant Y': 'Variante Y',
+	'Variant Z': 'Variante Z',
+	'Loading client assets…': 'Carregando recursos do cliente…',
+	'No client assets are available for this item.': 'Não há recursos do cliente disponíveis para este item.',
+	Summary: 'Resumo',
+	Article: 'Artigo',
+	Yes: 'Sim',
+	No: 'Não',
+	'More than one item in this corpus has this name (§13)':
+		'Mais de um item neste corpus tem esse nome (§13)',
+	'Raw attributes': 'Atributos brutos',
+	'No items match.': 'Nenhum item corresponde.',
 	'No corpse': 'Sem corpo',
 	'Corpse action id': 'Action id do corpo',
 	'Ironcore — stamped on the corpse so quest scripts can hook it. Only applied when non-zero.':

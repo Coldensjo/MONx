@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { confirm, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { Bookmark, Package, Percent, PersonStanding, Plus, Save, Skull, Sparkles, Star, Trash2, Users, Wand2, X } from 'lucide-react';
+import { Package, PersonStanding, Save, Skull, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import {
 	getItem,
 	allLints as fetchAllLints,
@@ -13,8 +13,6 @@ import {
 	itemUrl,
 	itemUsage,
 	writeTextFile,
-	corpseDecays,
-	isCorpse,
 	lintMonster,
 	lintWorkspace,
 	listMonsterGroups,
@@ -39,6 +37,12 @@ import {
 	type MonsterSummary,
 	type WorkspaceInfo
 } from './monster';
+import { buildItemFilters, itemSummaryLines, type ItemAppearanceMeta } from './items';
+import { type ItemPickPanelProps } from './ItemPickPanel';
+import ItemPickDialog from './ItemPickDialog';
+import ItemList from './ItemList';
+import ItemDetail from './ItemDetail';
+import ItemPreviewPanel from './ItemPreviewPanel';
 import { engineInfo } from './engine';
 import Menubar, { type Menu, type MenuItem } from './Menubar';
 import { newLootEntry } from './sections/Loot';
@@ -90,7 +94,6 @@ import { loadFavourites, saveFavourites } from './favourites';
 import { loadPresets, savePresets, upsertPreset, type LootPreset } from './lootpresets';
 import { getThings, type ThingSummary } from './spr';
 import { loadSetting, saveSetting } from './settings';
-import { n } from './i18n';
 import { workspaceLabel, type Toast } from './App';
 
 /** How often the corpus is statted for changes made outside MONx, while this is
@@ -121,6 +124,7 @@ import * as buffers from './buffers';
  *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
  *  the same cap, so the exact value only matters for the very fastest. */
 const NOMINAL_SPEED = 100;
+const EMPTY_ITEM_APPEARANCES: ReadonlyMap<number, ItemAppearanceMeta> = new Map();
 
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */
@@ -129,7 +133,7 @@ type View = 'monsters' | 'items' | 'outfits' | 'effects' | 'missiles';
 /** What the create wizard can ask a browser to answer, and which browser
  *  answers it. Every one of them is a picture, which is the whole reason the
  *  wizard hands them over rather than drawing a grid of its own. */
-type WizardPickKind = 'outfit' | 'corpse' | 'effect' | 'missile' | 'loot';
+export type WizardPickKind = 'outfit' | 'corpse' | 'effect' | 'missile' | 'loot';
 
 const PICK_VIEW: Record<WizardPickKind, View> = {
 	outfit: 'outfits',
@@ -277,8 +281,12 @@ export default function Workspace({
 	/** The Loot staging tray under the Items browser — collected via right-click,
 	 *  appended to the open monster in one go. Session-scoped, deduped by server id. */
 	const [lootTray, setLootTray] = useState<ItemInfo[]>([]);
-	/** Frame counts per client id from the .dat, for animating item cells. */
-	const [itemFrames, setItemFrames] = useState<Map<number, number>>(new Map());
+	/** Only the client metadata the selected item's right-hand preview needs.
+	 *  The full item ThingSummary list is tens of thousands of rows on Canary;
+	 *  discard names/flags after loading instead of retaining a second catalogue.
+	 *  Null means the client catalogue is still loading; an empty map means it
+	 *  settled without item appearances. */
+	const [itemPreviews, setItemPreviews] = useState<Map<number, ItemAppearanceMeta> | null>(null);
 	/** Server ids the saved corpus drops, for the "not dropped by any monster"
 	 *  filter. Re-read after anything that rewrites loot on disk. */
 	const [dropped, setDropped] = useState<Set<number>>(new Set());
@@ -292,6 +300,14 @@ export default function Workspace({
 	/** Filter keys the Items browser opens with. Pickupable is the standing default
 	 *  (the view exists to feed loot); Select corpse / Select item override it. */
 	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>(['pickupable']);
+	/** The Loot/Look sections' "Select…" buttons open the item picker as a modal
+	 *  over whatever is on screen, rather than navigating away from the monster
+	 *  being edited. `targetFile` pins every write to the document that opened it. */
+	const [pickDialog, setPickDialog] = useState<{ title: string; targetFile: string | null } | null>(null);
+	/** The rail's own Items view: which row `ItemList` has selected, driving
+	 *  `ItemDetail` in the centre column. Unrelated to `selected`/`doc` — a
+	 *  monster stays open in its tab while this is browsed, same as before. */
+	const [selectedItem, setSelectedItem] = useState<number | null>(null);
 	/** `item` is the cell under the cursor (for single-item actions like the corpse);
 	 *  `items` is the whole effective selection. */
 	const [itemMenu, setItemMenu] = useState<{ x: number; y: number; item: ItemInfo; items: ItemInfo[] } | null>(
@@ -1028,6 +1044,7 @@ export default function Workspace({
 	// workspace is open.
 	useEffect(() => {
 		let cancelled = false;
+		setItemPreviews(null);
 		Promise.all([
 			getThings(info.datPath, 'outfit').catch(() => []),
 			getThings(info.datPath, 'effect').catch(() => []),
@@ -1036,9 +1053,21 @@ export default function Workspace({
 		]).then(([outfit, effect, missile, item]) => {
 			if (cancelled) return;
 			setThings({ outfit, effect, missile });
-			// Frame counts by client id, so the Items grid can animate and filter
-			// on animation — ItemInfo itself knows nothing about the .dat side.
-			setItemFrames(new Map(item.map(t => [t.id, t.frames])));
+			// One compact index by client id drives cell animation, filters and the
+			// selected preview — ItemInfo itself knows nothing about the client side.
+			const appearances = new Map<number, ItemAppearanceMeta>();
+			for (const t of item) {
+				appearances.set(t.id, {
+					frames: t.frames,
+					width: t.width,
+					height: t.height,
+					patternX: t.patternX,
+					patternY: t.patternY,
+					patternZ: t.patternZ,
+					frameDurations: t.frameDurations
+				});
+			}
+			setItemPreviews(appearances);
 		});
 		return () => {
 			cancelled = true;
@@ -1296,133 +1325,40 @@ export default function Workspace({
 	const itemLabel = useCallback((i: ItemInfo) => i.name || `#${i.serverId}`, []);
 	const itemSearchText = useCallback((i: ItemInfo) => i.name, []);
 	const itemSearchId = useCallback((i: ItemInfo) => i.serverId, []);
-	// Multi-line tooltip from the raw items.xml attributes — weight is in
-	// hundredths of an oz, as the client displays it.
-	// `atk`/`def`/`arm` and the weaponType/slotType words are the items.xml
-	// vocabulary itself, so they stay as the file spells them; only the prose
-	// around them is translated.
-	const itemCellTitle = useCallback(
-		(i: ItemInfo) => {
-			const a = i.attributes;
-			const lines = [`${i.name || `#${i.serverId}`}  (#${i.serverId})`];
-			const combat: string[] = [];
-			if (a.attack) combat.push(`atk ${a.attack}`);
-			if (a.defense)
-				combat.push(`def ${a.defense}${a.extradef ? ` ${Number(a.extradef) >= 0 ? '+' : ''}${a.extradef}` : ''}`);
-			if (a.armor) combat.push(`arm ${a.armor}`);
-			if (a.weaponType) combat.push(a.weaponType);
-			if (a.slotType) combat.push(a.slotType);
-			if (combat.length > 0) lines.push(combat.join(' · '));
-			const misc: string[] = [];
-			if (a.weight) misc.push(t('{{weight}} oz', { weight: n(Number(a.weight) / 100) }));
-			if (a.worth) misc.push(t('worth {{worth}} gp', { worth: n(Number(a.worth)) }));
-			if (a.charges) misc.push(t('{{count}} charge', { count: Number(a.charges) }));
-			if (a.containerSize) misc.push(t('{{count}} slot', { count: Number(a.containerSize) }));
-			if (a.duration) misc.push(t('decays in {{seconds}}s', { seconds: a.duration }));
-			if (misc.length > 0) lines.push(misc.join(' · '));
-			if (a.description) lines.push(a.description);
-			return lines.join('\n');
-		},
-		[t]
+	// Multi-line tooltip from the raw items.xml attributes — see
+	// `itemSummaryLines` in `items.ts`, shared with the item detail panel.
+	const itemCellTitle = useCallback((i: ItemInfo) => itemSummaryLines(t, i).join('\n'), [t]);
+	const itemAppearanceIndex = itemPreviews ?? EMPTY_ITEM_APPEARANCES;
+	const itemCellFrames = useCallback(
+		(i: ItemInfo) => itemAppearanceIndex.get(i.clientId)?.frames ?? 1,
+		[itemAppearanceIndex]
 	);
-	const itemCellFrames = useCallback((i: ItemInfo) => itemFrames.get(i.clientId) ?? 1, [itemFrames]);
 	const itemCellUrl = useCallback(
 		(i: ItemInfo, frame: number) =>
 			thingUrlFor(info.sprPath, info.datPath, 'item', i.clientId, info.transparent, { frame }),
 		[info.sprPath, info.datPath, info.transparent]
 	);
-	// Predicates over the raw items.xml attributes (`corpseType` is what the
-	// backend's own corpses_only filter keys on). Filters AND together, as in
-	// SPRx — vocabulary from the corpus: weaponType sword/club/axe/distance/
-	// wand/shield/ammunition, slotType head/body/legs/feet/ring/necklace/
-	// backpack/rune/trinket/two-handed.
-	// `label` and `section` are i18n keys; ThingBrowser translates them where it
-	// renders the popover, so this table stays a plain list of predicates. The
-	// `key`s are storage and never translated.
-	const itemFilters = useMemo(() => {
-		const attr = (key: string) => (i: ItemInfo) => key in i.attributes;
-		const attrIs = (key: string, value: string) => (i: ItemInfo) => i.attributes[key] === value;
-		const special = 'Special';
-		const kind = 'Kind';
-		const weapons = 'Weapons';
-		const slot = 'Slot';
-		const props = 'Properties';
-		return [
-			{
-				key: 'favourite',
-				label: 'Favourites',
-				section: special,
-				test: (i: ItemInfo) => favourites.has(i.serverId)
-			},
-			{ key: 'pickupable', label: 'Pickupable', section: special, test: (i: ItemInfo) => i.pickupable },
-			{ key: 'corpses', label: 'Show corpses', section: special, test: isCorpse },
-			{
-				// The corpses that actually rot, which is what a monster's <look
-				// corpse=""> almost always wants. The rule itself is `corpseDecays` in
-				// monster.ts, because the create wizard's drawn corpse obeys it too and
-				// a default that disagrees with the filter it opens on is a default
-				// nobody can explain. This is the filter both corpse pickers open on;
-				// the plain one above is still there for the static corpses, which do
-				// exist and are occasionally what you want.
-				key: 'corpses-decay',
-				label: 'Show corpses with decay',
-				section: special,
-				test: corpseDecays
-			},
-			{
-				// Loot only — an item used as a corpse or worn as a typeex look still
-				// counts as undropped, which is the question being asked.
-				key: 'undropped',
-				label: 'Not dropped by any monster',
-				section: special,
-				test: (i: ItemInfo) => !dropped.has(i.serverId)
-			},
-
-			{ key: 'stackable', label: 'Stackable', section: kind, test: (i: ItemInfo) => i.stackable },
-			{ key: 'container', label: 'Container', section: kind, test: (i: ItemInfo) => i.container },
-			{
-				key: 'weapon',
-				label: 'Weapon (any)',
-				section: kind,
-				test: (i: ItemInfo) =>
-					['sword', 'club', 'axe', 'distance', 'wand', 'fist'].includes(i.attributes.weaponType ?? '')
-			},
-			{ key: 'shield', label: 'Shield', section: kind, test: attrIs('weaponType', 'shield') },
-			{ key: 'ammunition', label: 'Ammunition', section: kind, test: attrIs('weaponType', 'ammunition') },
-			{ key: 'rune', label: 'Rune', section: kind, test: attrIs('slotType', 'rune') },
-			{ key: 'fluid', label: 'Fluid container', section: kind, test: attr('fluidSource') },
-
-			{ key: 'sword', label: 'Sword', section: weapons, test: attrIs('weaponType', 'sword') },
-			{ key: 'club', label: 'Club', section: weapons, test: attrIs('weaponType', 'club') },
-			{ key: 'axe', label: 'Axe', section: weapons, test: attrIs('weaponType', 'axe') },
-			{ key: 'distance', label: 'Distance', section: weapons, test: attrIs('weaponType', 'distance') },
-			{ key: 'wand', label: 'Wand', section: weapons, test: attrIs('weaponType', 'wand') },
-
-			{ key: 'slot-head', label: 'Helmet', section: slot, test: attrIs('slotType', 'head') },
-			{ key: 'slot-body', label: 'Armor (body)', section: slot, test: attrIs('slotType', 'body') },
-			{ key: 'slot-legs', label: 'Legs', section: slot, test: attrIs('slotType', 'legs') },
-			{ key: 'slot-feet', label: 'Boots', section: slot, test: attrIs('slotType', 'feet') },
-			{ key: 'slot-ring', label: 'Ring', section: slot, test: attrIs('slotType', 'ring') },
-			{ key: 'slot-necklace', label: 'Necklace', section: slot, test: attrIs('slotType', 'necklace') },
-			{ key: 'slot-trinket', label: 'Trinket', section: slot, test: attrIs('slotType', 'trinket') },
-			{ key: 'slot-backpack', label: 'Backpack slot', section: slot, test: attrIs('slotType', 'backpack') },
-			{ key: 'two-handed', label: 'Two-handed', section: slot, test: attrIs('slotType', 'two-handed') },
-
-			{ key: 'has-attack', label: 'Has attack', section: props, test: attr('attack') },
-			{ key: 'has-defense', label: 'Has defense', section: props, test: attr('defense') },
-			{ key: 'has-armor', label: 'Has armor', section: props, test: attr('armor') },
-			{ key: 'speed', label: 'Speed bonus', section: props, test: attr('speed') },
-			{ key: 'charged', label: 'Has charges', section: props, test: attr('charges') },
-			{ key: 'decays', label: 'Decays', section: props, test: (i: ItemInfo) => 'duration' in i.attributes || 'decayTo' in i.attributes },
-			{ key: 'writeable', label: 'Writable', section: props, test: (i: ItemInfo) => 'writeable' in i.attributes || 'maxTextLen' in i.attributes },
-			{ key: 'blocks', label: 'Blocks projectiles', section: props, test: attr('blockprojectile') },
-			{ key: 'field', label: 'Field (fire/energy/…)', section: props, test: attr('field') },
-			{ key: 'worth', label: 'Has worth', section: props, test: attr('worth') },
-			{ key: 'described', label: 'Has description', section: props, test: attr('description') },
-			{ key: 'ambiguous', label: 'Ambiguous name', section: props, test: (i: ItemInfo) => i.ambiguousName },
-			{ key: 'animated', label: 'Animated', section: props, test: (i: ItemInfo) => (itemFrames.get(i.clientId) ?? 1) > 1 }
-		];
-	}, [itemFrames, dropped, favourites]);
+	const itemPreviewUrl = useCallback(
+		(i: ItemInfo, frame: number, patternX: number, patternY: number, patternZ: number) =>
+			thingUrlFor(info.sprPath, info.datPath, 'item', i.clientId, info.transparent, {
+				frame,
+				dir: patternX,
+				diry: patternY,
+				patz: patternZ
+			}),
+		[info.sprPath, info.datPath, info.transparent]
+	);
+	const selectedItemInfo = useMemo(
+		() => (selectedItem === null ? null : (itemList.find(i => i.serverId === selectedItem) ?? null)),
+		[selectedItem, itemList]
+	);
+	const selectedItemPreview = selectedItemInfo ? (itemAppearanceIndex.get(selectedItemInfo.clientId) ?? null) : null;
+	// Predicates over the raw items.xml attributes — see `buildItemFilters` in
+	// `items.ts`, shared with the item detail panel's sidebar list.
+	const itemFilters = useMemo(
+		() => buildItemFilters(favourites, dropped, itemAppearanceIndex),
+		[itemAppearanceIndex, dropped, favourites]
+	);
 
 	/** Stars or unstars a whole selection: the menu acts on what is selected,
 	 *  and unstars only when every one of them is already a favourite. */
@@ -1541,10 +1477,19 @@ export default function Workspace({
 	 *  array every render would redraw the look on every keystroke. */
 	const wizardOutfits = useMemo(() => things.outfit.map(o => ({ id: o.id, layers: o.layers })), [things.outfit]);
 
+	/** Starts a fresh item-picking session. The tray and context menu are dialog
+	 *  state in practice even though Workspace owns their callbacks; clearing
+	 *  before mount makes it impossible to commit a hidden previous session. */
+	const openPickDialog = useCallback((title: string, targetFile: string | null) => {
+		setLootTray([]);
+		setItemMenu(null);
+		setPickDialog({ title, targetFile });
+	}, []);
+
 	const browseCorpses = useCallback(() => {
 		setItemsInitialFilters(['corpses-decay']);
-		setView('items');
-	}, []);
+		openPickDialog(t('Select corpse'), doc?.file ?? null);
+	}, [doc?.file, openPickDialog, t]);
 
 	/** Loot's own door into the browser. Pickupable, because a monster dropping
 	 *  something a player cannot lift is a mistake in almost every case — and the
@@ -1553,8 +1498,8 @@ export default function Workspace({
 	 *  a statue or a fire worn as a body is exactly a thing you cannot pick up. */
 	const browseLootItems = useCallback(() => {
 		setItemsInitialFilters(['pickupable']);
-		setView('items');
-	}, []);
+		openPickDialog(t('Pick items…'), doc?.file ?? null);
+	}, [doc?.file, openPickDialog, t]);
 
 	// The create wizard borrows the browsers rather than carrying its own grids:
 	// asked for an outfit or a corpse it steps aside, the browser it sends you to
@@ -1570,11 +1515,22 @@ export default function Workspace({
 	const startWizardPick = useCallback(
 		(kind: WizardPickKind) => {
 			setWizardPick({ kind, from: view });
-			if (kind === 'corpse') setItemsInitialFilters(['corpses-decay']);
-			else if (kind === 'loot') setItemsInitialFilters(['pickupable']);
+			// Corpse and loot are answered by `ItemPickDialog` now — the rail's own
+			// Items view stopped being a picker once it became ItemList/ItemDetail,
+			// so there is no `view` left to borrow for these two kinds.
+			if (kind === 'corpse') {
+				setItemsInitialFilters(['corpses-decay']);
+				openPickDialog(t('Select corpse'), null);
+				return;
+			}
+			if (kind === 'loot') {
+				setItemsInitialFilters(['pickupable']);
+				openPickDialog(t('Pick items…'), null);
+				return;
+			}
 			setView(PICK_VIEW[kind]);
 		},
-		[view]
+		[view, openPickDialog, t]
 	);
 
 	const finishWizardPick = useCallback((ids: number[]) => {
@@ -1586,6 +1542,10 @@ export default function Workspace({
 		});
 	}, []);
 
+	// Safe to call unconditionally, wizard pick in flight or not: with none, the
+	// updater's `pick` is already null and this is a no-op. That is what lets
+	// `closePickDialog` below call it on every close rather than branching on
+	// whether the dialog happened to be answering the wizard.
 	const cancelWizardPick = useCallback(() => {
 		setWizardPick(pick => {
 			if (pick) setView(pick.from);
@@ -1593,10 +1553,20 @@ export default function Workspace({
 		});
 	}, []);
 
+	/** The one way `ItemPickDialog` ever closes — the X/backdrop and a
+	 *  completed pick both go through this, so an abandoned wizard corpse/loot
+	 *  step is never left stuck waiting for an answer that will not come. */
+	const closePickDialog = useCallback(() => {
+		setPickDialog(null);
+		setLootTray([]);
+		setItemMenu(null);
+		cancelWizardPick();
+	}, [cancelWizardPick]);
+
 	const browseItems = useCallback(() => {
 		setItemsInitialFilters([]);
-		setView('items');
-	}, []);
+		openPickDialog(t('Select item'), doc?.file ?? null);
+	}, [doc?.file, openPickDialog, t]);
 
 	// The same mutation as dropping the item on the typeex field: setting the
 	// item also switches the mode, since typeex has no effect otherwise.
@@ -1739,7 +1709,9 @@ export default function Workspace({
 	);
 
 	const addTrayToMonster = useCallback(() => {
-		if (!doc || lootTray.length === 0) return;
+		// The target is captured when the dialog opens. Even if another path
+		// changes the active tab underneath a modal, never retarget a staged write.
+		if (!doc || pickDialog?.targetFile !== doc.file || lootTray.length === 0) return;
 		editDoc({
 			...doc,
 			loot: [...doc.loot, ...lootTray.map(i => newLootEntry({ serverId: i.serverId, name: i.name }))]
@@ -1748,7 +1720,52 @@ export default function Workspace({
 			'ok',
 			t('Added {{count}} loot entry to {{monster}}', { count: lootTray.length, monster: doc.name })
 		);
-	}, [doc, lootTray, editDoc, showToast, t]);
+		setLootTray([]);
+	}, [doc, pickDialog?.targetFile, lootTray, editDoc, showToast, t]);
+
+	// Everything `ItemPickDialog` needs to render its `ItemPickPanel`, gathered
+	// once. The rail's own Items view no longer uses this panel — it shows
+	// `ItemList` + `ItemDetail` instead — but the wizard's corpse/loot steps
+	// still borrow it via `wizardPickKind` until they move onto the dialog too.
+	const itemPickPanelProps: ItemPickPanelProps = {
+		itemList,
+		itemRowUrl,
+		itemKey,
+		itemLabel,
+		itemSearchText,
+		itemSearchId,
+		itemCellTitle,
+		itemIsFavourite,
+		itemCellFrames,
+		itemCellUrl,
+		itemFilters,
+		initialFilters: itemsInitialFilters,
+		wizardPickKind: wizardPick?.kind ?? null,
+		finishWizardPick,
+		addToTray,
+		itemContextMenu,
+		itemMenu,
+		onCloseItemMenu: () => setItemMenu(null),
+		openUsage,
+		toggleFavourites,
+		favourites,
+		dirty,
+		onScaleDropChance: itemId => setScaling({ itemId }),
+		showToast,
+		// A wizard has no existing monster target. A regular dialog only exposes
+		// monster-writing actions while the document it opened for is still active.
+		doc: !wizardPick && pickDialog?.targetFile === doc?.file ? doc : null,
+		addToMonsterLoot,
+		setAsCorpse,
+		setAsTypeex,
+		lootTray,
+		onClearTray: () => void clearTray(),
+		addTrayToMonster,
+		presets,
+		onSavePreset: () => setPresetName(`Preset ${presets.length + 1}`),
+		onLoadPreset: loadPresetToTray,
+		onManagePresets: () => setPresetManage(true)
+	};
 
 	// ---- Commands ----
 	// One table of everything the shell can do. The menus are built from it and
@@ -1819,14 +1836,6 @@ export default function Workspace({
 			enabled: !!doc,
 			run: () => setFixScope('monster')
 		},
-		{
-			id: 'add-tray-loot',
-			label: t('Add the loot tray to this monster'),
-			group: t('Edit'),
-			enabled: !!doc && lootTray.length > 0,
-			run: addTrayToMonster
-		},
-
 		{ id: 'view-monsters', label: t('Go to Monsters'), group: t('View'), run: () => setView('monsters') },
 		{ id: 'view-items', label: t('Go to Items'), group: t('View'), run: () => setView('items') },
 		{ id: 'view-outfits', label: t('Go to Outfits'), group: t('View'), run: () => setView('outfits') },
@@ -1998,7 +2007,7 @@ export default function Workspace({
 		},
 		{
 			label: t('Edit'),
-			items: [item('undo'), item('redo'), item('fix-all-lints', { separated: true }), item('add-tray-loot')]
+			items: [item('undo'), item('redo'), item('fix-all-lints', { separated: true })]
 		},
 		{
 			label: t('Tools'),
@@ -2168,30 +2177,44 @@ export default function Workspace({
 							</button>
 						))}
 					</nav>
-					<MonsterList
-						monsters={monsters}
-						selectedFile={selected}
-						actionsRef={listActions}
-						onSelect={setSelected}
-						onOpen={file => {
-							setSelected(file);
-							setView('monsters');
-							// Double-click pins: this tab survives further selections.
-							pinTab(file);
-						}}
-						onMutated={refreshMonsters}
-						showToast={showToast}
-						groups={groups}
-						onReveal={reveal}
-						onNewMonster={() => setWizardOpen(true)}
-						lookOverrides={listLooks}
-					/>
+					{view === 'items' ? (
+						<ItemList
+							items={itemList}
+							selectedId={selectedItem}
+							onSelect={setSelectedItem}
+							favourites={favourites}
+							dropped={dropped}
+							itemAppearances={itemAppearanceIndex}
+						/>
+					) : (
+						<MonsterList
+							monsters={monsters}
+							selectedFile={selected}
+							actionsRef={listActions}
+							onSelect={setSelected}
+							onOpen={file => {
+								setSelected(file);
+								setView('monsters');
+								// Double-click pins: this tab survives further selections.
+								pinTab(file);
+							}}
+							onMutated={refreshMonsters}
+							showToast={showToast}
+							groups={groups}
+							onReveal={reveal}
+							onNewMonster={() => setWizardOpen(true)}
+							lookOverrides={listLooks}
+						/>
+					)}
 				</aside>
 
 				<main className="ss-main">
 					{/* The wizard is still open behind this, holding everything answered
-					    so far — the browser is on loan, and this says so. */}
-					{wizardPick && (
+					    so far — the browser is on loan, and this says so. Corpse/loot
+					    say it through ItemPickDialog's own title instead: `view` never
+					    changes for those two, so this bar would float over whatever
+					    ss-main already had on screen rather than over a borrowed browser. */}
+					{wizardPick && wizardPick.kind !== 'corpse' && wizardPick.kind !== 'loot' && (
 						<div className="mx-pickbar">
 							<span>
 								{t(PICK_PROMPT[wizardPick.kind])}
@@ -2329,246 +2352,7 @@ export default function Workspace({
 							<div className="mx-empty">{t('Select a monster')}</div>
 						)
 					) : view === 'items' ? (
-						<>
-							<ThingBrowser<ItemInfo>
-								items={itemList}
-								rowAtlasUrl={itemRowUrl}
-								cellKey={itemKey}
-								cellLabel={itemLabel}
-								searchText={itemSearchText}
-								searchId={itemSearchId}
-								cellTitle={itemCellTitle}
-								cellMark={itemIsFavourite}
-								cellFrames={itemCellFrames}
-								cellUrl={itemCellUrl}
-								filters={itemFilters}
-								initialFilters={itemsInitialFilters}
-								searchMode="filter"
-								selectionMode="multi"
-								view="items"
-								draggable
-								dragPayload={i => ({
-									kind: 'item',
-									serverId: i.serverId,
-									name: i.name,
-									container: i.container
-								})}
-								// Off while a single cell is the answer — a menu offering to make
-								// this the corpse of the monster behind the wizard is a trap.
-								// A loot pick keeps it: "Add N item to Loot" on a multi-selection
-								// is how the tray is meant to be filled.
-								onContextMenu={wizardPick && wizardPick.kind !== 'loot' ? undefined : itemContextMenu}
-								onPick={i => (wizardPick?.kind === 'corpse' ? finishWizardPick([i.serverId]) : addToTray([i]))}
-								searchPlaceholder={t('Search server id or name')}
-							/>
-							<div className="ss-loot-tray">
-								<div className="ss-loot-tray-head">
-									{t('Loot')}
-									{lootTray.length > 0 && <span className="ss-nav-meta">{lootTray.length}</span>}
-								</div>
-								<div className="ss-loot-tray-items">
-									{lootTray.length === 0 ? (
-										<span className="ss-loot-tray-empty">
-											{t('Right-click selected items above to add them here.')}
-										</span>
-									) : (
-										lootTray.map(i => (
-											<span
-												key={i.serverId}
-												className="ss-loot-tray-chip"
-												title={i.name ? `${i.name} (#${i.serverId})` : `#${i.serverId}`}
-											>
-												<img src={itemUrl(i.serverId, 32)} width={32} height={32} alt="" />
-											</span>
-										))
-									)}
-								</div>
-								<div className="ss-loot-tray-actions">
-									{/* The same button, aimed at whoever asked for the tray: the open
-									    monster ordinarily, the wizard while it is waiting for one. */}
-									{wizardPick?.kind === 'loot' ? (
-										<button
-											className="ss-btn ss-btn-primary"
-											disabled={lootTray.length === 0}
-											onClick={() => finishWizardPick(lootTray.map(i => i.serverId))}
-										>
-											<Plus size={14} />
-											{t('Add {{count}} item to the new monster', { count: lootTray.length })}
-										</button>
-									) : (
-										<button
-											className="ss-btn ss-btn-primary"
-											disabled={!doc || lootTray.length === 0}
-											onClick={addTrayToMonster}
-										>
-											<Plus size={14} />
-											{doc ? t('Add loot to {{monster}}', { monster: doc.name }) : t('Add loot')}
-										</button>
-									)}
-									<button
-										className="ss-btn"
-										disabled={lootTray.length === 0}
-										onClick={() => void clearTray()}
-										title={t('Clear the Loot section')}
-									>
-										<Trash2 size={14} />
-										{t('Clear')}
-									</button>
-									{/* Presets sit beside the tray because they are the tray:
-									    saving one is naming what is already collected. */}
-									<button
-										className="ss-btn"
-										disabled={lootTray.length === 0}
-										title={t('Save this tray under a name')}
-										onClick={() => setPresetName(`Preset ${presets.length + 1}`)}
-									>
-										<Bookmark size={14} />
-										{t('Save preset')}
-									</button>
-									<select
-										className="ss-ed-input mx-preset-pick"
-										value=""
-										disabled={presets.length === 0}
-										title={presets.length === 0 ? t('No presets saved yet') : t('Load a preset into the tray')}
-										onChange={e => {
-											const p = presets.find(x => x.name === e.target.value);
-											if (p) loadPresetToTray(p);
-										}}
-									>
-										<option value="">
-											{presets.length === 0 ? t('No presets') : t('Presets ({{count}})', { count: presets.length })}
-										</option>
-										{presets.map(p => (
-											<option key={p.name} value={p.name}>
-												{p.name} · {p.ids.length}
-											</option>
-										))}
-									</select>
-									{presets.length > 0 && (
-										<button
-											className="ss-btn ss-btn-ghost"
-											title={t('Delete a preset')}
-											onClick={() => setPresetManage(true)}
-										>
-											<Trash2 size={14} />
-										</button>
-									)}
-								</div>
-							</div>
-							{itemMenu && (
-								<div
-									className="ss-context-menu"
-									style={{ left: itemMenu.x, top: itemMenu.y }}
-									onMouseDown={e => e.stopPropagation()}
-								>
-									<button
-										className="ss-menu-item"
-										onClick={() => {
-											setItemMenu(null);
-											addToTray(itemMenu.items);
-										}}
-									>
-										<Package size={14} />
-										{t('Add {{count}} item to Loot', { count: itemMenu.items.length })}
-									</button>
-									<button
-										className="ss-menu-item"
-										onClick={() => {
-											setItemMenu(null);
-											void openUsage(itemMenu.item);
-										}}
-									>
-										<Users size={14} />
-										{t('Used by…')}
-									</button>
-									<button
-										className="ss-menu-item"
-										onClick={() => {
-											setItemMenu(null);
-											toggleFavourites(itemMenu.items);
-										}}
-									>
-										<Star size={14} />
-										{itemMenu.items.every(i => favourites.has(i.serverId))
-											? t('Remove {{count}} item from favourites', { count: itemMenu.items.length })
-											: t('Add {{count}} item to favourites', { count: itemMenu.items.length })}
-									</button>
-									<button
-										className="ss-menu-item"
-										// Same gate as the Tools menu: the scaler rewrites files from
-										// what is on disk, so an unsaved buffer would be overwritten.
-										disabled={dirty}
-										title={dirty ? t('Save the open monster first') : undefined}
-										onClick={() => {
-											setItemMenu(null);
-											setScaling({ itemId: itemMenu.item.serverId });
-										}}
-									>
-										<Percent size={14} />
-										{t('Scale drop chance…')}
-									</button>
-									<button
-										className="ss-menu-item"
-										onClick={() => {
-											setItemMenu(null);
-											void navigator.clipboard.writeText(String(itemMenu.item.serverId));
-											showToast('ok', t('Copied {{value}}', { value: itemMenu.item.serverId }));
-										}}
-									>
-										{t('Copy id {{id}}', { id: itemMenu.item.serverId })}
-									</button>
-									<button
-										className="ss-menu-item"
-										disabled={!itemMenu.item.name}
-										onClick={() => {
-											setItemMenu(null);
-											void navigator.clipboard.writeText(itemMenu.item.name);
-											showToast('ok', t('Copied “{{value}}”', { value: itemMenu.item.name }));
-										}}
-									>
-										{t('Copy name')}
-									</button>
-									{doc && (
-										<>
-											<button
-												className="ss-menu-item"
-												onClick={() => {
-													setItemMenu(null);
-													addToMonsterLoot(itemMenu.items);
-												}}
-											>
-												<Plus size={14} />
-												{t('Add {{count}} item to loot for {{monster}}', {
-													count: itemMenu.items.length,
-													monster: doc.name
-												})}
-											</button>
-											<div className="ss-menu-sep" />
-											<button
-												className="ss-menu-item"
-												onClick={() => {
-													setItemMenu(null);
-													setAsCorpse(itemMenu.item);
-												}}
-											>
-												<Skull size={14} />
-												{t('Set as corpse for {{monster}}', { monster: doc.name })}
-											</button>
-											<button
-												className="ss-menu-item"
-												onClick={() => {
-													setItemMenu(null);
-													setAsTypeex(itemMenu.item);
-												}}
-											>
-												<PersonStanding size={14} />
-												{t('Set as outfit (typeex) for {{monster}}', { monster: doc.name })}
-											</button>
-										</>
-									)}
-								</div>
-							)}
-						</>
+						<ItemDetail key={selectedItemInfo?.serverId ?? 'empty'} item={selectedItemInfo} />
 					) : (
 						<ThingBrowser<ThingSummary>
 							key={view}
@@ -2693,11 +2477,20 @@ export default function Workspace({
 					)}
 				</main>
 
-				{/* PreviewPanel's root is itself the `.ss-details` column — never wrap
-				    it in another one, or the panel becomes a column inside a column
-				    and its scroll area collapses. */}
+				{/* Both preview components own the `.ss-details` column themselves. The
+				    monster panel stays mounted while Items owns the column so its direction,
+				    playback state and corpus-wide balance bands survive the round trip. */}
+				{view === 'items' && (
+					<ItemPreviewPanel
+						item={selectedItemInfo}
+						appearance={selectedItemPreview}
+						loading={itemPreviews === null}
+						frameUrl={itemPreviewUrl}
+					/>
+				)}
 				{doc ? (
 					<PreviewPanel
+						hidden={view === 'items'}
 						doc={doc}
 						items={items}
 						lintCount={visibleMonsterLints.length}
@@ -2715,9 +2508,9 @@ export default function Workspace({
 								: undefined
 						}
 					/>
-				) : (
+				) : view !== 'items' ? (
 					<aside className="ss-details" />
-				)}
+				) : null}
 			</div>
 
 			<div className="ss-statusbar mx-statusbar">
@@ -2728,6 +2521,8 @@ export default function Workspace({
 					{saving ? t('Saving…') : activeDirty ? `${t('Save')} •` : t('Save')}
 				</button>
 			</div>
+
+			{pickDialog && <ItemPickDialog {...itemPickPanelProps} title={pickDialog.title} onClose={closePickDialog} />}
 
 			{usageDialog && (
 				<div className="ss-backdrop" onMouseDown={() => setUsageDialog(null)}>
@@ -2766,6 +2561,7 @@ export default function Workspace({
 														title={r.file}
 														onClick={() => {
 															setUsageDialog(null);
+															closePickDialog();
 															setSelected(r.file);
 															setView('monsters');
 														}}

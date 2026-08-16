@@ -813,9 +813,9 @@ export default function CreateWizard({
 			setCorpse(picked.ids[0] ?? 0);
 		} else if (picked.kind === 'loot') {
 			// The tray comes back whole and is added to what is already listed, so
-			// two trips collect rather than replace. An id already in the table is
-			// skipped rather than doubled — the tray does not clear itself, and a
-			// second visit to add one more item must not duplicate the first five.
+			// two trips collect rather than replace. Each picker visit now starts with
+			// an empty tray, but an id already in the wizard's table is still skipped:
+			// choosing the same item on a later visit must not duplicate it.
 			//
 			// The names are looked up rather than carried back, because the entry
 			// wants them anyway: an item added by id says nothing to anyone reading
