@@ -6,6 +6,11 @@ review, reshaping or partial rollback. It reuses MONx's existing catalogues,
 virtualized rows, sprite protocol and editor layout rather than introducing a
 second item engine.
 
+![MONx Items prototype with the item rail, selected-item details and client appearance preview](docs/screenshots/items-prototype.png)
+
+_Real Canary/OTServBR workspace on Linux. This image records the prototype for
+discussion; it is not a final visual contract._
+
 ## What the prototype proves
 
 - **Items can be a first-class, read-only catalogue.** The sidebar owns the
