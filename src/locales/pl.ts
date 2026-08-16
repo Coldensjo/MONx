@@ -319,6 +319,8 @@ const pl: Record<string, string> = {
 	'Monsters folder': 'Folder potworów',
 	'Items folder': 'Folder przedmiotów',
 	'Client folder': 'Folder klienta',
+	'Tibia.dat + Tibia.spr, or assets/ with catalog-content.json':
+		'Tibia.dat + Tibia.spr lub folder assets/ z plikiem catalog-content.json',
 	'Spells folder': 'Folder zaklęć',
 	'data/items — items.otb + items.xml': 'data/items — items.otb + items.xml',
 	'data/spells — optional, enables ### spell verification':

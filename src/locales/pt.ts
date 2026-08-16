@@ -244,6 +244,8 @@ const pt: Record<string, string> = {
 	'Monsters folder': 'Pasta de monstros',
 	'Items folder': 'Pasta de itens',
 	'Client folder': 'Pasta do cliente',
+	'Tibia.dat + Tibia.spr, or assets/ with catalog-content.json':
+		'Tibia.dat + Tibia.spr ou pasta assets/ com catalog-content.json',
 	'Spells folder': 'Pasta de magias',
 	'data/items — items.otb + items.xml': 'data/items — items.otb + items.xml',
 	'data/spells — optional, enables ### spell verification':
