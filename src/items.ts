@@ -7,6 +7,19 @@ import { n } from './i18n';
 import { corpseDecays, isCorpse, type ItemInfo } from './monster';
 import type { Filter } from './ThingBrowser';
 
+/** The small projection of a client thing retained for item browsing. Keeping
+ *  this separate from ThingSummary avoids holding a second copy of tens of
+ *  thousands of item names and property lists in large modern clients. */
+export interface ItemAppearanceMeta {
+	frames: number;
+	width: number;
+	height: number;
+	patternX: number;
+	patternY: number;
+	patternZ: number;
+	frameDurations?: number[];
+}
+
 /** Multi-line summary from the raw items.xml attributes — weight is in
  *  hundredths of an oz, as the client displays it.
  *  `atk`/`def`/`arm` and the weaponType/slotType words are the items.xml
@@ -45,7 +58,7 @@ export function itemSummaryLines(t: TFunction, i: ItemInfo): string[] {
 export function buildItemFilters(
 	favourites: Set<number>,
 	dropped: Set<number>,
-	itemFrames: Map<number, number>
+	itemAppearances: ReadonlyMap<number, ItemAppearanceMeta>
 ): Filter<ItemInfo>[] {
 	const attr = (key: string) => (i: ItemInfo) => key in i.attributes;
 	const attrIs = (key: string, value: string) => (i: ItemInfo) => i.attributes[key] === value;
@@ -141,7 +154,7 @@ export function buildItemFilters(
 			key: 'animated',
 			label: 'Animated',
 			section: props,
-			test: (i: ItemInfo) => (itemFrames.get(i.clientId) ?? 1) > 1
+			test: (i: ItemInfo) => (itemAppearances.get(i.clientId)?.frames ?? 1) > 1
 		}
 	];
 }

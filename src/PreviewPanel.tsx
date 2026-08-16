@@ -47,6 +47,9 @@ const FALLBACK_FRAMES = 3;
 
 interface Props {
 	doc: MonsterDoc;
+	/** Keeps the expensive monster analysis mounted while another rail owns the
+	 *  right column, preserving playback state and the loaded balance bands. */
+	hidden?: boolean;
 	/** Items already resolved for this monster's loot and corpse, keyed by server id. */
 	items: Map<number, ItemInfo>;
 	lintCount: number;
@@ -143,7 +146,8 @@ export default function PreviewPanel({
 	onLookType,
 	onLootChange,
 	onGoToLoot,
-	enhancedAnimations = false
+	enhancedAnimations = false,
+	hidden = false
 }: Props) {
 	const { t } = useTranslation();
 	const [dir, setDir] = useState(2);
@@ -197,6 +201,10 @@ export default function PreviewPanel({
 	// MONx picked.
 	const idleMs = hasWalk ? ANIM_INTERVAL_MS : idleCycleMs(frames);
 	useEffect(() => {
+		// Items temporarily owns the right column. Keep this component (and its
+		// loaded bands/direction/play choice) alive, but do no animation work while
+		// its root is hidden.
+		if (hidden) return;
 		if (!playing || typeex || frames <= firstFrame + 1) {
 			setFrame(firstFrame);
 			return;
@@ -214,7 +222,7 @@ export default function PreviewPanel({
 		};
 		step(firstFrame);
 		return () => clearTimeout(timer);
-	}, [playing, typeex, frames, firstFrame, idleFrames, walkMs, idleMs, outfitAnim]);
+	}, [hidden, playing, typeex, frames, firstFrame, idleFrames, walkMs, idleMs, outfitAnim]);
 
 	const drop = useDropTarget(['outfit'], p => {
 		if (p.kind === 'outfit') onLookType?.(p.type);
@@ -249,7 +257,7 @@ export default function PreviewPanel({
 	const notableEhp = ehp.filter(e => e.immune || e.percent !== 0);
 
 	return (
-		<div className="ss-details">
+		<div className="ss-details" hidden={hidden}>
 			<div className="ss-details-header">
 				<span>{doc.name}</span>
 				{!typeex && (

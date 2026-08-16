@@ -5,6 +5,7 @@
 // no longer means leaving the monster you are editing.
 
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import ItemPickPanel, { type ItemPickPanelProps } from './ItemPickPanel';
 
 export interface ItemPickDialogProps extends ItemPickPanelProps {
@@ -14,6 +15,7 @@ export interface ItemPickDialogProps extends ItemPickPanelProps {
 }
 
 export default function ItemPickDialog({ title, instructions, onClose, ...panel }: ItemPickDialogProps) {
+	const { t } = useTranslation();
 	return (
 		<div className="ss-backdrop" onMouseDown={onClose}>
 			<div className="ss-modal mx-item-pick-modal" onMouseDown={e => e.stopPropagation()}>
@@ -22,14 +24,13 @@ export default function ItemPickDialog({ title, instructions, onClose, ...panel 
 						<div className="ss-modal-title">{title}</div>
 						{instructions && <div className="ss-modal-desc">{instructions}</div>}
 					</div>
-					<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={onClose}>
+					<button className="ss-btn ss-btn-ghost ss-ed-mini" onClick={onClose} aria-label={t('Close')}>
 						<X size={14} />
 					</button>
 				</div>
 				<div className="mx-item-pick-body">
-					{/* Overrides whatever `panel.onPicked` came in as (there is none
-					    today — the rail's own Items view has no dialog to close) with
-					    "this dialog is done" once a pick commits straight to the monster. */}
+					{/* A direct commit and the tray's primary action both finish this
+					    dialog session through the same close path. */}
 					<ItemPickPanel {...panel} onPicked={onClose} />
 				</div>
 			</div>

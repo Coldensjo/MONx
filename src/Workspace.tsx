@@ -37,11 +37,12 @@ import {
 	type MonsterSummary,
 	type WorkspaceInfo
 } from './monster';
-import { buildItemFilters, itemSummaryLines } from './items';
+import { buildItemFilters, itemSummaryLines, type ItemAppearanceMeta } from './items';
 import { type ItemPickPanelProps } from './ItemPickPanel';
 import ItemPickDialog from './ItemPickDialog';
 import ItemList from './ItemList';
 import ItemDetail from './ItemDetail';
+import ItemPreviewPanel from './ItemPreviewPanel';
 import { engineInfo } from './engine';
 import Menubar, { type Menu, type MenuItem } from './Menubar';
 import { newLootEntry } from './sections/Loot';
@@ -123,6 +124,7 @@ import * as buffers from './buffers';
  *  Ordinary monsters run 100–300 and the foot-delay clamp puts all of them on
  *  the same cap, so the exact value only matters for the very fastest. */
 const NOMINAL_SPEED = 100;
+const EMPTY_ITEM_APPEARANCES: ReadonlyMap<number, ItemAppearanceMeta> = new Map();
 
 /** The centre column's content. `monsters` is the editor; the rest are the
  *  reference browsers, kept beside the editor rather than in a separate mode. */
@@ -279,8 +281,12 @@ export default function Workspace({
 	/** The Loot staging tray under the Items browser — collected via right-click,
 	 *  appended to the open monster in one go. Session-scoped, deduped by server id. */
 	const [lootTray, setLootTray] = useState<ItemInfo[]>([]);
-	/** Frame counts per client id from the .dat, for animating item cells. */
-	const [itemFrames, setItemFrames] = useState<Map<number, number>>(new Map());
+	/** Only the client metadata the selected item's right-hand preview needs.
+	 *  The full item ThingSummary list is tens of thousands of rows on Canary;
+	 *  discard names/flags after loading instead of retaining a second catalogue.
+	 *  Null means the client catalogue is still loading; an empty map means it
+	 *  settled without item appearances. */
+	const [itemPreviews, setItemPreviews] = useState<Map<number, ItemAppearanceMeta> | null>(null);
 	/** Server ids the saved corpus drops, for the "not dropped by any monster"
 	 *  filter. Re-read after anything that rewrites loot on disk. */
 	const [dropped, setDropped] = useState<Set<number>>(new Set());
@@ -296,8 +302,8 @@ export default function Workspace({
 	const [itemsInitialFilters, setItemsInitialFilters] = useState<string[]>(['pickupable']);
 	/** The Loot/Look sections' "Select…" buttons open the item picker as a modal
 	 *  over whatever is on screen, rather than navigating away from the monster
-	 *  being edited — `title` is the only thing that varies per button. */
-	const [pickDialog, setPickDialog] = useState<{ title: string } | null>(null);
+	 *  being edited. `targetFile` pins every write to the document that opened it. */
+	const [pickDialog, setPickDialog] = useState<{ title: string; targetFile: string | null } | null>(null);
 	/** The rail's own Items view: which row `ItemList` has selected, driving
 	 *  `ItemDetail` in the centre column. Unrelated to `selected`/`doc` — a
 	 *  monster stays open in its tab while this is browsed, same as before. */
@@ -1038,6 +1044,7 @@ export default function Workspace({
 	// workspace is open.
 	useEffect(() => {
 		let cancelled = false;
+		setItemPreviews(null);
 		Promise.all([
 			getThings(info.datPath, 'outfit').catch(() => []),
 			getThings(info.datPath, 'effect').catch(() => []),
@@ -1046,9 +1053,21 @@ export default function Workspace({
 		]).then(([outfit, effect, missile, item]) => {
 			if (cancelled) return;
 			setThings({ outfit, effect, missile });
-			// Frame counts by client id, so the Items grid can animate and filter
-			// on animation — ItemInfo itself knows nothing about the .dat side.
-			setItemFrames(new Map(item.map(t => [t.id, t.frames])));
+			// One compact index by client id drives cell animation, filters and the
+			// selected preview — ItemInfo itself knows nothing about the client side.
+			const appearances = new Map<number, ItemAppearanceMeta>();
+			for (const t of item) {
+				appearances.set(t.id, {
+					frames: t.frames,
+					width: t.width,
+					height: t.height,
+					patternX: t.patternX,
+					patternY: t.patternY,
+					patternZ: t.patternZ,
+					frameDurations: t.frameDurations
+				});
+			}
+			setItemPreviews(appearances);
 		});
 		return () => {
 			cancelled = true;
@@ -1309,17 +1328,36 @@ export default function Workspace({
 	// Multi-line tooltip from the raw items.xml attributes — see
 	// `itemSummaryLines` in `items.ts`, shared with the item detail panel.
 	const itemCellTitle = useCallback((i: ItemInfo) => itemSummaryLines(t, i).join('\n'), [t]);
-	const itemCellFrames = useCallback((i: ItemInfo) => itemFrames.get(i.clientId) ?? 1, [itemFrames]);
+	const itemAppearanceIndex = itemPreviews ?? EMPTY_ITEM_APPEARANCES;
+	const itemCellFrames = useCallback(
+		(i: ItemInfo) => itemAppearanceIndex.get(i.clientId)?.frames ?? 1,
+		[itemAppearanceIndex]
+	);
 	const itemCellUrl = useCallback(
 		(i: ItemInfo, frame: number) =>
 			thingUrlFor(info.sprPath, info.datPath, 'item', i.clientId, info.transparent, { frame }),
 		[info.sprPath, info.datPath, info.transparent]
 	);
+	const itemPreviewUrl = useCallback(
+		(i: ItemInfo, frame: number, patternX: number, patternY: number, patternZ: number) =>
+			thingUrlFor(info.sprPath, info.datPath, 'item', i.clientId, info.transparent, {
+				frame,
+				dir: patternX,
+				diry: patternY,
+				patz: patternZ
+			}),
+		[info.sprPath, info.datPath, info.transparent]
+	);
+	const selectedItemInfo = useMemo(
+		() => (selectedItem === null ? null : (itemList.find(i => i.serverId === selectedItem) ?? null)),
+		[selectedItem, itemList]
+	);
+	const selectedItemPreview = selectedItemInfo ? (itemAppearanceIndex.get(selectedItemInfo.clientId) ?? null) : null;
 	// Predicates over the raw items.xml attributes — see `buildItemFilters` in
 	// `items.ts`, shared with the item detail panel's sidebar list.
 	const itemFilters = useMemo(
-		() => buildItemFilters(favourites, dropped, itemFrames),
-		[itemFrames, dropped, favourites]
+		() => buildItemFilters(favourites, dropped, itemAppearanceIndex),
+		[itemAppearanceIndex, dropped, favourites]
 	);
 
 	/** Stars or unstars a whole selection: the menu acts on what is selected,
@@ -1439,10 +1477,19 @@ export default function Workspace({
 	 *  array every render would redraw the look on every keystroke. */
 	const wizardOutfits = useMemo(() => things.outfit.map(o => ({ id: o.id, layers: o.layers })), [things.outfit]);
 
+	/** Starts a fresh item-picking session. The tray and context menu are dialog
+	 *  state in practice even though Workspace owns their callbacks; clearing
+	 *  before mount makes it impossible to commit a hidden previous session. */
+	const openPickDialog = useCallback((title: string, targetFile: string | null) => {
+		setLootTray([]);
+		setItemMenu(null);
+		setPickDialog({ title, targetFile });
+	}, []);
+
 	const browseCorpses = useCallback(() => {
 		setItemsInitialFilters(['corpses-decay']);
-		setPickDialog({ title: t('Select corpse') });
-	}, [t]);
+		openPickDialog(t('Select corpse'), doc?.file ?? null);
+	}, [doc?.file, openPickDialog, t]);
 
 	/** Loot's own door into the browser. Pickupable, because a monster dropping
 	 *  something a player cannot lift is a mistake in almost every case — and the
@@ -1451,8 +1498,8 @@ export default function Workspace({
 	 *  a statue or a fire worn as a body is exactly a thing you cannot pick up. */
 	const browseLootItems = useCallback(() => {
 		setItemsInitialFilters(['pickupable']);
-		setPickDialog({ title: t('Pick items…') });
-	}, [t]);
+		openPickDialog(t('Pick items…'), doc?.file ?? null);
+	}, [doc?.file, openPickDialog, t]);
 
 	// The create wizard borrows the browsers rather than carrying its own grids:
 	// asked for an outfit or a corpse it steps aside, the browser it sends you to
@@ -1473,17 +1520,17 @@ export default function Workspace({
 			// so there is no `view` left to borrow for these two kinds.
 			if (kind === 'corpse') {
 				setItemsInitialFilters(['corpses-decay']);
-				setPickDialog({ title: t('Select corpse') });
+				openPickDialog(t('Select corpse'), null);
 				return;
 			}
 			if (kind === 'loot') {
 				setItemsInitialFilters(['pickupable']);
-				setPickDialog({ title: t('Pick items…') });
+				openPickDialog(t('Pick items…'), null);
 				return;
 			}
 			setView(PICK_VIEW[kind]);
 		},
-		[view, t]
+		[view, openPickDialog, t]
 	);
 
 	const finishWizardPick = useCallback((ids: number[]) => {
@@ -1511,13 +1558,15 @@ export default function Workspace({
 	 *  step is never left stuck waiting for an answer that will not come. */
 	const closePickDialog = useCallback(() => {
 		setPickDialog(null);
+		setLootTray([]);
+		setItemMenu(null);
 		cancelWizardPick();
 	}, [cancelWizardPick]);
 
 	const browseItems = useCallback(() => {
 		setItemsInitialFilters([]);
-		setPickDialog({ title: t('Select item') });
-	}, [t]);
+		openPickDialog(t('Select item'), doc?.file ?? null);
+	}, [doc?.file, openPickDialog, t]);
 
 	// The same mutation as dropping the item on the typeex field: setting the
 	// item also switches the mode, since typeex has no effect otherwise.
@@ -1660,7 +1709,9 @@ export default function Workspace({
 	);
 
 	const addTrayToMonster = useCallback(() => {
-		if (!doc || lootTray.length === 0) return;
+		// The target is captured when the dialog opens. Even if another path
+		// changes the active tab underneath a modal, never retarget a staged write.
+		if (!doc || pickDialog?.targetFile !== doc.file || lootTray.length === 0) return;
 		editDoc({
 			...doc,
 			loot: [...doc.loot, ...lootTray.map(i => newLootEntry({ serverId: i.serverId, name: i.name }))]
@@ -1669,7 +1720,8 @@ export default function Workspace({
 			'ok',
 			t('Added {{count}} loot entry to {{monster}}', { count: lootTray.length, monster: doc.name })
 		);
-	}, [doc, lootTray, editDoc, showToast, t]);
+		setLootTray([]);
+	}, [doc, pickDialog?.targetFile, lootTray, editDoc, showToast, t]);
 
 	// Everything `ItemPickDialog` needs to render its `ItemPickPanel`, gathered
 	// once. The rail's own Items view no longer uses this panel — it shows
@@ -1700,7 +1752,9 @@ export default function Workspace({
 		dirty,
 		onScaleDropChance: itemId => setScaling({ itemId }),
 		showToast,
-		doc,
+		// A wizard has no existing monster target. A regular dialog only exposes
+		// monster-writing actions while the document it opened for is still active.
+		doc: !wizardPick && pickDialog?.targetFile === doc?.file ? doc : null,
 		addToMonsterLoot,
 		setAsCorpse,
 		setAsTypeex,
@@ -1782,14 +1836,6 @@ export default function Workspace({
 			enabled: !!doc,
 			run: () => setFixScope('monster')
 		},
-		{
-			id: 'add-tray-loot',
-			label: t('Add the loot tray to this monster'),
-			group: t('Edit'),
-			enabled: !!doc && lootTray.length > 0,
-			run: addTrayToMonster
-		},
-
 		{ id: 'view-monsters', label: t('Go to Monsters'), group: t('View'), run: () => setView('monsters') },
 		{ id: 'view-items', label: t('Go to Items'), group: t('View'), run: () => setView('items') },
 		{ id: 'view-outfits', label: t('Go to Outfits'), group: t('View'), run: () => setView('outfits') },
@@ -1961,7 +2007,7 @@ export default function Workspace({
 		},
 		{
 			label: t('Edit'),
-			items: [item('undo'), item('redo'), item('fix-all-lints', { separated: true }), item('add-tray-loot')]
+			items: [item('undo'), item('redo'), item('fix-all-lints', { separated: true })]
 		},
 		{
 			label: t('Tools'),
@@ -2138,7 +2184,7 @@ export default function Workspace({
 							onSelect={setSelectedItem}
 							favourites={favourites}
 							dropped={dropped}
-							itemFrames={itemFrames}
+							itemAppearances={itemAppearanceIndex}
 						/>
 					) : (
 						<MonsterList
@@ -2306,7 +2352,7 @@ export default function Workspace({
 							<div className="mx-empty">{t('Select a monster')}</div>
 						)
 					) : view === 'items' ? (
-						<ItemDetail item={selectedItem !== null ? (itemList.find(i => i.serverId === selectedItem) ?? null) : null} />
+						<ItemDetail key={selectedItemInfo?.serverId ?? 'empty'} item={selectedItemInfo} />
 					) : (
 						<ThingBrowser<ThingSummary>
 							key={view}
@@ -2431,11 +2477,20 @@ export default function Workspace({
 					)}
 				</main>
 
-				{/* PreviewPanel's root is itself the `.ss-details` column — never wrap
-				    it in another one, or the panel becomes a column inside a column
-				    and its scroll area collapses. */}
+				{/* Both preview components own the `.ss-details` column themselves. The
+				    monster panel stays mounted while Items owns the column so its direction,
+				    playback state and corpus-wide balance bands survive the round trip. */}
+				{view === 'items' && (
+					<ItemPreviewPanel
+						item={selectedItemInfo}
+						appearance={selectedItemPreview}
+						loading={itemPreviews === null}
+						frameUrl={itemPreviewUrl}
+					/>
+				)}
 				{doc ? (
 					<PreviewPanel
+						hidden={view === 'items'}
 						doc={doc}
 						items={items}
 						lintCount={visibleMonsterLints.length}
@@ -2453,9 +2508,9 @@ export default function Workspace({
 								: undefined
 						}
 					/>
-				) : (
+				) : view !== 'items' ? (
 					<aside className="ss-details" />
-				)}
+				) : null}
 			</div>
 
 			<div className="ss-statusbar mx-statusbar">
@@ -2506,6 +2561,7 @@ export default function Workspace({
 														title={r.file}
 														onClick={() => {
 															setUsageDialog(null);
+															closePickDialog();
 															setSelected(r.file);
 															setView('monsters');
 														}}

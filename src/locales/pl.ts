@@ -392,7 +392,6 @@ const pl: Record<string, string> = {
 	Undo: 'Cofnij',
 	Redo: 'Ponów',
 	'Fix every fixable lint': 'Napraw każdą naprawialną uwagę',
-	'Add the loot tray to this monster': 'Dodaj tacę łupu do tego potwora',
 	'Go to Monsters': 'Przejdź do Potworów',
 	'Go to Items': 'Przejdź do Przedmiotów',
 	'Go to Outfits': 'Przejdź do Wyglądów',
@@ -886,8 +885,9 @@ const pl: Record<string, string> = {
 	spell: 'zaklęcie',
 
 	// --- Loot tray ------------------------------------------------------------
-	'Right-click selected items above to add them here.':
-		'Kliknij prawym przyciskiem zaznaczone przedmioty powyżej, aby dodać je tutaj.',
+	'Loot to add': 'Łup do dodania',
+	'Double-click an item, or right-click the selection, to add it here.':
+		'Kliknij dwukrotnie przedmiot lub kliknij zaznaczenie prawym przyciskiem, aby dodać je tutaj.',
 	'Add loot': 'Dodaj łup',
 	'Add loot to {{monster}}': 'Dodaj łup do {{monster}}',
 	'Clear the Loot section': 'Wyczyść sekcję Łup',
@@ -1070,6 +1070,14 @@ const pl: Record<string, string> = {
 	'Select an item': 'Wybierz przedmiot',
 	'server id {{id}}': 'id serwera {{id}}',
 	'client id {{id}}': 'id klienta {{id}}',
+	Appearance: 'Wygląd',
+	Frames: 'Klatki',
+	Variants: 'Warianty',
+	'Variant X': 'Wariant X',
+	'Variant Y': 'Wariant Y',
+	'Variant Z': 'Wariant Z',
+	'Loading client assets…': 'Wczytywanie zasobów klienta…',
+	'No client assets are available for this item.': 'Brak zasobów klienta dla tego przedmiotu.',
 	Summary: 'Podsumowanie',
 	Article: 'Przedimek',
 	Yes: 'Tak',

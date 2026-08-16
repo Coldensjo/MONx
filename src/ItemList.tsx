@@ -2,7 +2,8 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useTranslation } from 'react-i18next';
 import { Filter, Search, X } from 'lucide-react';
 import { itemsRowUrl, type ItemInfo } from './monster';
-import { buildItemFilters } from './items';
+import { n } from './i18n';
+import { buildItemFilters, type ItemAppearanceMeta } from './items';
 import { parseIdSearch, type Filter as ItemFilter } from './ThingBrowser';
 
 // The sidebar's Items list — the same virtualized-row-atlas technique
@@ -29,7 +30,7 @@ interface Props {
 	onSelect: (serverId: number) => void;
 	favourites: Set<number>;
 	dropped: Set<number>;
-	itemFrames: Map<number, number>;
+	itemAppearances: ReadonlyMap<number, ItemAppearanceMeta>;
 }
 
 const ItemRow = memo(function ItemRow({
@@ -41,7 +42,9 @@ const ItemRow = memo(function ItemRow({
 	atlasUrl,
 	atlasIndex,
 	atlasLength,
-	onSelect
+	setSize,
+	onSelect,
+	onFocusList
 }: {
 	item: ItemInfo;
 	index: number;
@@ -51,17 +54,27 @@ const ItemRow = memo(function ItemRow({
 	atlasUrl: string;
 	atlasIndex: number;
 	atlasLength: number;
+	setSize: number;
 	onSelect: (serverId: number) => void;
+	onFocusList: () => void;
 }) {
 	// A memo boundary does not re-render when the language changes unless it
 	// subscribes itself, same as MonsterList's own row.
 	const { t } = useTranslation();
 	return (
 		<div
+			id={`mx-item-option-${item.serverId}`}
+			role="option"
+			aria-selected={selected}
+			aria-posinset={index + 1}
+			aria-setsize={setSize}
 			className={`ss-mon-row${selected ? ' ss-mon-row-active' : ''}`}
 			style={{ top, height: ROW_H }}
 			title={`${item.name || `#${item.serverId}`} (#${item.serverId})`}
-			onMouseDown={() => onSelect(item.serverId)}
+			onClick={() => {
+				onSelect(item.serverId);
+				onFocusList();
+			}}
 			data-index={index}
 		>
 			<div
@@ -90,7 +103,7 @@ const ItemRow = memo(function ItemRow({
  *  `ThingBrowser`'s `lastScrollByList` uses, for the same reason. */
 const lastScrollByList = new Map<string, number>();
 
-export default function ItemList({ items, selectedId, onSelect, favourites, dropped, itemFrames }: Props) {
+export default function ItemList({ items, selectedId, onSelect, favourites, dropped, itemAppearances }: Props) {
 	const { t } = useTranslation();
 	const [search, setSearch] = useState('');
 	const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
@@ -98,6 +111,7 @@ export default function ItemList({ items, selectedId, onSelect, favourites, drop
 	const [filterSearch, setFilterSearch] = useState('');
 
 	const scrollRef = useRef<HTMLDivElement>(null);
+	const filterButtonRef = useRef<HTMLButtonElement>(null);
 	const [scrollTop, setScrollTop] = useState(0);
 	const [height, setHeight] = useState(0);
 
@@ -110,7 +124,10 @@ export default function ItemList({ items, selectedId, onSelect, favourites, drop
 		return () => ro.disconnect();
 	}, []);
 
-	const filters = useMemo(() => buildItemFilters(favourites, dropped, itemFrames), [favourites, dropped, itemFrames]);
+	const filters = useMemo(
+		() => buildItemFilters(favourites, dropped, itemAppearances),
+		[favourites, dropped, itemAppearances]
+	);
 
 	const shown = useMemo(() => {
 		const needle = search.trim().toLowerCase();
@@ -168,6 +185,37 @@ export default function ItemList({ items, selectedId, onSelect, favourites, drop
 		(index: number) => chunks.find(c => index >= c.start && index < c.start + c.ids.length) ?? null,
 		[chunks]
 	);
+	const focusList = useCallback(() => scrollRef.current?.focus({ preventScroll: true }), []);
+	const selectedIndex = selectedId === null ? -1 : shown.findIndex(i => i.serverId === selectedId);
+	const activeDescendant =
+		selectedIndex >= first && selectedIndex <= last ? `mx-item-option-${selectedId}` : undefined;
+
+	const moveSelection = useCallback(
+		(key: string) => {
+			if (shown.length === 0) return false;
+			const current = selectedId === null ? -1 : shown.findIndex(i => i.serverId === selectedId);
+			let next: number;
+			switch (key) {
+				case 'ArrowDown':
+					next = Math.min(shown.length - 1, current + 1);
+					break;
+				case 'ArrowUp':
+					next = Math.max(0, current < 0 ? shown.length - 1 : current - 1);
+					break;
+				case 'Home':
+					next = 0;
+					break;
+				case 'End':
+					next = shown.length - 1;
+					break;
+				default:
+					return false;
+			}
+			onSelect(shown[next].serverId);
+			return true;
+		},
+		[shown, selectedId, onSelect]
+	);
 
 	// Keep the selected row in view when the parent changes the selection.
 	useEffect(() => {
@@ -187,7 +235,10 @@ export default function ItemList({ items, selectedId, onSelect, favourites, drop
 			if (!(e.target as HTMLElement).closest('.ss-filter')) setShowFilters(false);
 		};
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') setShowFilters(false);
+			if (e.key === 'Escape') {
+				setShowFilters(false);
+				filterButtonRef.current?.focus();
+			}
 		};
 		window.addEventListener('mousedown', onDown);
 		window.addEventListener('keydown', onKey);
@@ -223,7 +274,9 @@ export default function ItemList({ items, selectedId, onSelect, favourites, drop
 				atlasUrl={chunk.url}
 				atlasIndex={i - chunk.start}
 				atlasLength={chunk.ids.length}
+				setSize={shown.length}
 				onSelect={onSelect}
+				onFocusList={focusList}
 			/>
 		);
 	}
@@ -247,15 +300,26 @@ export default function ItemList({ items, selectedId, onSelect, favourites, drop
 				</div>
 				<div className="ss-filter">
 					<button
+						ref={filterButtonRef}
 						className={`ss-icon-btn${activeFilters.size > 0 ? ' ss-filter-btn-active' : ''}`}
 						onClick={() => setShowFilters(s => !s)}
 						title={t('Filter the list')}
+						aria-label={t('Filter the list')}
+						aria-expanded={showFilters}
+						aria-controls="mx-item-filters"
+						aria-haspopup="dialog"
 					>
 						<Filter size={14} />
 						{activeFilters.size > 0 && <span className="ss-filter-count">{activeFilters.size}</span>}
 					</button>
 					{showFilters && (
-						<div className="ss-filter-popover" onMouseDown={e => e.stopPropagation()}>
+						<div
+							id="mx-item-filters"
+							className="ss-filter-popover"
+							role="dialog"
+							aria-label={t('Filters')}
+							onMouseDown={e => e.stopPropagation()}
+						>
 							<div className="ss-filter-head">
 								<span>{t('Filters')}</span>
 								{activeFilters.size > 0 && (
@@ -293,8 +357,15 @@ export default function ItemList({ items, selectedId, onSelect, favourites, drop
 			</div>
 
 			<div
-				className="ss-mon-scroll"
+				className="ss-mon-scroll mx-item-listbox"
 				ref={scrollRef}
+				role="listbox"
+				tabIndex={0}
+				aria-label={t('Items')}
+				aria-activedescendant={activeDescendant}
+				onKeyDown={e => {
+					if (moveSelection(e.key)) e.preventDefault();
+				}}
 				onScroll={e => {
 					const top = e.currentTarget.scrollTop;
 					setScrollTop(top);
@@ -309,7 +380,7 @@ export default function ItemList({ items, selectedId, onSelect, favourites, drop
 
 			<div className="ss-mon-foot">
 				<span className="ss-mon-count">
-					{shown.length === items.length ? `${items.length}` : `${shown.length} / ${items.length}`}
+					{shown.length === items.length ? n(items.length) : `${n(shown.length)} / ${n(items.length)}`}
 				</span>
 			</div>
 		</div>

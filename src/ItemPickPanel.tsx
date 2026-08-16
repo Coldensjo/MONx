@@ -1,11 +1,10 @@
 // The items grid + loot tray + item context menu — the one place in MONx
 // that lets you pick an item for the open monster (loot, corpse, typeex) or
 // for the create wizard. Bare content, no modal chrome: `Workspace.tsx`
-// renders it inline for the rail's "Items" view, and `ItemPickDialog` wraps
-// it in a backdrop for the Loot/Look section "Select…" buttons and the
-// wizard's corpse/loot steps. Moving this out of `Workspace.tsx` verbatim —
-// same JSX, same closures passed in as props — is what let the sidebar swap
-// happen without breaking loot-picking (see the plan this came from).
+// `ItemPickDialog` wraps it in a backdrop for the Loot/Look section "Select…"
+// buttons and the wizard's corpse/loot steps. The rail's own Items view uses
+// ItemList + ItemDetail instead; the tray therefore belongs to one dialog
+// session and must never survive invisibly outside it.
 
 import { useTranslation } from 'react-i18next';
 import { Bookmark, Package, Percent, PersonStanding, Plus, Skull, Star, Trash2, Users } from 'lucide-react';
@@ -143,102 +142,111 @@ export default function ItemPickPanel(props: ItemPickPanelProps) {
 				}}
 				searchPlaceholder={t('Search server id or name')}
 			/>
-			<div className="ss-loot-tray">
-				<div className="ss-loot-tray-head">
-					{t('Loot')}
-					{lootTray.length > 0 && <span className="ss-nav-meta">{lootTray.length}</span>}
-				</div>
-				<div className="ss-loot-tray-items">
-					{lootTray.length === 0 ? (
-						<span className="ss-loot-tray-empty">
-							{t('Right-click selected items above to add them here.')}
-						</span>
-					) : (
-						lootTray.map(i => (
-							<span
-								key={i.serverId}
-								className="ss-loot-tray-chip"
-								title={i.name ? `${i.name} (#${i.serverId})` : `#${i.serverId}`}
-							>
-								<img src={itemUrl(i.serverId, 32)} width={32} height={32} alt="" />
+			{wizardPickKind !== 'corpse' && (
+				<div className="ss-loot-tray">
+					<div className="ss-loot-tray-head">
+						{t('Loot to add')}
+						{lootTray.length > 0 && <span className="ss-nav-meta">{lootTray.length}</span>}
+					</div>
+					<div className="ss-loot-tray-items">
+						{lootTray.length === 0 ? (
+							<span className="ss-loot-tray-empty">
+								{t('Double-click an item, or right-click the selection, to add it here.')}
 							</span>
-						))
-					)}
-				</div>
-				<div className="ss-loot-tray-actions">
-					{/* The same button, aimed at whoever asked for the tray: the open
-					    monster ordinarily, the wizard while it is waiting for one. */}
-					{wizardPickKind === 'loot' ? (
+						) : (
+							lootTray.map(i => (
+								<span
+									key={i.serverId}
+									className="ss-loot-tray-chip"
+									title={i.name ? `${i.name} (#${i.serverId})` : `#${i.serverId}`}
+								>
+									<img src={itemUrl(i.serverId, 32)} width={32} height={32} alt="" />
+								</span>
+							))
+						)}
+					</div>
+					<div className="ss-loot-tray-actions">
+						{/* The same button, aimed at whoever asked for the tray: the open
+						    monster ordinarily, the wizard while it is waiting for one. */}
+						{wizardPickKind === 'loot' ? (
+							<button
+								className="ss-btn ss-btn-primary"
+								disabled={lootTray.length === 0}
+								onClick={() => {
+									finishWizardPick(lootTray.map(i => i.serverId));
+									onPicked?.();
+								}}
+							>
+								<Plus size={14} />
+								{t('Add {{count}} item to the new monster', { count: lootTray.length })}
+							</button>
+						) : (
+							<button
+								className="ss-btn ss-btn-primary"
+								disabled={!doc || lootTray.length === 0}
+								onClick={() => {
+									addTrayToMonster();
+									onPicked?.();
+								}}
+							>
+								<Plus size={14} />
+								{doc
+									? t('Add {{count}} item to loot for {{monster}}', {
+											count: lootTray.length,
+											monster: doc.name
+									  })
+									: t('Add loot')}
+							</button>
+						)}
 						<button
-							className="ss-btn ss-btn-primary"
+							className="ss-btn"
 							disabled={lootTray.length === 0}
-							onClick={() => {
-								finishWizardPick(lootTray.map(i => i.serverId));
-								onPicked?.();
-							}}
+							onClick={onClearTray}
+							title={t('Clear the Loot section')}
 						>
-							<Plus size={14} />
-							{t('Add {{count}} item to the new monster', { count: lootTray.length })}
-						</button>
-					) : (
-						<button
-							className="ss-btn ss-btn-primary"
-							disabled={!doc || lootTray.length === 0}
-							onClick={() => {
-								addTrayToMonster();
-								onPicked?.();
-							}}
-						>
-							<Plus size={14} />
-							{doc ? t('Add loot to {{monster}}', { monster: doc.name }) : t('Add loot')}
-						</button>
-					)}
-					<button
-						className="ss-btn"
-						disabled={lootTray.length === 0}
-						onClick={onClearTray}
-						title={t('Clear the Loot section')}
-					>
-						<Trash2 size={14} />
-						{t('Clear')}
-					</button>
-					{/* Presets sit beside the tray because they are the tray:
-					    saving one is naming what is already collected. */}
-					<button
-						className="ss-btn"
-						disabled={lootTray.length === 0}
-						title={t('Save this tray under a name')}
-						onClick={onSavePreset}
-					>
-						<Bookmark size={14} />
-						{t('Save preset')}
-					</button>
-					<select
-						className="ss-ed-input mx-preset-pick"
-						value=""
-						disabled={presets.length === 0}
-						title={presets.length === 0 ? t('No presets saved yet') : t('Load a preset into the tray')}
-						onChange={e => {
-							const p = presets.find(x => x.name === e.target.value);
-							if (p) onLoadPreset(p);
-						}}
-					>
-						<option value="">
-							{presets.length === 0 ? t('No presets') : t('Presets ({{count}})', { count: presets.length })}
-						</option>
-						{presets.map(p => (
-							<option key={p.name} value={p.name}>
-								{p.name} · {p.ids.length}
-							</option>
-						))}
-					</select>
-					{presets.length > 0 && (
-						<button className="ss-btn ss-btn-ghost" title={t('Delete a preset')} onClick={onManagePresets}>
 							<Trash2 size={14} />
+							{t('Clear')}
 						</button>
-					)}
+						{/* Presets sit beside the tray because they are the tray:
+						    saving one is naming what is already collected. */}
+						<button
+							className="ss-btn"
+							disabled={lootTray.length === 0}
+							title={t('Save this tray under a name')}
+							onClick={onSavePreset}
+						>
+							<Bookmark size={14} />
+							{t('Save preset')}
+						</button>
+						<select
+							className="ss-ed-input mx-preset-pick"
+							value=""
+							disabled={presets.length === 0}
+							title={presets.length === 0 ? t('No presets saved yet') : t('Load a preset into the tray')}
+							onChange={e => {
+								const p = presets.find(x => x.name === e.target.value);
+								if (p) onLoadPreset(p);
+							}}
+						>
+							<option value="">
+								{presets.length === 0
+									? t('No presets')
+									: t('Presets ({{count}})', { count: presets.length })}
+							</option>
+							{presets.map(p => (
+								<option key={p.name} value={p.name}>
+									{p.name} · {p.ids.length}
+								</option>
+							))}
+						</select>
+						{presets.length > 0 && (
+							<button className="ss-btn ss-btn-ghost" title={t('Delete a preset')} onClick={onManagePresets}>
+								<Trash2 size={14} />
+							</button>
+						)}
+					</div>
 				</div>
-			</div>
+			)}
 			{itemMenu && (
 				<div className="ss-context-menu" style={{ left: itemMenu.x, top: itemMenu.y }} onMouseDown={e => e.stopPropagation()}>
 					<button
@@ -251,16 +259,18 @@ export default function ItemPickPanel(props: ItemPickPanelProps) {
 						<Package size={14} />
 						{t('Add {{count}} item to Loot', { count: itemMenu.items.length })}
 					</button>
-					<button
-						className="ss-menu-item"
-						onClick={() => {
-							onCloseItemMenu();
-							void openUsage(itemMenu.item);
-						}}
-					>
-						<Users size={14} />
-						{t('Used by…')}
-					</button>
+					{!wizardPickKind && (
+						<button
+							className="ss-menu-item"
+							onClick={() => {
+								onCloseItemMenu();
+								void openUsage(itemMenu.item);
+							}}
+						>
+							<Users size={14} />
+							{t('Used by…')}
+						</button>
+					)}
 					<button
 						className="ss-menu-item"
 						onClick={() => {
@@ -308,7 +318,7 @@ export default function ItemPickPanel(props: ItemPickPanelProps) {
 					>
 						{t('Copy name')}
 					</button>
-					{doc && (
+					{doc && !wizardPickKind && (
 						<>
 							<button
 								className="ss-menu-item"
