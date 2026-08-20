@@ -1,3 +1,5 @@
+
+
 <div align="center">
 
 <img src="src-tauri/icons/128x128@2x.png" alt="MONx" width="128" height="128">
@@ -80,7 +82,7 @@ GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./src-tauri/target/release/monx
 
 - Frontend: `bun run build` (runs `tsc`, then Vite)
 - Backend compile: `cargo check` in `src-tauri/`
-- Backend behaviour: from `src-tauri/`, `cargo run --example probe_monster -- <monsters-dir>` reads and rewrites the whole corpus and diffs the bytes. `probe_dat`, `probe_assets` and `probe_lua` do the same for sprite composition and the Lua document layer. AGENTS.md lists the flags.
+- Backend behaviour: from `src-tauri/`, `cargo run --example probe_monster -- <monsters-dir>` reads and rewrites the whole corpus and diffs the bytes (with no argument it uses `fixtures/engines/ironcore/monsters`). `probe_dat`, `probe_assets` and `probe_lua` do the same for sprite composition and the Lua document layer. AGENTS.md lists the flags.
 
 ## Further reading
 
