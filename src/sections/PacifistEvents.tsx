@@ -4,6 +4,7 @@ import { Field } from '../fields/Field';
 import { TextField } from '../fields/TextField';
 import { SortableList } from '../fields/SortableList';
 import { Section, SubGroup, type SectionId, type SectionProps } from './section';
+import { engineInfo } from '../engine';
 
 interface Props extends SectionProps {
 	collapsed: boolean;
@@ -11,13 +12,19 @@ interface Props extends SectionProps {
 }
 
 /**
- * The two Ironcore pacifist strings and the creaturescript registrations — a
- * tab of its own because most monsters have neither, and it is hidden by
- * default (see prefs.ts). Both still write into `<voices>` / `<script>` where
- * the format puts them; only the UI is split.
+ * The two pacifist strings and the creaturescript registrations — a tab of its
+ * own because most monsters have neither, and it is hidden by default (see
+ * prefs.ts). Both still write into `<voices>` / `<script>` where the format
+ * puts them; only the UI is split.
+ *
+ * The events half is universal, so the tab cannot be an entry in
+ * `SECTION_ENGINE_FLAG`; only Ironcore has the pacifist system, so that half
+ * gates itself on `engine.pacifist` rather than offering every other engine two
+ * fields its loader never reads.
  */
 export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Props) {
 	const { t } = useTranslation();
+	const engine = engineInfo(doc.engine);
 	const voices = doc.voices;
 	// The two pacifist strings do nothing on a monster that isn't one (§5.1).
 	const pacifist = doc.flags.pacifist === true;
@@ -28,10 +35,15 @@ export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onTogg
 			id="events"
 			collapsed={collapsed}
 			onToggle={() => onToggle('events')}
-			summary={t('{{pacifist}} pacifist · {{events}} events', { pacifist: pacifistLines, events: doc.events.length })}
+			summary={
+				engine.pacifist
+					? t('{{pacifist}} pacifist · {{events}} events', { pacifist: pacifistLines, events: doc.events.length })
+					: t('{{count}} event', { count: doc.events.length })
+			}
 		>
+			{engine.pacifist && (
 			<SubGroup
-				title={t('Pacifist lines (Ironcore)')}
+				title={t('Pacifist lines')}
 				note={
 					pacifist
 						? t('Said once when it wakes, and when it walks past its leash radius. Neither is part of the random voice pool.')
@@ -55,6 +67,7 @@ export function PacifistEvents({ doc, patch, lintAt, readOnly, collapsed, onTogg
 					/>
 				</Field>
 			</SubGroup>
+			)}
 
 			<SubGroup
 				title={t('Creature events')}

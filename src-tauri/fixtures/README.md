@@ -13,7 +13,7 @@ engines/          one tiny workspace per engine (below)
 
 ```sh
 cd src-tauri
-cargo run --release --example probe_monster                       # defaults to engines/ironcore/monsters
+cargo run --release --example probe_monster                       # engines/ironcore/monsters — the fullest fixture, not a default engine
 cargo run --release --example probe_monster -- fixtures/engines/tvp/monster --engine tvp --mutate
 cargo run --release --example probe_lua     -- fixtures/engines/canary/monster
 ```
@@ -22,7 +22,7 @@ Each engine gets a **workspace root** — `engines/<engine>/` — with the monst
 folder inside it, named the way that server names it (`monsters` for Ironcore,
 `monster` for the rest). The nesting is not decoration: probes resolve a
 `spells/` sibling from the monsters folder's parent, so a flatter layout has
-every engine inherit `fixtures/spells/spells.xml`, which is Ironcore's. That
+every engine inherit `fixtures/spells/spells.xml`, which is an Ironcore file. That
 made Canary's `combat`/`COMBAT_ICEDAMAGE` spells lint as unknown names — an
 artifact of the layout, not a finding.
 

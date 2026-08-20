@@ -36,8 +36,9 @@ param(
 
     # The default fixture workspace. `assets/` holds one folder per engine —
     # Ironcore, Canary, BlackTek, Nostalrius, TVP — each with monsters/, items/,
-    # client/ and spells/; Ironcore is the default profile, so it is the default
-    # here. Pass another engine's folder to `start`/`open` to test against it.
+    # client/ and spells/. Ironcore's is the default here only because it is the
+    # fullest of them, not because MONx favours that engine. Pass another
+    # engine's folder to `start`/`open` to test against it.
     [string]$Fixture = (Resolve-Path "$PSScriptRoot\..\..\..\assets\Ironcore" -ErrorAction SilentlyContinue),
 
     # Fill the four slots through the folder pickers instead of taking the

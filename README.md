@@ -12,7 +12,7 @@
 
 </div>
 
-A monster editor for OpenTibia servers — Ironcore, TheForgottenServer, TheVioletProject, Nostalrius, Canary/OTServBR, CrystalServer and BlackTek. Open a workspace, pick a monster, edit, save.
+A monster editor for OpenTibia servers — TheForgottenServer, Ironcore, TheVioletProject, Nostalrius, Canary/OTServBR, CrystalServer and BlackTek. Open a workspace, pick a monster, edit, save.
 
 A workspace is up to four folders: the server's `monster/` folder, its `items/` folder, a client folder and optionally `spells/`. **Only the monsters folder is required** — the rest fill in what they can. Outfits, corpses and loot render as real sprites because the client assets are loaded alongside the monsters, from either a `.spr`/`.dat` pair or a modern 12.x+ asset bundle.
 

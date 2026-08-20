@@ -33,7 +33,7 @@ export interface Toast {
 const THEMES = ['lined', 'light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
 
-/** "…/Ironcore/data/monster" → "Ironcore". Falls back to the folder itself. */
+/** "…/MyServer/data/monster" → "MyServer". Falls back to the folder itself. */
 export function workspaceLabel(monstersPath: string): string {
 	const parts = monstersPath.split(/[\\/]/).filter(Boolean);
 	return parts[parts.length - 3] ?? parts[parts.length - 1] ?? monstersPath;

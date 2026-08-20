@@ -41,8 +41,8 @@ dead on Canary.
 
 | Key | Server | Format | Shape |
 |-----|--------|--------|-------|
-| `ironcore` | Ironcore | XML | The default. `raceid`, `species`, the pacifist system, `CONST_ME_*` effects |
 | `tfs` | TheForgottenServer 1.x | XML | `raceId` + `<bestiary>`, short-name effects, no pacifist system |
+| `ironcore` | Ironcore | XML | `raceid`, `species`, the pacifist system, `CONST_ME_*` effects |
 | `tvp` | TheVioletProject | XML | 7.x: `<targetstrategy>`, `delay=`, melee skill progression |
 | `nostalrius` | Nostalrius | XML | 7.x: melee on `<attacks>`, no spell interval, `count=` conditions |
 | `canary` | Canary / OTServBR | Lua | Bestiary + bosstiary, factions, `COMBAT_*` damage types |
@@ -64,7 +64,7 @@ codebase in half.
 
 ### A corpus can be a tree
 
-Only Ironcore is flat. Everywhere else a monster's key is its path relative to
+Only Ironcore's corpus is flat. Everywhere else a monster's key is its path relative to
 the monsters folder (`monsters/demon.xml`), matching its `file=` in
 `monsters.xml`.
 
@@ -79,13 +79,13 @@ The profile has ~50 fields. These are the ones that bite.
 
 ### Identity
 
-| | ironcore | tfs | tvp | nostalrius | canary | crystal | blacktek |
+| | tfs | ironcore | tvp | nostalrius | canary | crystal | blacktek |
 |---|---|---|---|---|---|---|---|
-| Race id attribute | `raceid` | `raceId` | — | — | — | — | — |
-| `species=` | ✓ | — | — | — | — | — | — |
-| Bestiary | — | ✓ | — | — | ✓ | ✓ | — |
+| Race id attribute | `raceId` | `raceid` | — | — | — | — | — |
+| `species=` | — | ✓ | — | — | — | — | — |
+| Bestiary | ✓ | — | — | — | ✓ | ✓ | — |
 | Registry (`monsters.xml`) | ✓ | ✓ | ✓ | ✓ | — | — | — |
-| Recursive corpus | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Recursive corpus | ✓ | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Extension | `.xml` | `.xml` | `.xml` | `.xml` | `.lua` | `.lua` | `.lua` |
 
 Ironcore's `species=` is **author metadata and nothing else** — `monsters.cpp`
@@ -97,7 +97,7 @@ in detection.
 
 ### Spells
 
-| | ironcore | tfs | tvp | nostalrius | canary | crystal | blacktek |
+| | tfs | ironcore | tvp | nostalrius | canary | crystal | blacktek |
 |---|---|---|---|---|---|---|---|
 | Cadence | `interval` | `interval` | `interval`/`delay` | chance only | `interval` | `interval` | `interval` |
 | Melee from | spell block | spell block | spell block | `<attacks>` node | spell block | spell block | spell block |
@@ -121,13 +121,13 @@ why they are enums and not booleans:
 
 ### Flags and resistances
 
-| | ironcore | tfs | tvp | nostalrius | canary | crystal | blacktek |
+| | tfs | ironcore | tvp | nostalrius | canary | crystal | blacktek |
 |---|---|---|---|---|---|---|---|
-| Pacifist system | ✓ | — | — | — | — | — | — |
+| Pacifist system | — | ✓ | — | — | — | — | — |
 | `canpushcreatures` override | always | always | **never** | always | never | never | **only when unset** |
 | Clamps `health` to max | ✓ | ✓ | ✓ | **—** | ✓ | ✓ | ✓ |
-| Effect naming | `CONST_ME_*` | short | short | short | `CONST_ME_*` | `CONST_ME_*` | `CONST_ME_*` |
-| Effect matching | **case-sensitive** | lowercased | lowercased | lowercased | lowercased | lowercased | lowercased |
+| Effect naming | short | `CONST_ME_*` | short | short | `CONST_ME_*` | `CONST_ME_*` | `CONST_ME_*` |
+| Effect matching | lowercased | **case-sensitive** | lowercased | lowercased | lowercased | lowercased | lowercased |
 
 `PushableOverride` needed three states rather than a bool because BlackTek
 added a condition the C++ engines do not have: the override applies **only
@@ -141,11 +141,11 @@ Ironcore-only finding.
 
 ### Loot and summons
 
-| | ironcore | tfs | tvp | nostalrius | canary | crystal | blacktek |
+| | tfs | ironcore | tvp | nostalrius | canary | crystal | blacktek |
 |---|---|---|---|---|---|---|---|
 | Loot inside a wrapper node | ✓ | ✓ | ✓ | **—** | — | — | — |
 | Loader validates loot ids | ✓ | ✓ | ✓ | **—** | ✓ | ✓ | ✓ |
-| `countmax` ceiling | ✓ | — | — | — | — | — | — |
+| `countmax` ceiling | — | ✓ | — | — | — | — | — |
 | Summon `interval` | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ |
 | Summon `delay` | — | — | ✓ | — | — | — | — |
 | Summon cap key | `max` | `max` | `max` | `max` | **`count`** | **`count`** | `max` |
@@ -163,13 +163,16 @@ existing file is always mirrored rather than reshaped, because
 > A lint the engine has no rule for is **suppressed, not reported**.
 
 `silent` severity is only worth anything if it means the server really would
-say nothing. Firing Ironcore's rules at a TVP corpus inverts that: it turns
-"your server will not tell you about this" into noise.
+say nothing. Firing one engine's rules at another's corpus inverts that: it
+turns "your server will not tell you about this" into noise.
 
 Each profile carries `suppressed_lints`, and an entry ending in `.` suppresses
 the whole prefix:
 
-- **Ironcore** — nothing suppressed. It is the reference engine.
+- **Ironcore** — nothing suppressed, because every rule in `lint.rs` was
+  written against a real Ironcore consequence. That is a fact about where the
+  rules came from, not a ranking: a rule with no Ironcore counterpart would be
+  suppressed there like anywhere else.
 - **TFS, TVP, Nostalrius** — the pacifist rules, since only Ironcore has that
   system. TVP and Nostalrius additionally drop `flag.staticattack-over-100`.
 - **Canary, Crystal, BlackTek** — `registry.` and (BlackTek) `raceid.`
@@ -216,7 +219,7 @@ Nothing else catches it:
 
 ```sh
 cd src-tauri
-cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --mutate
+cargo run --release --example probe_monster -- ../assets/TFS/monster --mutate
 ```
 
 **Run every gate against all seven engines' own corpora when touching the

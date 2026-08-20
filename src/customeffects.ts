@@ -3,14 +3,14 @@
 // The engine tables in `engine.ts` and `engine/tables.rs` are each read out of a real
 // server's source, which is what makes them worth trusting — and exactly why
 // they cannot cover the effect somebody added to their own fork last Tuesday.
-// Without this, magic effect 105 on a modified Ironcore is invisible in the
-// picker, indistinguishable from no effect at all, and linted as "dropped" by a
-// loader that handles it perfectly well.
+// Without this, the magic effect somebody added to their own build is invisible
+// in the picker, indistinguishable from no effect at all, and linted as
+// "dropped" by a loader that handles it perfectly well.
 //
 // So the catalogue the editor offers is the engine's table *plus* whatever the
 // user declares here. Declarations never replace a stock entry: they are the
 // user's word about their own server, which is why they live in settings rather
-// than beside `ME_IRONCORE`.
+// than beside the engine tables.
 
 import { invoke } from '@tauri-apps/api/core';
 import type { EffectEntry } from './catalog';

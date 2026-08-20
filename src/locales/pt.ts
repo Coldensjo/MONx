@@ -25,6 +25,8 @@ const pt: Record<string, string> = {
 	'{{count}} silent-data-loss issue_other': '{{count}} perdas silenciosas de dados',
 	'{{count}} lint_one': '{{count}} apontamento',
 	'{{count}} lint_other': '{{count}} apontamentos',
+	'{{count}} event_one': '{{count}} evento',
+	'{{count}} event_other': '{{count}} eventos',
 	'Fix all ({{count}})_one': 'Corrigir tudo ({{count}})',
 	'Fix all ({{count}})_other': 'Corrigir tudo ({{count}})',
 	'Fixed {{count}} lint_one': '{{count}} apontamento corrigido',
@@ -993,8 +995,7 @@ const pt: Record<string, string> = {
 	Behaviour: 'Comportamento',
 	'Pushing and movement': 'Empurrar e movimento',
 	Terrain: 'Terreno',
-	'Pacifist (Ironcore)': 'Pacifista (Ironcore)',
-	'{{note}} (Ironcore)': '{{note}} (Ironcore)',
+	Pacifist: 'Pacifista',
 	'“Pushes creatures” forces “pushable by players” off at load — the value written here will not survive.':
 		'“Empurra criaturas” força “empurrável por jogadores” a ficar desligado no carregamento — o valor gravado aqui não sobrevive.',
 	'Target change': 'Troca de alvo',
@@ -1019,8 +1020,8 @@ const pt: Record<string, string> = {
 		'A armadura reduz golpes corpo a corpo e físicos; a defesa só é consultada em golpes que a verificam, ou seja, corpo a corpo.',
 	Armor: 'Armadura',
 	Defense: 'Defesa',
-	'Show pacifist system (Ironcore)': 'Mostrar sistema pacifista (Ironcore)',
-	'Hide pacifist system (Ironcore)': 'Ocultar sistema pacifista (Ironcore)',
+	'Show pacifist system': 'Mostrar sistema pacifista',
+	'Hide pacifist system': 'Ocultar sistema pacifista',
 	'A dormant monster that only fights back once struck. The sub-flags do nothing without Pacifist.':
 		'Um monstro dormente que só revida depois de ser atingido. As sub-flags não fazem nada sem o Pacifista.',
 	'Pacifist forces {{flag}} to 0 during load — writing both as 1 will not survive.':
@@ -1142,7 +1143,7 @@ const pt: Record<string, string> = {
 
 	// --- Pacifist & events ------------------------------------------------------------------------------------------------
 	'{{pacifist}} pacifist · {{events}} events': '{{pacifist}} pacifista · {{events}} eventos',
-	'Pacifist lines (Ironcore)': 'Falas de pacifista (Ironcore)',
+	'Pacifist lines': 'Falas de pacifista',
 	'Said once when it wakes, and when it walks past its leash radius. Neither is part of the random voice pool.':
 		'Dito uma vez ao acordar, e ao ultrapassar o raio da coleira. Nenhum dos dois faz parte do conjunto aleatório de falas.',
 	'Only spoken by a pacifist monster — turn Pacifist on in Combat, or these never fire.':

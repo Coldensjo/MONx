@@ -90,6 +90,11 @@ fn main() {
         // The committed fixtures, so a fresh clone can run the gates without
         // first populating the (gitignored) `assets/` workspaces. They are a
         // smoke test, not coverage — see fixtures/README.md.
+        //
+        // Ironcore's is the one a bare run picks not because that engine is
+        // special but because its fixture is the fullest: it is the only corpus
+        // here with the pacifist voices, so `voice_extras_survive` has
+        // something to exercise. Name the folder to run any of the other six.
         .unwrap_or_else(|| PathBuf::from("fixtures/engines/ironcore/monsters"));
     // The CI surface. `--format` is what makes this usable as a check in a
     // datapack repository: a machine document on stdout (or in a file), and an

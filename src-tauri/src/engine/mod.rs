@@ -1,13 +1,14 @@
 //! Engine profiles — which server's rules a workspace is being edited under.
 //!
-//! MONx was written against Ironcore. TheForgottenServer, TheVioletProject and
-//! Nostalrius read the same-*looking* monster XML and do materially different
-//! things with it: TFS spells the bestiary id `raceId` where Ironcore spells it
-//! `raceid`, TVP has no `hostile` flag at all, Nostalrius keeps melee on the
-//! `<attacks>` container instead of in a spell block, and all three name magic
-//! effects `firearea` where Ironcore names them `CONST_ME_FIREAREA`.
+//! Ironcore, TheForgottenServer, TheVioletProject and Nostalrius read the
+//! same-*looking* monster XML and do materially different things with it: TFS
+//! spells the bestiary id `raceId` where Ironcore spells it `raceid`, TVP has no
+//! `hostile` flag at all, Nostalrius keeps melee on the `<attacks>` container
+//! instead of in a spell block, and Ironcore names magic effects
+//! `CONST_ME_FIREAREA` where the other three name them `firearea`. No engine
+//! here is the one MONx is *for*; each is a profile like the rest.
 //!
-//! Every table here was read out of that engine's own `monsters.cpp` and
+//! Every table here was read out of that server's own `monsters.cpp` and
 //! `tools.cpp` (kept under `sources/` while this was written) rather than
 //! inferred from upstream docs — the whole reason this module exists is that
 //! the engines disagree in ways no document records.
@@ -50,7 +51,7 @@
 //! [`detect`] depends on none of it — it takes corpus bytes and returns scored
 //! candidates, naming engines by key string only.
 //!
-//! Everything is re-exported here, so the paths callers use — `engine::IRONCORE`,
+//! Everything is re-exported here, so the paths callers use — `engine::TFS`,
 //! `engine::EngineProfile`, `engine::detect` — are the same as when this was one
 //! file. Submodules reach each other through `use super::*`.
 

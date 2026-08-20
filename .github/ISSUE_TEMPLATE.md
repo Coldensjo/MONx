@@ -6,7 +6,7 @@
 1.
 2.
 
-**Which server?** (Ironcore / TFS / TheVioletProject / Nostalrius / Canary / BlackTek)
+**Which server?** (TFS / Ironcore / TheVioletProject / Nostalrius / Canary / CrystalServer / BlackTek)
 
 **MONx version** (titlebar, or `package.json`):
 

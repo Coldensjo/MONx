@@ -342,7 +342,7 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 #[serde(rename_all = "camelCase")]
 pub struct EngineDetection {
     pub candidates: Vec<EngineCandidate>,
-    /// Best guess, always populated (falls back to Ironcore).
+    /// Best guess, always populated (falls back to the default profile).
     pub best: String,
     /// False when nothing scored, or when the top two are close enough that
     /// picking silently would be a guess dressed as a fact.
@@ -354,12 +354,19 @@ const MIN_SCORE: i32 = 40;
 const MIN_LEAD: i32 = 25;
 
 pub fn detection(candidates: Vec<EngineCandidate>) -> EngineDetection {
-    let best = candidates
-        .first()
-        .map(|c| c.key.clone())
-        .unwrap_or_else(|| "ironcore".to_string());
     let top = candidates.first().map(|c| c.score).unwrap_or(0);
     let second = candidates.get(1).map(|c| c.score).unwrap_or(0);
+    // A corpus that scored nothing has not named an engine, and neither should
+    // this. `detect` sorts stably, so the head of an all-zero list is whichever
+    // profile happens to sit first in `ALL` — table order dressed as evidence,
+    // and for years that meant every unrecognisable corpus was called Ironcore.
+    // Name the default profile instead, and let `confident: false` say it is a
+    // fallback rather than a reading.
+    let best = if top > 0 {
+        candidates.first().map(|c| c.key.clone()).unwrap_or_default()
+    } else {
+        super::default_profile().key.to_string()
+    };
     EngineDetection {
         confident: top >= MIN_SCORE && top - second >= MIN_LEAD,
         best,

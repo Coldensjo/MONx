@@ -2,7 +2,7 @@ import type { WorkspacePaths } from './monster';
 
 /** A workspace the user has opened before, for the landing screen's recent list. */
 export interface RecentWorkspace {
-	/** Display name — the monsters folder's grandparent, e.g. "Ironcore". */
+	/** Display name — the monsters folder's grandparent, e.g. "MyServer". */
 	label: string;
 	paths: WorkspacePaths;
 }
