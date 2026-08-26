@@ -1,6 +1,6 @@
 [package]
 name = "monx"
-version = "0.1.132"
+version = "0.1.133"
 description = "MONx — OpenTibia monster editor"
 authors = ["Coldensjo"]
 edition = "2021"
