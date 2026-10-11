@@ -9,7 +9,7 @@
 
 import { MAGIC_EFFECTS, SHOOT_EFFECTS, type EffectEntry } from './catalog';
 
-export type EngineKey = 'ironcore' | 'tfs' | 'tvp' | 'nostalrius' | 'canary' | 'crystal' | 'blacktek';
+export type EngineKey = 'tfs' | 'ironcore' | 'tvp' | 'nostalrius' | 'canary' | 'crystal' | 'blacktek';
 
 /** How effect values are spelled. Ironcore matches `CONST_ME_*`
  *  case-sensitively; everyone else lower-cases a short name before lookup. */
@@ -392,11 +392,17 @@ const BLACKTEK: EngineInfo = {
 	shootEffects: SHOOT_EFFECTS
 };
 
-export const ENGINES: EngineInfo[] = [IRONCORE, TFS, TVP, NOSTALRIUS, CANARY, CRYSTAL, BLACKTEK];
+/** Same order as `engine/profiles.rs` `ALL`, which is the order the Landing
+ *  picker offers them in. It carries no ranking — the first entry is not a
+ *  default and detection does not let the order break a tie. */
+export const ENGINES: EngineInfo[] = [TFS, IRONCORE, TVP, NOSTALRIUS, CANARY, CRYSTAL, BLACKTEK];
 
 const BY_KEY = new Map(ENGINES.map(e => [e.key, e]));
 
-/** Falls back to Ironcore, which is what the backend does too. */
+/** Falls back to TFS — `engine/profiles.rs` `default_profile()` and the reason
+ *  it is that one rather than any other. Keep the two sides agreeing: a
+ *  frontend that assumes a different engine to the backend mislabels every
+ *  field on screen while the file on disk is read under other rules. */
 export function engineInfo(key: string | null | undefined): EngineInfo {
-	return BY_KEY.get((key ?? '') as EngineKey) ?? IRONCORE;
+	return BY_KEY.get((key ?? '') as EngineKey) ?? TFS;
 }

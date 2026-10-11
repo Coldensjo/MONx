@@ -17,8 +17,9 @@ export interface Prefs {
 	visibleSections: SectionId[];
 }
 
-/** Pacifist & Events: two Ironcore strings and the creaturescript list, both
- *  empty on most monsters, so the tab stays out of the way until asked for. */
+/** Pacifist & Events: the two pacifist strings and the creaturescript list,
+ *  both empty on most monsters, so the tab stays out of the way until asked
+ *  for. */
 const HIDDEN_BY_DEFAULT: readonly SectionId[] = ['events'];
 
 /** Engine-specific sections. They are gated by the active engine anyway, so a

@@ -572,9 +572,14 @@ pub static CRYSTAL: EngineProfile = EngineProfile {
     ],
 };
 
+/// Every profile, in the order they are offered to the user: the four XML
+/// engines, then the three Lua ones. The order carries no ranking — the head of
+/// this list is not a default, and `detect` deliberately does not let the order
+/// break a tie (see `detection`). `default_profile` is the one place a fallback
+/// engine is named.
 pub static ALL: &[&EngineProfile] = &[
-    &IRONCORE,
     &TFS,
+    &IRONCORE,
     &TVP,
     &NOSTALRIUS,
     &CANARY,
@@ -587,7 +592,14 @@ pub fn by_key(key: &str) -> Option<&'static EngineProfile> {
 }
 
 /// The profile to fall back to when nothing is specified and nothing detects.
+///
+/// TFS 1.x, and not because MONx has a home engine — it does not. It is the
+/// shape the other XML engines are variants of, and the most conservative of
+/// them: it declares fewer extras than Ironcore or TVP, so anything it does not
+/// name rides along as an unknown attribute. A profile that under-declares
+/// makes MONx quiet rather than destructive (see the module docs), which is the
+/// failure mode to pick when the engine is a guess.
 pub fn default_profile() -> &'static EngineProfile {
-    &IRONCORE
+    &TFS
 }
 

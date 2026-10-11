@@ -29,6 +29,9 @@ const pl: Record<string, string> = {
 	'{{count}} lint_one': '{{count}} uwaga',
 	'{{count}} lint_few': '{{count}} uwagi',
 	'{{count}} lint_many': '{{count}} uwag',
+	'{{count}} event_one': '{{count}} zdarzenie',
+	'{{count}} event_few': '{{count}} zdarzenia',
+	'{{count}} event_many': '{{count}} zdarzeń',
 	'Fix all ({{count}})_one': 'Napraw wszystko ({{count}})',
 	'Fix all ({{count}})_few': 'Napraw wszystko ({{count}})',
 	'Fix all ({{count}})_many': 'Napraw wszystko ({{count}})',
@@ -1087,8 +1090,7 @@ const pl: Record<string, string> = {
 	Behaviour: 'Zachowanie',
 	'Pushing and movement': 'Popychanie i ruch',
 	Terrain: 'Teren',
-	'Pacifist (Ironcore)': 'Pacyfista (Ironcore)',
-	'{{note}} (Ironcore)': '{{note}} (Ironcore)',
+	Pacifist: 'Pacyfista',
 	'“Pushes creatures” forces “pushable by players” off at load — the value written here will not survive.':
 		'„Popycha stworzenia” wymusza wyłączenie „popychalny przez graczy” przy wczytaniu — zapisana tu wartość nie przetrwa.',
 	'Target change': 'Zmiana celu',
@@ -1112,8 +1114,8 @@ const pl: Record<string, string> = {
 		'Pancerz redukuje trafienia wręcz i fizyczne; obrona liczy się tylko przy trafieniach, które ją sprawdzają, czyli wręcz.',
 	Armor: 'Pancerz',
 	Defense: 'Obrona',
-	'Show pacifist system (Ironcore)': 'Pokaż system pacyfisty (Ironcore)',
-	'Hide pacifist system (Ironcore)': 'Ukryj system pacyfisty (Ironcore)',
+	'Show pacifist system': 'Pokaż system pacyfisty',
+	'Hide pacifist system': 'Ukryj system pacyfisty',
 	'A dormant monster that only fights back once struck. The sub-flags do nothing without Pacifist.':
 		'Uśpiony potwór, który walczy dopiero po uderzeniu. Podflagi nic nie robią bez Pacyfisty.',
 	'Pacifist forces {{flag}} to 0 during load — writing both as 1 will not survive.':
@@ -1235,7 +1237,7 @@ const pl: Record<string, string> = {
 
 	// --- Pacifist & events ------------------------------------------------------
 	'{{pacifist}} pacifist · {{events}} events': '{{pacifist}} pacyfisty · {{events}} zdarzeń',
-	'Pacifist lines (Ironcore)': 'Kwestie pacyfisty (Ironcore)',
+	'Pacifist lines': 'Kwestie pacyfisty',
 	'Said once when it wakes, and when it walks past its leash radius. Neither is part of the random voice pool.':
 		'Wypowiadane raz przy przebudzeniu oraz przy wyjściu poza promień smyczy. Żadne nie należy do losowej puli kwestii.',
 	'Only spoken by a pacifist monster — turn Pacifist on in Combat, or these never fire.':

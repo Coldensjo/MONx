@@ -1,6 +1,6 @@
 ---
 name: run-monx
-description: Build, run, and drive MONx (the Tauri desktop Ironcore monster XML editor). Use when asked to start MONx, build the exe, screenshot its UI, open a workspace in it, exercise the editor, or verify a Rust backend change (monster.rs/otb.rs/items.rs/dat.rs) via the probe CLI examples.
+description: Build, run, and drive MONx (the Tauri desktop OpenTibia monster editor). Use when asked to start MONx, build the exe, screenshot its UI, open a workspace in it, exercise the editor, or verify a Rust backend change (monster.rs/otb.rs/items.rs/dat.rs) via the probe CLI examples.
 ---
 
 MONx is a Windows Tauri 2 desktop app (React/TS frontend + Rust backend in `src-tauri/`).

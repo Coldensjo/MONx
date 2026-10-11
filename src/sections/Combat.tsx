@@ -56,15 +56,14 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 					<div className="ss-ed-flags">
 						{BOOLEAN_FLAGS.filter(f => f.group === group && engine.boolFlags.includes(f.key)).map(f => {
 							const value = boolFlag(f.key, f.default);
+							// No "this one is an extra" marker on the label: the filter
+							// above already said so by not rendering the flags this
+							// engine lacks.
 							return (
 								<Toggle
 									key={f.key}
-									label={f.ironcore ? `${f.label} ✦` : f.label}
-									title={
-										f.note && f.ironcore
-											? t('{{note}} (Ironcore)', { note: f.note })
-											: (f.note ?? (f.ironcore ? t('Ironcore') : undefined))
-									}
+									label={f.label}
+									title={f.note}
 									checked={value}
 									changed={value !== f.default}
 									disabled={readOnly}
@@ -210,12 +209,13 @@ export function Combat({ doc, patch, lintAt, readOnly, collapsed, onToggle }: Pr
 				</div>
 			</SubGroup>
 
-			{/* The pacifist system is Ironcore-only; every other loader reports its
-			    flags as unknown and ignores them. */}
+			{/* Only Ironcore has the pacifist system; every other loader reports its
+			    flags as unknown and ignores them, so `engine.pacifist` is what says
+			    whose corpus this is and the labels need not repeat it. */}
 			{engine.pacifist && (
 			<div className="ss-ed-advanced">
 				<button type="button" className="ss-btn ss-btn-ghost" onClick={() => setShowPacifist(s => !s)}>
-					{showPacifist ? t('Hide pacifist system (Ironcore)') : t('Show pacifist system (Ironcore)')}
+					{showPacifist ? t('Hide pacifist system') : t('Show pacifist system')}
 				</button>
 				{showPacifist && (
 					<SubGroup

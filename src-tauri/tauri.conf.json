@@ -1,8 +1,8 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
 	"productName": "MONx",
-	"version": "0.1.131",
-	"identifier": "com.ironcore.monx",
+	"version": "0.1.133",
+	"identifier": "com.monx.app",
 	"build": {
 		"beforeDevCommand": "bun run dev",
 		"beforeBuildCommand": "bun run build",

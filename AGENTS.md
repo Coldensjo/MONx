@@ -45,7 +45,7 @@ path it runs against the committed fixtures, so a fresh clone can check itself b
 `assets/` is populated:
 
 ```sh
-cargo run --release --example probe_monster                                              # fixtures/engines/ironcore/monsters
+cargo run --release --example probe_monster                                              # fixtures/engines/ironcore/monsters — the fullest fixture, not a default engine
 cargo run --release --example probe_monster -- fixtures/engines/tvp/monster --engine tvp --mutate
 ```
 
@@ -53,10 +53,10 @@ Those are a smoke test, not coverage — see `src-tauri/fixtures/README.md`. The
 point at a server's own tree:
 
 ```sh
-cargo run --release --example probe_monster -- ../assets/Ironcore/monsters              # round-trip
-cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --canonical --mutate
-cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --lint
-cargo run --release --example probe_monster -- ../assets/Ironcore/monsters --crud <scratch-dir>
+cargo run --release --example probe_monster -- ../assets/TFS/monster              # round-trip
+cargo run --release --example probe_monster -- ../assets/TFS/monster --canonical --mutate
+cargo run --release --example probe_monster -- ../assets/TFS/monster --lint
+cargo run --release --example probe_monster -- ../assets/TFS/monster --crud <scratch-dir>
 ```
 
 `--mutate` is the one that proves the writer is driven by the model rather than copying bytes: it edits several fields in every file, writes, re-reads, and checks the document that comes back is the one that went in. It also budgets the diff — a handful of field edits that rewrite more than 12 lines fail, because the writer is meant to splice. A change that *inserts or removes* a node moves every line under it and can never meet that budget, so it belongs in a pass of its own (see `voice_extras_survive`). Add `--verbose` to any of them to list every finding, `--items <dir>` to point loot resolution at a database that is not the monsters folder's sibling, and `--bands` to print the corpus's balance bands.
@@ -70,7 +70,7 @@ cargo run --release --example probe_monster -- data/monster \
 
 `--format json|sarif` implies `--lint` and writes the report to `--out <path>`, or to stdout with the human summary moved to stderr so the stream stays pipeable. `--fail-on` takes a **set** of severities, not a threshold — the three are not a ranking, and `silent` is the one worth failing a build on even where warnings are tolerated. `--fail-on any` is all three; without the flag the lint pass never fails the run, which is what keeps `--lint` usable on a corpus that has lived with three hundred warnings for years.
 
-`--engine <key>` picks the profile (`ironcore`, `tfs`, `tvp`, `nostalrius`, `canary`, `crystal`, `blacktek`); without it the corpus is sniffed exactly as the Landing dialog sniffs it, and the guess is printed. **Run every gate against all seven engines' own corpora when touching the reader, writer or a profile** — an over-declared `known_attrs` drops data, and `--mutate` is the only thing that catches it:
+`--engine <key>` picks the profile (`tfs`, `ironcore`, `tvp`, `nostalrius`, `canary`, `crystal`, `blacktek`); without it the corpus is sniffed exactly as the Landing dialog sniffs it, and the guess is printed. **Run every gate against all seven engines' own corpora when touching the reader, writer or a profile** — an over-declared `known_attrs` drops data, and `--mutate` is the only thing that catches it:
 
 ```sh
 cargo run --release --example probe_monster -- ../assets/TVP/monster           --engine tvp        --mutate
@@ -256,16 +256,14 @@ assets/                fixture workspaces, one folder per engine: each has
 
 ## Domain knowledge
 
-**Do not infer behaviour from upstream TFS.** Ironcore diverges in ways that matter constantly: per-spell cooldowns, extra flags, the pacifist system, `force` on summons, `corpseactionid`, `masterEffect`.
-
-MONx also opens **TheForgottenServer 1.x, TheVioletProject, Nostalrius, Canary/OTServBR, CrystalServer and BlackTek** corpora. Everything below describes Ironcore, which is the default profile; what the other six do differently lives in `engine/profiles.rs` and is summarised in [ENGINES.md](ENGINES.md). Four consequences worth knowing before touching anything:
+**Do not infer one engine's behaviour from another's.** MONx opens **TheForgottenServer 1.x, Ironcore, TheVioletProject, Nostalrius, Canary/OTServBR, CrystalServer and BlackTek** corpora, and they diverge in ways that matter constantly — per-spell cooldowns, extra flags, the pacifist system, `force` on summons, `corpseactionid`, `masterEffect` are Ironcore's; every other engine has its own list. None of them is the engine MONx is *for*: what each one does lives in `engine/profiles.rs` and is summarised in [ENGINES.md](ENGINES.md). Four consequences worth knowing before touching anything:
 
 - **The reader, writer and linter all take a `&'static EngineProfile`.** There is one `MonsterDoc` for all seven engines — a superset — and the profile decides which parts the reader populates and the writer emits. Never hard-code a spelling like `raceid` or `CONST_ME_*`; ask the profile.
 - **Two formats, one model.** Canary and BlackTek define monsters as Lua tables, not XML. `Parsed` is an enum with an XML body and a Lua body; `read_bytes`/`write_bytes` dispatch on `profile.format`. Everything above the document layer — `MonsterDoc`, the lints, the editor — is shared, and should stay that way.
-- **A corpus can be a tree.** Only Ironcore is flat. A monster's key is its path relative to the monsters folder (`monsters/demon.xml`), matching its `file=` in `monsters.xml`.
-- **A lint the engine has no rule for is suppressed, not reported.** `silent` severity is only worth anything if it means the server really would say nothing; firing Ironcore's rules at a TVP corpus inverts that. Per-engine suppressions live on the profile.
+- **A corpus can be a tree.** Only Ironcore's is flat. A monster's key is its path relative to the monsters folder (`monsters/demon.xml`), matching its `file=` in `monsters.xml`.
+- **A lint the engine has no rule for is suppressed, not reported.** `silent` severity is only worth anything if it means the server really would say nothing; firing one engine's rules at another's corpus inverts that. Per-engine suppressions live on the profile.
 
-The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the product in `DESIGN.md`; both were derived from the server's own source and have since been removed from the repo. The `§n` markers throughout the code cite them. What they said now lives in the code, and that is where to look — or to add to:
+The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the product in `DESIGN.md`; both were derived from Ironcore's own source, back when that was the only engine MONx read, and have since been removed from the repo. The `§n` markers throughout the code cite them. What they said now lives in the code, and that is where to look — or to add to:
 
 - `catalog.rs` / `catalog.ts` — the enum tables (flags, damage and condition types, races, skulls, `CONST_ME_*`, `CONST_ANI_*`, built-in spells), each citing its section. The two are hand-kept mirrors and **`bun run catalog` is what keeps them honest** — add a value to one side only and nothing breaks, no build fails and no probe notices: the linter quietly stops calling it unknown while the picker still will not offer it, which is the "renders as nothing, deleted on the next click" case above. The check compares wire-exact names and numbers only; labels, colours, notes and group headings are UI-only and diverge on purpose. Where the two sides model the same fact differently — the unreachable shoot effects are a Rust exclusion list and a TS row flag — the check knows, and the comments in `scripts/check-catalog.mjs` say why for each.
 - `customeffects.ts` / `engine/custom.rs` — the escape hatch for the tables above. Every effect table is read out of a shipped server's source, which is what makes it trustworthy and what makes it wrong for anyone who modified their own. A user declares the extras (Preferences → Custom effects, `monx.customEffects`), the picker appends them to the engine's list, and the linter stops calling them unknown. **The probes deliberately pass `CustomEffects::default()`** — a gate a setting can quieten is not a gate. Effects that are neither shipped nor declared still show in the picker as off-catalogue rather than reading as `(none)`, because a value the editor renders as "nothing" is a value the next click deletes.
@@ -277,7 +275,7 @@ The format was originally specified in `MONSTER_EDITOR_REFERENCE.md` and the pro
 Four rules that come up constantly:
 
 - **Round-trip is sacred.** Unknown attributes and comments are preserved verbatim; nothing is reordered or normalised on save. A value the engine would clamp gets linted, not silently rewritten.
-- **Exact casing on the wire.** `raceid`, `maxSummons`, `actionId`, and upper-case `CONST_ME_*` / `CONST_ANI_*` — under Ironcore. Which spelling is the live one is a property of the engine: TFS reads `raceId` and names effects `firearea`, so both come from the profile rather than a literal.
+- **Exact casing on the wire.** Which spelling is the live one is a property of the engine, never a literal: Ironcore reads `raceid` and upper-case `CONST_ME_*` / `CONST_ANI_*`, TFS reads `raceId` and names effects `firearea`. Both come from the profile.
 - **MONx never invents item ids.** A loot id the items database cannot resolve is a lint (`loot.unknown-id`), not something to create. The check is against the database, not the OTB — most engines ship no OTB, and it is skipped entirely when no database was loaded.
 - **`silent` is the loudest severity, not the quietest.** It marks the findings the server never reports at all — a spell the loader drops without a word. Those are the ones a human cannot discover any other way, so the UI gives them their own icon and hue rather than burying them under errors.
 

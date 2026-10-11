@@ -140,7 +140,7 @@ pub fn immunity_combat_type(name: &str) -> Option<&'static str> {
 
 // ---------- §11 Elements ----------
 
-/// Ironcore's eleven. This is the *default* table, not the authority — ask
+/// Ironcore's eleven. It is one engine's table, not the authority — ask
 /// `EngineProfile::is_element_attr`, which is what every caller now does. It
 /// deliberately has no `agonyPercent`: that is CrystalServer's twelfth type and
 /// lives on `ELEMENTS_CRYSTAL`, so listing it here would tell an Ironcore

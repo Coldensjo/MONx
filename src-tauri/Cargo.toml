@@ -1,8 +1,8 @@
 [package]
 name = "monx"
-version = "0.1.131"
-description = "MONx — Ironcore monster XML editor"
-authors = ["Ironcore"]
+version = "0.1.133"
+description = "MONx — OpenTibia monster editor"
+authors = ["Coldensjo"]
 edition = "2021"
 license = "MIT"
 

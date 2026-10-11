@@ -29,6 +29,8 @@ const en: Record<string, string> = {
 	'{{count}} silent-data-loss issue_other': '{{count}} silent-data-loss issues',
 	'{{count}} lint_one': '{{count}} lint',
 	'{{count}} lint_other': '{{count}} lints',
+	'{{count}} event_one': '{{count}} event',
+	'{{count}} event_other': '{{count}} events',
 	'Fix all ({{count}})_one': 'Fix all ({{count}})',
 	'Fix all ({{count}})_other': 'Fix all ({{count}})',
 	'Fixed {{count}} lint_one': 'Fixed {{count}} lint',

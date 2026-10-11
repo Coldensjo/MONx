@@ -537,7 +537,6 @@ export interface BooleanFlag {
 	/** Loader default when the flag is absent. */
 	default: boolean;
 	group: 'behaviour' | 'push' | 'terrain' | 'pacifist';
-	ironcore?: boolean;
 	note?: string;
 }
 
@@ -548,25 +547,25 @@ export const BOOLEAN_FLAGS: BooleanFlag[] = [
 	{ key: 'convinceable', label: 'Convinceable', default: false, group: 'behaviour', note: 'Needs a non-zero mana cost.' },
 	{ key: 'illusionable', label: 'Illusionable', default: false, group: 'behaviour' },
 	{ key: 'challengeable', label: 'Challengeable', default: true, group: 'behaviour', note: 'exeta res can force a target switch.' },
-	{ key: 'isboss', label: 'Boss', default: false, group: 'behaviour', ironcore: true, note: 'Metadata only — read from Lua by killboss.lua to broadcast the kill.' },
+	{ key: 'isboss', label: 'Boss', default: false, group: 'behaviour', note: 'Metadata only — read from Lua by killboss.lua to broadcast the kill.' },
 	{ key: 'ignorespawnblock', label: 'Ignore spawn block', default: false, group: 'behaviour' },
 	{ key: 'hidehealth', label: 'Hide health bar', default: false, group: 'behaviour' },
-	{ key: 'whiteskullonattack', label: 'White skull on attack', default: false, group: 'behaviour', ironcore: true, note: 'Damaging it PvP-flags the player.' },
+	{ key: 'whiteskullonattack', label: 'White skull on attack', default: false, group: 'behaviour', note: 'Damaging it PvP-flags the player.' },
 
 	{ key: 'pushable', label: 'Pushable by players', default: true, group: 'push', note: 'Forced off at load when "pushes creatures" is set.' },
 	{ key: 'canpushitems', label: 'Pushes items', default: false, group: 'push' },
 	{ key: 'canpushcreatures', label: 'Pushes creatures', default: false, group: 'push', note: 'Implies pushable = 0.' },
-	{ key: 'canpushplayers', label: 'Pushes players', default: false, group: 'push', ironcore: true },
-	{ key: 'cannotmove', label: 'Cannot move', default: false, group: 'push', ironcore: true, note: 'Never takes a step — distinct from speed 0.' },
-	{ key: 'corpseunmovable', label: 'Corpse unmovable', default: false, group: 'push', ironcore: true },
+	{ key: 'canpushplayers', label: 'Pushes players', default: false, group: 'push' },
+	{ key: 'cannotmove', label: 'Cannot move', default: false, group: 'push', note: 'Never takes a step — distinct from speed 0.' },
+	{ key: 'corpseunmovable', label: 'Corpse unmovable', default: false, group: 'push' },
 
 	{ key: 'canwalkonenergy', label: 'Walks on energy', default: true, group: 'terrain' },
 	{ key: 'canwalkonfire', label: 'Walks on fire', default: true, group: 'terrain' },
 	{ key: 'canwalkonpoison', label: 'Walks on poison', default: true, group: 'terrain' },
 
-	{ key: 'pacifist', label: 'Pacifist', default: false, group: 'pacifist', ironcore: true, note: 'Dormant until attacked. Forces hostile = 0 at load.' },
-	{ key: 'deaggroonkill', label: 'De-aggro on kill', default: false, group: 'pacifist', ironcore: true, note: 'Pacifist only.' },
-	{ key: 'singletarget', label: 'Single target', default: false, group: 'pacifist', ironcore: true, note: 'Pacifist only — only actual attackers count as opponents.' },
+	{ key: 'pacifist', label: 'Pacifist', default: false, group: 'pacifist', note: 'Dormant until attacked. Forces hostile = 0 at load.' },
+	{ key: 'deaggroonkill', label: 'De-aggro on kill', default: false, group: 'pacifist', note: 'Pacifist only.' },
+	{ key: 'singletarget', label: 'Single target', default: false, group: 'pacifist', note: 'Pacifist only — only actual attackers count as opponents.' },
 ];
 
 export interface NumericFlag {
@@ -578,7 +577,6 @@ export interface NumericFlag {
 	min: number;
 	max: number;
 	group: 'behaviour' | 'push' | 'terrain' | 'pacifist';
-	ironcore?: boolean;
 	note?: string;
 }
 
@@ -588,14 +586,14 @@ export const NUMERIC_FLAGS: NumericFlag[] = [
 	{ key: 'runonhealth', label: 'Flee below HP', default: 0, corpusDefault: null, min: 0, max: 100000, group: 'behaviour' },
 	{ key: 'lightlevel', label: 'Light level', default: 0, corpusDefault: null, min: 0, max: 255, group: 'behaviour' },
 	{ key: 'lightcolor', label: 'Light colour', default: 0, corpusDefault: null, min: 0, max: 255, group: 'behaviour' },
-	{ key: 'leashradius', label: 'Leash radius', default: 0, corpusDefault: null, min: 0, max: 50, group: 'pacifist', ironcore: true, note: 'Pacifist only — returns home beyond this, and tightens the dormant despawn radius.' },
+	{ key: 'leashradius', label: 'Leash radius', default: 0, corpusDefault: null, min: 0, max: 50, group: 'pacifist', note: 'Pacifist only — returns home beyond this, and tightens the dormant despawn radius.' },
 ];
 
 export const FLAG_GROUP_LABEL: Record<string, string> = {
 	behaviour: 'Behaviour',
 	push: 'Pushing and movement',
 	terrain: 'Terrain',
-	pacifist: 'Pacifist (Ironcore)'
+	pacifist: 'Pacifist'
 };
 
 // ---------- lookups ----------
